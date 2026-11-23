@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "ay/ay_engine.h"
 
 enum { K_PT3 = 0, K_PT2 = 1, K_STC = 2 };
 
@@ -98,6 +99,11 @@ static void wr_reg(int chip, int reg, int val) {
   if (reg < 0 || reg > 15) return;
   g_regs[chip & 1][reg] = (uint8_t) val;
   g_written[chip & 1] |= (uint16_t) (1u << reg);
+}
+
+extern "C" void ayp_write_reg(int chip, int reg, int val) { wr_reg(chip, reg, val); }
+extern "C" int ayp_read_reg(int chip, int reg) {
+  return (reg >= 0 && reg < 16) ? g_regs[chip & 1][reg] : 0;
 }
 static void set_error(const char *s) {
   int i = 0;
@@ -699,11 +705,22 @@ extern "C" int ayp_start(int f, const uint8_t *m, uint32_t n) {
   memset(g_written, 0, sizeof(g_written));
   g_regs[0][7] = g_regs[1][7] = 0xff;
   if (!m) { set_error("empty module"); return -1; }
-  if (start_one(g_pl[0], f, m, n) != 0) { set_error("bad module header"); return -1; }
+
   if (f == K_PT3) {
-    const uint8_t *second = find_second_pt3(m, n);
-    if (second && second > m && start_one(g_pl[1], f, second, (uint32_t) (n - (second - m))) == 0) g_nchips = 2;
+    // The complete libayfly PT3 replayer (PT1/2/3, TS, all effects).
+    if (ay_engine_start(AYF_PT3, m, n) != 0) { set_error("bad PT3 module"); return -1; }
+    g_nchips = ay_engine_channels() > 3 ? 2 : 1;
+    g_length = (uint32_t) ay_engine_length();
+    const char *t = ay_engine_title();
+    int i = 0;
+    for (; t && t[i] && i < (int) sizeof(g_title) - 1; i++) g_title[i] = t[i];
+    g_title[i] = 0;
+    g_kind = f;
+    g_active = 1;
+    return 0;
   }
+
+  if (start_one(g_pl[0], f, m, n) != 0) { set_error("bad module header"); return -1; }
   g_length = estimate_length(g_pl[0]);
   g_kind = f;
   g_active = 1;
@@ -712,9 +729,13 @@ extern "C" int ayp_start(int f, const uint8_t *m, uint32_t n) {
 
 extern "C" void ayp_tick(void) {
   if (!g_active) return;
+  if (g_kind == K_PT3) {
+    ay_engine_tick();
+    g_ticks++;
+    return;
+  }
   for (int c = 0; c < g_nchips; c++) {
-    if (g_kind == K_PT3) pt3_tick(g_pl[c], c);
-    else if (g_kind == K_PT2) pt2_tick(g_pl[c], c);
+    if (g_kind == K_PT2) pt2_tick(g_pl[c], c);
     else stc_tick(g_pl[c], c);
   }
   g_ticks++;
@@ -728,4 +749,7 @@ extern "C" uint32_t ayp_length(void) { return g_length; }
 extern "C" uint32_t ayp_ticks(void) { return g_ticks; }
 extern "C" const char *ayp_title(void) { return g_title; }
 extern "C" const char *ayp_error(void) { return g_error; }
-extern "C" void ayp_stop(void) { g_active = 0; }
+extern "C" void ayp_stop(void) {
+  if (g_kind == K_PT3) ay_engine_stop();
+  g_active = 0;
+}

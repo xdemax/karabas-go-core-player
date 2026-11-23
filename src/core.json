@@ -1,7 +1,7 @@
 {
     "id": "musicplayer",
     "name": "Music Player",
-    "build": "26112319",
+    "build": "26112321",
     "visible": true,
     "type": "osd",
     "order": 10,
@@ -52,7 +52,7 @@
             "type": "FL",
             "name": "SD1 MUSIC",
             "slot": 1,
-            "extensions": ".mod,.xm,.pt3,.pt2,.stc,.s3m",
+            "extensions": ".mod,.xm,.pt3,.pt2,.stc,.pt1,.asc,.psc,.sqt,.stp,.vtx,.psg,.s3m",
             "dir": "/mods",
             "hotkey": "Menu+F5"
         }

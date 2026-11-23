@@ -46,3 +46,10 @@ POSSIBILITY OF SUCH DAMAGE.
 [karabas-go-tools](https://github.com/andykarpov/karabas-go-tools), MIT License,
 Copyright (c) 2024 Andy Karpov. It is vendored so the repository builds without a second
 checkout.
+
+## AY/YM replayers (libayfly)
+
+`src/sw/ay/players/*.h` are the format replayers from libayfly (AY-3-8910/12 emulator,
+S.V. Bulba), used as one register-stream engine for PT1/PT2/PT3, STC, ASC, PSC, SQT,
+STP, VTX and PSG. They are distributed under GPLv2; see the upstream
+https://github.com/l29ah/ayfly project.

@@ -7,7 +7,8 @@
 #include "eng_esp32.h"
 #include "fpga.h"
 
-static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_s3m };
+extern const fmt_module_t fmt_pt1, fmt_asc, fmt_psc, fmt_sqt, fmt_stp, fmt_vtx, fmt_psg;
+static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_pt1, &fmt_asc, &fmt_psc, &fmt_sqt, &fmt_stp, &fmt_vtx, &fmt_psg, &fmt_s3m };
 #define NFMT (sizeof(fmt_modules) / sizeof(fmt_modules[0]))
 
 static const play_engine_t *const engines[] = { &fpga_engine, &esp32_engine };
