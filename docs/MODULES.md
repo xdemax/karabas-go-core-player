@@ -1,5 +1,26 @@
 # Modules: the player and the formats
 
+## The audio path: one output mixer, one analyzer
+
+Every format is a **source of stereo samples** only. The sources are:
+
+- `mod_fpga.c` / `xm_fpga.c` — their own sample mixers;
+- `ay_fpga.c` + `ay_engine` — a libayfly replayer followed by the software YM2149
+  synthesizer (PT1/PT2/PT3, STC, ASC, PSC, SQT, STP, VTX, PSG).
+
+They all feed `mixer_write()` (`sw/mixer.c`). The output mixer owns:
+
+- the output low-pass filter (two-pole, 12 kHz at 48 kHz, to remove the square-wave
+  "sand" of AY modules);
+- the one and only `analysis_push()` feed for the spectrum analyzer;
+- the write to the 48 kHz audio FIFO (`audio_write()`).
+
+Format engines must not call `audio_write()` or `analysis_push()` themselves and must
+not contain their own level-meter/spectrum code. The UI reads the common `fmt_audio_t`
+and draws the common analyzer; it does not know which format is playing. The AY
+software synthesizer is driven by the FIFO free space, so its tempo cannot depend on
+GUI redraw timing.
+
 The core is split into a player, format modules and playback engines:
 
 ```
@@ -12,11 +33,13 @@ player.c        the GUI, the file list (SD2 / SD1), the keys, the progress, the 
   |     +-- formats/pt3.c  -> ay_fpga.c     the YM2149 register stream (PT3)
   |     +-- formats/pt2.c  -> ay_fpga.c     the YM2149 register stream (PT2)
   |     +-- formats/stc.c  -> ay_fpga.c     the YM2149 register stream (STC)
+  |     +-- formats/ay_more.c -> ay_fpga.c  PT1/ASC/PSC/SQT/STP/VTX/PSG
   |     |                     fpga.c        the shared FPGA engine dispatcher
   |     +-- formats/s3m.c  -> eng_esp32.c
   |
   +-- src.c     a play_src_t: a FatFs file on SD2, or the SRAM buffer from SD1
   +-- sd1.c     the SD1 file of the stock file loader (menu_soc 0x60 / 0x64 / 0x6c / 0x68)
+  +-- mixer.c   the one output mixer: filter + analyzer + FIFO
   +-- audio.c   the 48 kHz stereo FIFO (menu_soc 0x70 / 0x74)
 ```
 
@@ -124,5 +147,12 @@ need it. A new format is a new `formats/*.c` + a rebuild of the program (the bit
 | `xm` | `.xm` | **FPGA** (`xm_fpga.c`) | `Extended Module: ` at 0 |
 | `pt3` | `.pt3` | **FPGA** (`ay_fpga.c`, two YM2149) | `ProTracker 3.` / `Vortex Tracke` at 0 |
 | `pt2` | `.pt2` | **FPGA** (`ay_fpga.c`, two YM2149) | ProTracker 2 header |
-| `stc` | `.stc` | **FPGA** (`ay_fpga.c`, two YM2149) | Sound Tracker header |
+| `stc` | `.stc` | **FPGA** (`ay_fpga.c`, libayfly) | Sound Tracker header |
+| `pt1` | `.pt1` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
+| `asc` | `.asc` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
+| `psc` | `.psc` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
+| `sqt` | `.sqt` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
+| `stp` | `.stp` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
+| `vtx` | `.vtx` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
+| `psg` | `.psg` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `s3m` | `.s3m` | ESP32 (for now) | `SCRM` at 0x2c |

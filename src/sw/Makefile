@@ -24,7 +24,7 @@ $(B)/ay/ay_engine.o: ay/ay_engine.cpp $(wildcard ay/players/*.h) | $(B)
 $(B)/%.o: %.S | $(B)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 SRCS   := main.c player.c ui_skin.c skin_graphic.c ui.c fonts.c gfx.c fpga.c xm_fpga.c ay_fpga.c analysis.c sound.c rpc.c settings.c spi.c sd.c diskio.c fs.c syscalls.c \
-          src.c fmt.c eng_esp32.c sd1.c audio.c mod_fpga.c formats/mod.c formats/xm.c formats/s3m.c formats/pt3.c formats/pt2.c formats/stc.c formats/ay_more.c \
+          src.c fmt.c eng_esp32.c sd1.c audio.c mixer.c mod_fpga.c formats/mod.c formats/xm.c formats/s3m.c formats/pt3.c formats/pt2.c formats/stc.c formats/ay_more.c \
           fatfs/ff.c fatfs/ffunicode.c
 OBJS   := $(B)/crt0.o $(addprefix $(B)/,$(SRCS:.c=.o)) $(B)/ay_players.o $(B)/ay/ay_engine.o
 $(B)/player.elf: $(OBJS) link.ld

@@ -4,6 +4,7 @@
 #include <string.h>
 #include "fpga.h"
 #include "audio.h"
+#include "mixer.h"
 #include "mmio.h"
 #include "analysis.h"
 
@@ -609,8 +610,7 @@ static void mix(int n) {
     if (al > X.peak_l) X.peak_l = al;
     if (ar > X.peak_r) X.peak_r = ar;
     X.last_l = l; X.last_r = r;
-    analysis_push((int16_t) l, (int16_t) r);
-    audio_write((int16_t) l, (int16_t) r);
+    mixer_write((int16_t) l, (int16_t) r);
   }
 }
 

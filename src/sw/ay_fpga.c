@@ -5,9 +5,11 @@
 #include <string.h>
 #include "fpga.h"
 #include "audio.h"
+#include "mixer.h"
 #include "analysis.h"
 #include "mmio.h"
 #include "ay/ay_engine.h"
+#include "ay/ay_emu.h"
 
 #define AY_CLK     1773400u
 #define AY_TICK    960u          // 50 Hz at 48000
@@ -46,12 +48,20 @@ typedef struct {
 static ay_t ay[2];
 static int active, ended, paused, nchips;
 static int engine_mode;
+static AYChipStruct ayemu[2];
 static int vol = 64;
 static uint32_t tick_left, ticks, next_us;
 static int32_t last_l, last_r, peak_l, peak_r;
 static uint8_t vu[FMT_CHANNELS];
 static uint32_t pt3_size;
 static char title[64], err[48];
+
+static void apply_ay_regs(void) {
+  for (int c = 0; c < 2; c++) {
+    const uint8_t *r = ayp_regs(c);
+    for (int i = 0; i < 14; i++) ay_out(&ayemu[c], i, r[i]);
+  }
+}
 
 static void set_error(const char *s) {
   int i = 0;
@@ -194,32 +204,12 @@ static void ay_mix(int n, int emit) {
     if (al > peak_l) peak_l = al;
     if (ar > peak_r) peak_r = ar;
     last_l = sl; last_r = sr;
-    analysis_push((int16_t) sl, (int16_t) sr);
-    if (emit) audio_write((int16_t) sl, (int16_t) sr);
+    if (emit) mixer_write((int16_t) sl, (int16_t) sr);
   }
 }
 
 void pt3_service(void) {
   if (!active || paused) return;
-#ifdef AY_HW
-  uint32_t now = R_US;
-  int guard = 0;
-  while ((int32_t) (now - next_us) >= 0 && active) {
-    uint32_t length = engine_mode ? (uint32_t) ay_engine_length() : ayp_length();
-    if (length && ticks >= length) {
-      active = 0; ended = 1; ay_hw_ctl(0, vol); break;
-    }
-    if (engine_mode) ay_engine_tick(); else ayp_tick();
-    ticks++;
-    for (int c = 0; c < nchips; c++) { ay_apply(&ay[c], ayp_regs(c), c); ay_hw_sync(c, 0); }
-    // Keep the spectrum/VU display fed from the same register stream. This does not touch
-    // the audio FIFO: the RTL chips are the sound source.
-    ay_mix((int) AY_TICK, 0);
-    audio_note_written((int) AY_TICK);
-    next_us += 20000u;            // 20 ms
-    if (++guard >= 100) { next_us = now + 20000u; break; }
-  }
-#else
   int free = audio_free();
   while (free > 0 && active) {
     if (!tick_left) {
@@ -227,17 +217,39 @@ void pt3_service(void) {
       if (length && ticks >= length) { active = 0; ended = 1; break; }
       if (engine_mode) ay_engine_tick(); else ayp_tick();
       ticks++;
-      for (int c = 0; c < nchips; c++) ay_apply(&ay[c], ayp_regs(c), c);
+      apply_ay_regs();
       tick_left = AY_TICK;
     }
     int n = free > AY_CHUNK ? AY_CHUNK : free;
     if (n > (int) tick_left) n = (int) tick_left;
     if (n <= 0) break;
-    ay_mix(n, 1);
+    for (int i = 0; i < n; i++) {
+      ay_tick(&ayemu[0], 1);
+      ay_tick(&ayemu[1], 1);
+      int32_t l = (int32_t) ayemu[0].out[0] * 2 + ayemu[0].out[1] +
+                  (int32_t) ayemu[1].out[0] * 2 + ayemu[1].out[1];
+      int32_t r = (int32_t) ayemu[0].out[2] * 2 + ayemu[0].out[1] +
+                  (int32_t) ayemu[1].out[2] * 2 + ayemu[1].out[1];
+      l = (l * vol) / 64;
+      r = (r * vol) / 64;
+      if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
+      if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
+      int32_t al = l < 0 ? -l : l;
+      int32_t ar = r < 0 ? -r : r;
+      if (al > peak_l) peak_l = al;
+      if (ar > peak_r) peak_r = ar;
+      last_l = l; last_r = r;
+      mixer_write((int16_t) l, (int16_t) r);
+      for (int c = 0; c < 3; c++) {
+        int v = ayp_regs(0)[8 + c] & 15;
+        vu[c] = (uint8_t) (v * 16);
+        v = ayp_regs(1)[8 + c] & 15;
+        vu[3 + c] = (uint8_t) (v * 16);
+      }
+    }
     free -= n;
     tick_left -= (uint32_t) n;
   }
-#endif
 }
 
 static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_progress_t progress) {
@@ -272,28 +284,15 @@ static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_prog
   nchips = ay_engine_channels() > 3 ? 2 : 1;
   if (nchips > 2) nchips = 2;
   engine_mode = 1;
-  for (int c = 0; c < 2; c++) {
-    memset(&ay[c], 0, sizeof(ay[c]));
-    ay[c].lfsr = 0x1FFFF;
-    ay[c].last_shape = 0xff;
-    ay[c].shape = 0;
-  }
   memset(title, 0, sizeof(title));
   const char *t = ay_engine_title();
   for (int n = 0; t && t[n] && n < (int) sizeof(title) - 1; n++) title[n] = t[n];
-#ifdef AY_HW
-  ay_hw_ctl(0, vol);
-  ay_hw_reset();
-  for (volatile int i = 0; i < 2000; i++) ;
+  ay_init(&ayemu[0]);
+  ay_init(&ayemu[1]);
   ay_engine_tick();
   ticks = 1;
-  for (int c = 0; c < nchips; c++) { ay_apply(&ay[c], ayp_regs(c), c); ay_hw_sync(c, 1); }
-  ay_mix((int) AY_TICK, 0);
-  next_us = R_US + 20000u;
-  ay_hw_ctl(1, vol);
-#else
+  apply_ay_regs();
   tick_left = 0;
-#endif
   active = 1;
   return 0;
 }
@@ -373,9 +372,6 @@ void pt3_stop(void) {
   else if (active) ayp_stop();
   engine_mode = 0;
   active = 0; ended = 0; paused = 0;
-#ifdef AY_HW
-  ay_hw_ctl(0, vol);
-#endif
 }
 int pt3_active(void) { return active; }
 int pt3_finished(void) { return ended; }

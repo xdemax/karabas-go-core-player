@@ -4,6 +4,7 @@
 #include <string.h>
 #include "fmt.h"
 #include "analysis.h"
+#include "mixer.h"
 #include "eng_esp32.h"
 #include "fpga.h"
 
@@ -78,6 +79,7 @@ int fmt_active(void) {
 }
 
 void fmt_stop(void) {
+  mixer_reset();
   for (unsigned i = 0; i < NENG; i++)
     if (engines[i]->stop) engines[i]->stop();
 }
