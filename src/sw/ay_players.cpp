@@ -617,17 +617,22 @@ static int start_one(Player &p, int kind, const uint8_t *m, uint32_t n) {
   return stc_start(p, m, n);
 }
 
+static int is_pt3_header(const uint8_t *m, uint32_t n) {
+  return n >= 13 && (!memcmp(m, "ProTracker 3.", 13) || !memcmp(m, "Vortex Tracke", 13));
+}
+
 static const uint8_t *find_second_pt3(const uint8_t *m, uint32_t n) {
   if (n >= 16 && !memcmp(m + n - 4, "02TS", 4)) {
     uint32_t f = n - 16;
     if (!memcmp(m + f, "PT3!", 4) && !memcmp(m + f + 6, "PT3!", 4)) {
       uint32_t s1 = m[f + 4] | (m[f + 5] << 8);
       uint32_t s2 = m[f + 10] | (m[f + 11] << 8);
-      if (s1 && s2 && s1 + s2 == f && !memcmp(m, "ProTracker 3.", 13)) return m + s1;
+      if (s1 && s2 && s1 + s2 == f && is_pt3_header(m, n) && is_pt3_header(m + s1, n - s1))
+        return m + s1;
     }
   }
   for (uint32_t i = 0x63; i + 13 <= n; i++)
-    if (!memcmp(m + i, "ProTracker 3.", 13)) return m + i;
+    if (is_pt3_header(m + i, n - i)) return m + i;
   return 0;
 }
 
