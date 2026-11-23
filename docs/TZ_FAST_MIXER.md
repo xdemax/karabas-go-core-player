@@ -2,12 +2,19 @@
 
 Это задание для отдельного исполнителя (Claude/другого coding agent). Нужен **только
 микшер и оптимизация существующего воспроизведения трекерных модулей**. Новый
-трекерный движок, MP3, внешние декодеры и замена форматов в эту задачу не входят.
+трекерный движок, сторонние декодеры и замена форматов в эту задачу не входят.
 
 ## 1. Зачем
 
-На Karabas Go стоит VexRiscv `rv32im` на 75 МГц, без FPU, с I/D-кэшами по 4 КБ.
-Текущая сборка `26112349` играет:
+На Karabas Go стоит VexRiscv `rv32imf` на 75 МГц с I-кэшем 16 КБ, D-кэшем 8 КБ
+и single-precision FPU; софт собран под `rv32imf`/`ilp32f`.
+
+**Важный результат:** переход с 4 КБ кэшей и soft-float на 16/8 КБ кэши и FPU
+(локальная сборка `26112353`) **не изменил скорость трекерного воспроизведения**
+на слух и по поведению `MIX`/`U`. Значит, дальнейшее улучшение надо искать не
+в CPU/FPU/разгоне, а в микшере и профиле горячих функций.
+
+Текущая сборка `26112353` играет:
 
 - MOD/XM — собственными FPGA-плеерами (`mod_fpga.c`, `xm_fpga.c`);
 - S3M/IT — MikMod (`mikmod_fpga.c`, `mikmod/playercode/virtch.c`);
@@ -29,14 +36,14 @@
 ## 2. Железо и текущая система
 
 - FPGA: Xilinx Spartan-6 `xc6slx25`, 75 МГц.
-- CPU: VexRiscv, `rv32im`, 75 МГц, I$ 16 КБ, D$ 8 КБ, FPU есть; прошивка собрана под `rv32imf`/`ilp32f`. SRAM общая с видео.
+- CPU: VexRiscv, `rv32imf`, 75 МГц, I$ 16 КБ, D$ 8 КБ, FPU есть; прошивка собрана под `rv32imf`/`ilp32f`. SRAM общая с видео.
 - Память: 3 МБ SRAM под код/кучу/стек; 32 МБ SDRAM, окно `0x10000000`.
 - Аудио: стерео FIFO 8192 сэмпла, 48 кГц, регистр свободного места `0x74`.
 - SRAM: `0x000000–0x300000`; фреймбуферы `0x300000/0x380000`.
 - SDRAM: файлы модулей и сэмплы.
-- Текущая сборка: `26112349`; Go/MiniG проверены, Mini добавлена в 1.0b.
+- Текущая сборка: `26112353` (локальная, FPU); Go/MiniG проверены, Mini добавлена в 1.0b.
 - libxmp **не входит** в текущую сборку и в эту задачу не входит.
-- MP3 **не входит** в эту задачу.
+- MP3/другие декодеры **не входят** в эту задачу.
 
 ## 3. Границы задачи
 
@@ -58,14 +65,14 @@
 
 - загрузка модулей, парсинг эффектов, envelopes, NNA, IT-фильтры;
 - замена replayer’а MikMod/libxmp;
-- MP3, OGG, WAV-декодеры;
+- сторонние декодеры и новые форматы;
 - UI, файловый браузер, SD-драйвер;
 - изменения FPGA/CPU/частоты;
 - ESP32 и внешние декодеры.
 
 ## 4. Что профилировать
 
-До переписывания микшера нужен честный профиль текущей сборки `26112349`:
+До переписывания микшера нужен честный профиль текущей сборки `26112353`:
 
 1. `mod_fpga.c`: `mix()`, парсинг эффектов, загрузка сэмплов.
 2. `xm_fpga.c`: `mix()`, `sample_decode()`, envelopes, limiter >28 голосов.
@@ -205,9 +212,9 @@ Target-тесты:
 - `Keijsig.it` стабильно, без плавающего тона;
 - `an32xm` без underrun;
 - 4/16 голосов укладываются в бюджет;
-- A/B с `26112349` не хуже по качеству;
+- A/B с `26112353` не хуже по качеству;
 - нет регрессий MOD/XM/S3M/IT;
-- нет FPU и тяжёлых аллокаций в audio-path.
+- FPU не требуется в audio-path; тяжёлых аллокаций там нет.
 
 ## 9. Что сдать
 
@@ -225,8 +232,8 @@ Target-тесты:
 > Read `docs/TZ_FAST_MIXER.md`, `src/sw/mod_fpga.c`, `src/sw/xm_fpga.c`,
 > `src/sw/mikmod_fpga.c`, `src/sw/mikmod/playercode/virtch.c`, `src/sw/mixer.c`,
 > `src/sw/analysis.c`, `src/sw/Makefile`, `src/sw/link.ld`.
-> First measure the current build `26112349` on target as described in section 4.
+> First measure the current build `26112353` on target as described in section 4.
 > Then implement `fastmix` within the scope above and integrate it into the native
 > MOD/XM players. Do not touch loaders, effects or replayers. After that, propose the
-> MikMod adapter/inner-loop change with measurements. Do not add MP3, libxmp or new
-> formats.
+> MikMod adapter/inner-loop change with measurements. Do not add new formats or
+> change the CPU.
