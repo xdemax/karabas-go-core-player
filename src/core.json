@@ -1,0 +1,63 @@
+{
+    "id": "musicplayer",
+    "name": "Music Player",
+    "build": "26112252",
+    "visible": true,
+    "type": "osd",
+    "order": 10,
+    "eeprom_bank": 0,
+    "roms": [
+        {
+            "filename": "roms/player.bin",
+            "address": 0
+        }
+    ],
+    "boards": {
+        "minig": {
+            "link": 2,
+            "bitstream": "karabas_minig.bin"
+        }
+    },
+    "osd": [
+        {
+            "type": "S",
+            "name": "Volume",
+            "key": "volume",
+            "index": 0,
+            "default": "64",
+            "options": [
+                "0",
+                "4",
+                "8",
+                "12",
+                "16",
+                "20",
+                "24",
+                "28",
+                "32",
+                "36",
+                "40",
+                "44",
+                "48",
+                "52",
+                "56",
+                "64"
+            ]
+        },
+        {
+            "type": "FL",
+            "name": "SD1 MUSIC",
+            "slot": 1,
+            "extensions": ".mod,.xm,.pt3,.pt2,.stc,.s3m",
+            "dir": "/mods",
+            "hotkey": "Menu+F5"
+        }
+    ],
+    "matrix": {
+        "mode": "scroll",
+        "text": "KARABAS GO MUSIC PLAYER",
+        "color": "rainbow",
+        "repeat": 1,
+        "then": "core"
+    }
+}

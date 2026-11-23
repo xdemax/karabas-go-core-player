@@ -1,0 +1,33 @@
+// Render an AY tracker (PT3/PT2/STC) with the FPGA AY engine to a 48 kHz stereo WAV (host).
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include "../fpga.h"
+#include "../audio.h"
+
+static FILE *out; static uint32_t written, total;
+int audio_free(void) { return 2047; }
+void audio_write(int16_t l, int16_t r) { if (written >= total) return; int16_t b[2] = {l,r}; fwrite(b,2,2,out); written++; }
+int src_read(play_src_t *s, uint32_t off, void *buf, uint32_t n, UINT *got) { (void)s;(void)off;(void)buf;(void)n; if(got)*got=0; return -1; }
+static uint32_t hreg; volatile uint32_t *host_reg(uint32_t off) { (void)off; hreg=1; return &hreg; }
+static void wr32(uint8_t*p,uint32_t v){p[0]=v;p[1]=v>>8;p[2]=v>>16;p[3]=v>>24;}
+static void wr16(uint8_t*p,uint16_t v){p[0]=v;p[1]=v>>8;}
+static const char *ext(const char *s){const char*d=strrchr(s,'.');return d?d+1:"";}
+int main(int argc,char**argv){
+  if(argc<3){fprintf(stderr,"usage: %s song out.wav [sec]\n",argv[0]);return 2;}
+  int sec=argc>3?atoi(argv[3]):10; if(sec<1)sec=1; total=(uint32_t)sec*48000;
+  FILE*f=fopen(argv[1],"rb"); if(!f){perror(argv[1]);return 1;} fseek(f,0,SEEK_END);long n=ftell(f);fseek(f,0,SEEK_SET);
+  uint8_t*b=malloc(n); if(!b||fread(b,1,n,f)!=(size_t)n){perror("read");return 1;} fclose(f);
+  out=fopen(argv[2],"wb"); if(!out){perror("out");return 1;} uint8_t h[44]; memset(h,0,44);
+  memcpy(h,"RIFF",4);memcpy(h+8,"WAVE",4);memcpy(h+12,"fmt ",4);wr32(h+16,16);wr16(h+20,1);wr16(h+22,2);wr32(h+24,48000);wr32(h+28,48000*4);wr16(h+32,4);wr16(h+34,16);memcpy(h+36,"data",4);fwrite(h,1,44,out);
+  play_src_t src={NULL,b}; const char*e=ext(argv[1]); int rc;
+  if(!strcasecmp(e,"pt2")) rc=pt2_start(&src,(uint32_t)n,NULL);
+  else if(!strcasecmp(e,"stc")) rc=stc_start(&src,(uint32_t)n,NULL);
+  else rc=pt3_start(&src,(uint32_t)n,NULL);
+  if(rc){fprintf(stderr,"ay: %s\n",pt3_error());return 1;}
+  while(written<total && pt3_active()){uint32_t before=written;pt3_service();if(written==before)break;}
+  long data=(long)written*4; fseek(out,4,SEEK_SET);uint32_t r=36+data;fwrite(&r,4,1,out);fseek(out,40,SEEK_SET);uint32_t d=data;fwrite(&d,4,1,out);fclose(out);
+  fprintf(stderr,"rendered %u samples, '%s', %d ch\n",written,pt3_title(),({fmt_info_t fi;memset(&fi,0,sizeof fi);pt3_info(&fi);fi.channels;}));
+  return 0;
+}
