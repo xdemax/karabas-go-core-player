@@ -11,6 +11,26 @@
 enum { K_PT3 = 0, K_PT2 = 1, K_STC = 2 };
 
 // The period of the C-1..B-7 notes (Pro Tracker / Sound Tracker note table, 96 entries).
+// Volume table 3.5x (the same table as the reference PT3 player; volume * amplitude)
+static const uint8_t pt3_vol35[16][16] = {
+  {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1},
+  {0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2},
+  {0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3},
+  {0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4},
+  {0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5},
+  {0,0,1,1,2,2,2,3,3,4,4,4,5,5,6,6},
+  {0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7},
+  {0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8},
+  {0,1,1,2,2,3,4,4,5,5,6,7,7,8,8,9},
+  {0,1,1,2,3,3,4,5,5,6,7,7,8,9,9,10},
+  {0,1,1,2,3,4,4,5,6,7,7,8,9,10,10,11},
+  {0,1,2,2,3,4,5,6,6,7,8,9,10,10,11,12},
+  {0,1,2,3,3,4,5,6,7,8,9,10,10,11,12,13},
+  {0,1,2,3,4,5,6,7,7,8,9,10,11,12,13,14},
+  {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
+};
+
 static const uint16_t note_tab[96] = {
   0x0ef8, 0x0e10, 0x0d60, 0x0c80, 0x0bd8, 0x0b28, 0x0a88, 0x09f0,
   0x0960, 0x08e0, 0x0858, 0x07e0, 0x077c, 0x0708, 0x06b0, 0x0640,
@@ -38,6 +58,7 @@ struct Chan {
   uint8_t enabled, env;
   int16_t slide, slide_step, slide_left, slide_delay;
   int8_t amp_slide;
+  int16_t env_shift, noise_shift;
   uint8_t on_delay, off_delay, on_left, on_state;
   uint8_t s_tik;                // STC sample tick counter (0xff: stopped)
 };
@@ -150,7 +171,17 @@ static void set_pattern(Player &p, int pos) {
 // ---------------------------------------------------------------- PT3
 
 static void pt3_emit(Player &p, Chan &c, int ci, int &mixer) {
+  (void) ci;
   c.amp = 0;
+
+  // #05 gate: toggle the channel after the on/off delay.
+  if (c.on_left > 0) {
+    c.on_left--;
+    if (c.on_left == 0) {
+      c.enabled = !c.enabled;
+      c.on_left = c.enabled ? c.on_delay : c.off_delay;
+    }
+  }
   if (!c.enabled) return;
   uint32_t a = c.smp + (uint32_t) c.spos * 4;
   if (a + 3 >= p.n) return;
@@ -167,14 +198,19 @@ static void pt3_emit(Player &p, Chan &c, int ci, int &mixer) {
     else if (c.amp_slide > -15) c.amp_slide--;
   }
   amp = clamp_amp(amp + c.amp_slide);
-  c.amp = (uint8_t) ((c.vol * amp + 7) / 15);
+  c.amp = pt3_vol35[c.vol & 15][amp];
   if (!(b0 & 1) && c.env) c.amp |= 16;
   mixer |= (b1 >> 1) & 0x48;   // the PT3 mixer bits; shifted once per channel below
   if (b1 & 0x80) {
-    int e = ((b0 >> 1) & 0x0f) + c.amp_slide;
+    int e;
+    if (b0 & 0x20) e = ((b0 >> 1) | 0xf0) + c.env_shift;
+    else e = ((b0 >> 1) & 0x0f) + c.env_shift;
+    if (b1 & 0x20) c.env_shift = (int16_t) e;
     p.env_add = (int16_t) e;
   } else {
-    p.noise_add = (b0 >> 1) & 31;
+    int e = (b0 >> 1) + c.noise_shift;
+    if (b1 & 0x20) c.noise_shift = (int16_t) e;
+    p.noise_add = (uint8_t) e;
   }
   c.spos++;
   if (c.spos >= c.slen) c.spos = c.sloop;
@@ -208,7 +244,9 @@ static void pt3_row(Player &p, Chan &c, int chip) {
     } else if (v >= 0xc1 && v <= 0xcf) {
       c.vol = (uint8_t) (v - 0xc0);
     } else if (v == 0xc0) {
-      // No note, but the current sample keeps sounding; only #D0/#00 end the row.
+      c.enabled = 0; c.spos = c.opos = 0;
+      c.slide = 0; c.env = 0; c.on_left = 0;
+      c.env_shift = c.noise_shift = 0;
       end = 1;
     } else if (v >= 0xb2 && v <= 0xbf) {
       c.env = 1;
@@ -222,6 +260,8 @@ static void pt3_row(Player &p, Chan &c, int chip) {
     } else if (v >= 0x50 && v <= 0xaf) {
       c.note = (uint8_t) (v - 0x50);
       c.spos = c.opos = 0; c.slide = 0; c.amp_slide = 0;
+      c.env_shift = c.noise_shift = 0;
+      c.on_left = 0;
       c.enabled = 1; end = 1;
     } else if (v >= 0x40 && v <= 0x4f) {
       set_orn_pt3(c, p.m, p.n, v - 0x40); c.opos = 0;
@@ -284,6 +324,7 @@ static void pt3_tick(Player &p, int chip) {
       p.pos++;
       if (p.pos >= p.pos_count) p.pos = p.loop;
       set_pattern(p, p.pos);
+      p.noise_base = 0;
     }
     for (int i = 0; i < 3; i++) {
       if (p.ch[i].skip_left) { p.ch[i].skip_left--; if (p.ch[i].skip_left) continue; }
@@ -292,6 +333,7 @@ static void pt3_tick(Player &p, int chip) {
   }
   int mixer = 0;
   p.env_add = 0;
+  p.noise_add = 0;
   for (int i = 0; i < 3; i++) { pt3_emit(p, p.ch[i], i, mixer); mixer >>= 1; }
   wr_reg(chip, 7, mixer);
   for (int i = 0; i < 3; i++) {
