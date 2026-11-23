@@ -189,13 +189,14 @@ static void pt3_emit(Player &p, Chan &c, int ci, int &mixer) {
   }
 }
 
-static void pt3_row(Player &p, Chan &c) {
+static void pt3_row(Player &p, Chan &c, int chip) {
   uint8_t flags[8];
   int nf = 0;
   uint32_t a = c.pat;
   int end = 0;
   while (a < p.n) {
     uint8_t v = p.m[a++];
+    if (v == 0) { a--; break; }   // #00: end of this track, leave the pointer at it
     if (v >= 0xf0) {
       set_orn_pt3(c, p.m, p.n, v - 0xf0);
       if (a < p.n) set_sample_pt3(c, p.m, p.n, p.m[a++] / 2);
@@ -207,10 +208,11 @@ static void pt3_row(Player &p, Chan &c) {
     } else if (v >= 0xc1 && v <= 0xcf) {
       c.vol = (uint8_t) (v - 0xc0);
     } else if (v == 0xc0) {
-      c.enabled = 0; c.spos = c.opos = 0; c.slide = 0; c.env = 0; end = 1;
+      // No note, but the current sample keeps sounding; only #D0/#00 end the row.
+      end = 1;
     } else if (v >= 0xb2 && v <= 0xbf) {
       c.env = 1;
-      wr_reg(0, 13, v - 0xb1);
+      wr_reg(chip, 13, v - 0xb1);
       if (a + 1 < p.n) { p.env_hi = p.m[a++]; p.env_lo = p.m[a++]; }
       c.opos = 0; p.env_slide = 0;
     } else if (v == 0xb1) {
@@ -228,7 +230,7 @@ static void pt3_row(Player &p, Chan &c) {
     } else if (v >= 0x10 && v <= 0x1f) {
       if (v == 0x10) c.env = 0;
       else {
-        c.env = 1; wr_reg(0, 13, v - 0x10);
+        c.env = 1; wr_reg(chip, 13, v - 0x10);
         if (a + 1 < p.n) { p.env_hi = p.m[a++]; p.env_lo = p.m[a++]; }
         p.env_slide = 0;
       }
@@ -285,7 +287,7 @@ static void pt3_tick(Player &p, int chip) {
     }
     for (int i = 0; i < 3; i++) {
       if (p.ch[i].skip_left) { p.ch[i].skip_left--; if (p.ch[i].skip_left) continue; }
-      pt3_row(p, p.ch[i]);
+      pt3_row(p, p.ch[i], chip);
     }
   }
   int mixer = 0;
@@ -311,7 +313,12 @@ static int pt3_start(Player &p, const uint8_t *m, uint32_t n) {
   if (memcmp(m, "ProTracker 3.", 13) && memcmp(m, "Vortex Tracke", 13)) return -1;
   p.kind = K_PT3; p.m = m; p.n = n;
   p.pat_tab = rd16(m + 0x67);
-  p.pos_count = m[0x65];
+  // The order list is terminated by #ff; +101 is not the position count in every
+  // tracker version.
+  p.pos_count = 0;
+  while (p.pos_count < 255 && (uint32_t) (0xc9 + p.pos_count) < n &&
+         m[0xc9 + p.pos_count] != 0xff)
+    p.pos_count++;
   if (!p.pos_count) p.pos_count = 1;
   p.loop = m[0x66];
   if (p.loop >= p.pos_count) p.loop = 0;
@@ -370,11 +377,12 @@ static void pt2_emit(Player &p, Chan &c, int ci, int &mixer) {
   }
 }
 
-static void pt2_row(Player &p, Chan &c) {
+static void pt2_row(Player &p, Chan &c, int chip) {
   uint32_t a = c.pat;
   int end = 0, gliss = 0;
   while (a < p.n) {
     uint8_t v = p.m[a++];
+    if (v == 0) { a--; break; }   // #00: end of this track, leave the pointer at it
     if (v >= 0xe1) {
       set_sample_pt2(c, p.m, p.n, v - 0xe0);
     } else if (v == 0xe0) {
@@ -386,8 +394,8 @@ static void pt2_row(Player &p, Chan &c) {
     } else if (v == 0x7f) {
       c.env = 0;
     } else if (v >= 0x71 && v <= 0x7e) {
-      c.env = 1; wr_reg(0, 13, v - 0x70);
-      if (a + 1 < p.n) { wr_reg(0, 11, p.m[a++]); wr_reg(0, 12, p.m[a++]); }
+      c.env = 1; wr_reg(chip, 13, v - 0x70);
+      if (a + 1 < p.n) { wr_reg(chip, 11, p.m[a++]); wr_reg(chip, 12, p.m[a++]); }
     } else if (v == 0x70) {
       end = 1;
     } else if (v >= 0x60 && v <= 0x6f) {
@@ -425,7 +433,7 @@ static void pt2_tick(Player &p, int chip) {
     }
     for (int i = 0; i < 3; i++) {
       if (p.ch[i].skip_left) { p.ch[i].skip_left--; continue; }
-      pt2_row(p, p.ch[i]);
+      pt2_row(p, p.ch[i], chip);
     }
   }
   int mixer = 0;
