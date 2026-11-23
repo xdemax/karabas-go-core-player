@@ -1,7 +1,7 @@
 # Music Player для Karabas Go / Mini / Mini G
 
 Плеер трекерных и чиптюн-модулей для семейства **Karabas Go, Mini rev A–F
-и Mini G/G2**. Ядро — форк menu-ядра: RISC-V VexRiscv на 75 МГц,
+и Mini G/G2**. Ядро — форк menu-ядра: RISC-V VexRiscv на 75 МГц (I-кэш 16 КБ, D-кэш 8 КБ, FPU),
 фреймбуфер 800×600×8 в SRAM, блиттер/шрифты, клавиатура и джойстики через
 MCU link v2 (`kg_mcu2`).
 

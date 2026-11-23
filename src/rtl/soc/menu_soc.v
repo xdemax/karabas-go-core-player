@@ -3,7 +3,7 @@
 /*
  menu_soc.v
 
- The computer of the boot menu (docs/PLAN.md): VexRiscv (rv32im, I$ 4K, D$ 4K, wishbone), the SRAM
+ The computer of the boot menu (docs/PLAN.md): VexRiscv (rv32im, I$ 16K, D$ 8K, FPU, wishbone), the SRAM
  (menu_sram: the program, the data and the two frame buffers), the MMIO registers, the loader. One
  clock (clk, 75 MHz). After doom_soc.v of karabas-go-core-doom (no SDRAM: the Mini G rev G2 has it off,
  the menu must run on every board).
@@ -212,10 +212,9 @@ reg [31:0] i_dat_i, d_dat_i;
 reg i_ack, d_ack;
 
 VexRiscv cpu (
-	.externalResetVector(RESET_VECTOR),
 	.timerInterrupt(1'b0),
 	.softwareInterrupt(1'b0),
-	.externalInterruptArray(32'd0),
+	.externalInterrupt(1'b0),
 	.iBusWishbone_CYC(i_cyc),
 	.iBusWishbone_STB(i_stb),
 	.iBusWishbone_ACK(i_ack),
