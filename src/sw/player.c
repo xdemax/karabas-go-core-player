@@ -186,12 +186,12 @@ static void progress(uint32_t done, uint32_t total) {
 static void play_selected(void) {
   if (sel < 0 || sel >= nent) return;
   fs_entry_t *e = &ent[sel];
-  char full[300];
+  char full[512];
   int i = 0;
   const char *p = path;
-  if (strcmp(path, "/") != 0) { while (*p && i < 290) full[i++] = *p++; }
+  if (strcmp(path, "/") != 0) { while (*p && i < (int) sizeof(full) - 2) full[i++] = *p++; }
   if (i == 0 || full[i - 1] != '/') full[i++] = '/';
-  for (int j = 0; e->name[j] && i < 298; j++) full[i++] = e->name[j];
+  for (int j = 0; e->name[j] && i < (int) sizeof(full) - 1; j++) full[i++] = e->name[j];
   full[i] = 0;
 
   if (e->dir) {

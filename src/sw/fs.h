@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "ff.h"
 
-#define FS_NAME_MAX 64
+#define FS_NAME_MAX 256
 
 typedef struct {
   char name[FS_NAME_MAX];   // UTF-8, as FatFs gives it

@@ -137,6 +137,7 @@ static void set_pattern(Player &p, int pos) {
   p.pos = (uint8_t) pos;
   if (p.kind == K_PT3) {
     uint8_t v = p.m[0xc9 + pos];
+    // The position list stores pattern * 3; two bytes per pattern slot make *6.
     uint16_t base = p.pat_tab + v * 2;
     for (int c = 0; c < 3; c++) p.ch[c].pat = rd16(p.m + base + c * 2);
   } else if (p.kind == K_PT2) {
