@@ -1,7 +1,7 @@
 # The program of the player core (rtl/soc/menu_soc.v): player.bin is the ROM of musicplayer.kg.
 XPACK  ?= $(HOME)/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin
 CROSS  := $(XPACK)/riscv-none-elf-
-CFLAGS := -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32im -mabi=ilp32 -O2 -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
+CFLAGS := -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32imf -mabi=ilp32f -O2 -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
 CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -fno-unwind-tables
 B      := build
 
