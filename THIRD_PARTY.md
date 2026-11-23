@@ -48,6 +48,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 `src/sw/mikmod` is libmikmod used for S3M and IT playback. It is distributed under the GNU Lesser General Public License 2.1; see `src/sw/mikmod/COPYING.LIB` and `src/sw/mikmod/COPYING.LESSER`.
 
+## MP3 (Helix)
+
+`src/sw/helix` is the fixed-point Helix MP3 decoder, taken from the karabas-megabuzz project. The files carry the RealNetworks Public Source License 1.0 (RPSL) in their headers; the decoder is used only for the experimental MP3 format in this player.
+
 ## make_core.py
 
 `src/make_core.py` is a copy of the `make_core` tool from

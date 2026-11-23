@@ -102,7 +102,7 @@ typedef struct {
 
 Add a `play_engine_t` and the format modules of that engine. Add the engine to `engines[]` in
 `fmt.c`; the player initializes all and shows the first one's name / version. The FPGA engine is
-the only one in the current build; S3M/IT use MikMod inside it.
+the only one in the current build; S3M/IT use MikMod inside it; MP3 uses Helix, separately from the tracker engines.
 
 ## The audio FIFO (`menu_soc` 0x70 / 0x74)
 
@@ -142,3 +142,4 @@ need it. A new format is a new `formats/*.c` + a rebuild of the program (the bit
 | `psg` | `.psg` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `s3m` | `.s3m` | FPGA (MikMod) | `SCRM` at 0x2c |
 | `it` | `.it` | FPGA (MikMod) | `IMPM` at 0 |
+| `mp3` | `.mp3` | FPGA (Helix, experimental) | ID3 / MPEG sync |

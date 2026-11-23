@@ -1,7 +1,7 @@
 # The program of the player core (rtl/soc/menu_soc.v): player.bin is the ROM of musicplayer.kg.
 XPACK  ?= $(HOME)/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin
 CROSS  := $(XPACK)/riscv-none-elf-
-CFLAGS := -Ifatfs -Imikmod -Imikmod/include -DNO_DEPACKERS -march=rv32im -mabi=ilp32 -O2 -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
+CFLAGS := -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32im -mabi=ilp32 -O2 -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
 CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -fno-unwind-tables
 B      := build
 
@@ -24,7 +24,7 @@ $(B)/ay/ay_engine.o: ay/ay_engine.cpp $(wildcard ay/players/*.h) | $(B)
 $(B)/%.o: %.S | $(B)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 SRCS   := main.c player.c ui_skin.c skin_graphic.c ui.c fonts.c gfx.c fpga.c xm_fpga.c ay_fpga.c analysis.c sound.c rpc.c settings.c spi.c sd.c diskio.c fs.c browser.c playlist.c syscalls.c \
-          src.c fmt.c audio.c mixer.c mod_fpga.c mikmod_fpga.c formats/mod.c formats/xm.c formats/s3m.c formats/it.c formats/pt3.c formats/pt2.c formats/stc.c formats/ay_more.c \
+          src.c fmt.c audio.c mixer.c mod_fpga.c mikmod_fpga.c mp3_fpga.c formats/mod.c formats/xm.c formats/s3m.c formats/it.c formats/pt3.c formats/pt2.c formats/stc.c formats/ay_more.c formats/mp3.c \
           fatfs/ff.c fatfs/ffunicode.c
 MIKMOD_SRCS := mikmod/mmio/mmalloc.c mikmod/mmio/mmerror.c mikmod/mmio/mmio.c \
                mikmod/playercode/mdriver.c mikmod/playercode/mdulaw.c mikmod/playercode/mloader.c \
@@ -32,7 +32,10 @@ MIKMOD_SRCS := mikmod/mmio/mmalloc.c mikmod/mmio/mmerror.c mikmod/mmio/mmio.c \
                mikmod/playercode/mwav.c mikmod/playercode/npertab.c mikmod/playercode/sloader.c \
                mikmod/playercode/virtch.c mikmod/playercode/virtch2.c mikmod/playercode/virtch_common.c \
                mikmod/loaders/load_s3m.c mikmod/loaders/load_it.c mikmod/drivers/drv_nos.c
-OBJS   := $(B)/crt0.o $(addprefix $(B)/,$(SRCS:.c=.o)) $(addprefix $(B)/,$(MIKMOD_SRCS:.c=.o)) $(B)/ay_players.o $(B)/ay/ay_engine.o
+HELIX_SRCS := helix/mp3dec.c helix/mp3tabs.c helix/bitstream.c helix/buffers.c helix/dequant.c \
+              helix/huffman.c helix/imdct.c helix/scalfact.c helix/stproc.c helix/subband.c \
+              helix/dqchan.c helix/dct32.c helix/hufftabs.c helix/polyphase.c helix/trigtabs.c
+OBJS   := $(B)/crt0.o $(addprefix $(B)/,$(SRCS:.c=.o)) $(addprefix $(B)/,$(MIKMOD_SRCS:.c=.o)) $(addprefix $(B)/,$(HELIX_SRCS:.c=.o)) $(B)/ay_players.o $(B)/ay/ay_engine.o
 $(B)/player.elf: $(OBJS) link.ld
 	$(CROSS)gcc $(CFLAGS) -nostdlib -nostartfiles -T link.ld -Wl,--gc-sections -o $@ $(OBJS) -lc_nano -lm -lgcc
 	$(CROSS)size $@
