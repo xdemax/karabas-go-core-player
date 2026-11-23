@@ -128,7 +128,7 @@ static void env_step(ay_t *a) {
   }
 }
 
-static int ay_chip(ay_t *a, int base) {
+static void ay_chip(ay_t *a, int base, int *out_l, int *out_r) {
   for (int c = 0; c < 3; c++) {
     uint32_t p = a->tphase[c] + a->tstep[c];
     int t = p >> 16;
@@ -150,7 +150,7 @@ static int ay_chip(ay_t *a, int base) {
   while (et-- > 0) env_step(a);
 
   int mixer = a->regs[7];
-  int sum = 0;
+  int sum_l = 0, sum_r = 0;
   for (int c = 0; c < 3; c++) {
     int rv = a->regs[8 + c];
     int v;
@@ -162,24 +162,40 @@ static int ay_chip(ay_t *a, int base) {
     int tone_on = !(mixer & (1 << c));
     int noise_on = !(mixer & (8 << c));
     int out = (tone_on ? a->tone[c] : 1) & (noise_on ? a->noise : 1);
-    sum += out ? level : -level;
+    int s = out ? level : -level;
+    // The RTL pair places A and B on the left, B and C on the right (menu_soc):
+    //   left = 2*A + B, right = 2*C + B for each YM2149.
+    if (c == 0) sum_l += s * 2;
+    else if (c == 1) { sum_l += s; sum_r += s; }
+    else sum_r += s * 2;
     vu[base + c] = (uint8_t) level;
   }
-  return sum;
+  *out_l = sum_l;
+  *out_r = sum_r;
 }
 
 static void ay_mix(int n, int emit) {
   for (int i = 0; i < n; i++) {
-    int sum = 0;
-    for (int c = 0; c < nchips; c++) sum += ay_chip(&ay[c], c * 3);
-    int32_t s = sum * 32;
-    s = s * vol / 64;
-    if (s > 32767) s = 32767; else if (s < -32768) s = -32768;
-    int32_t al = s < 0 ? -s : s;
+    int sum_l = 0, sum_r = 0;
+    for (int c = 0; c < nchips; c++) {
+      int l, r;
+      ay_chip(&ay[c], c * 3, &l, &r);
+      sum_l += l;
+      sum_r += r;
+    }
+    int32_t sl = sum_l * 32;
+    int32_t sr = sum_r * 32;
+    sl = sl * vol / 64;
+    sr = sr * vol / 64;
+    if (sl > 32767) sl = 32767; else if (sl < -32768) sl = -32768;
+    if (sr > 32767) sr = 32767; else if (sr < -32768) sr = -32768;
+    int32_t al = sl < 0 ? -sl : sl;
+    int32_t ar = sr < 0 ? -sr : sr;
     if (al > peak_l) peak_l = al;
-    last_l = s; last_r = s;
-    analysis_push((int16_t) s, (int16_t) s);
-    if (emit) audio_write((int16_t) s, (int16_t) s);
+    if (ar > peak_r) peak_r = ar;
+    last_l = sl; last_r = sr;
+    analysis_push((int16_t) sl, (int16_t) sr);
+    if (emit) audio_write((int16_t) sl, (int16_t) sr);
   }
 }
 
