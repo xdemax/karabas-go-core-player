@@ -23,13 +23,17 @@
 #define SP_Y    270              // the spectrum label
 #define SP_BASE 462
 #define SP_H    160
-#define SP_BARS 60
-#define SP_BW   2
-#define SP_GAP  4
+#define SP_BARS 178              // 1 px bars, 1 px gaps: 355 px, the full right panel
+#define SP_BW   1
+#define SP_GAP  1
 #define SP_STEP (SP_BW + SP_GAP)
 #define SP_W    (SP_BARS * SP_BW + (SP_BARS - 1) * SP_GAP)
 #define SP_X    (PX + (PW - SP_W) / 2)
 #define SP_CAP  4
+// The UI used to show only the middle (yellow) third: the raw bands stay around
+// 85..170, which is exactly the yellow colour zone. Use that zone as the full scale.
+#define SP_LO   85
+#define SP_HI   170
 
 static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_spec, c_grid, c_yellow, c_red;
 static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent;
@@ -389,6 +393,10 @@ static void update_spectrum(const player_view_t *v) {
     // spectrum sensitivity: 75% overall, with a gentle low-frequency tilt (70%..100%)
     t = t * (70 + (i * 30) / (SP_BARS - 1)) / 100;
     t = t * 3 / 4;
+    // Zoom into the band values that used to sit in the yellow zone: the yellow
+    // bottom is the new zero, the yellow top the new full scale.
+    t = (t - SP_LO) * 255 / (SP_HI - SP_LO);
+    if (t < 0) t = 0; else if (t > 255) t = 255;
     int old = disp_bands[i];
     int nv = old;
     if (t > nv) nv = t;
