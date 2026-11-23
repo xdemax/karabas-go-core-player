@@ -23,7 +23,7 @@
 #define SP_Y    270              // the spectrum label
 #define SP_BASE 462
 #define SP_H    160
-#define SP_BARS 360              // 1 px bars, no gaps: the full right panel
+#define SP_BARS 60               // the original bar count, 1 px wide and adjacent
 #define SP_BW   1
 #define SP_GAP  0
 #define SP_STEP (SP_BW + SP_GAP)
