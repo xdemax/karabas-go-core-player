@@ -210,6 +210,21 @@ static void ay_mix(int n, int emit) {
 
 void pt3_service(void) {
   if (!active || paused) return;
+#ifdef AY_HW
+  uint32_t now = R_US;
+  int guard = 0;
+  while ((int32_t) (now - next_us) >= 0 && active) {
+    uint32_t length = engine_mode ? (uint32_t) ay_engine_length() : ayp_length();
+    if (length && ticks >= length) { active = 0; ended = 1; ay_hw_ctl(0, vol); break; }
+    ay_engine_tick();
+    ticks++;
+    for (int c = 0; c < nchips; c++) { ay_apply(&ay[c], ayp_regs(c), c); ay_hw_sync(c, 0); }
+    // The RTL chips are the sound source. Refresh the display model at 12.5 Hz only.
+    if ((ticks & 3) == 0) ay_mix((int) AY_TICK, 0);
+    next_us += 20000u;
+    if (++guard >= 100) { next_us = now + 20000u; break; }
+  }
+#else
   int free = audio_free();
   while (free > 0 && active) {
     if (!tick_left) {
@@ -230,26 +245,22 @@ void pt3_service(void) {
                   (int32_t) ayemu[1].out[0] * 2 + ayemu[1].out[1];
       int32_t r = (int32_t) ayemu[0].out[2] * 2 + ayemu[0].out[1] +
                   (int32_t) ayemu[1].out[2] * 2 + ayemu[1].out[1];
-      l = (l * vol) / 64;
-      r = (r * vol) / 64;
+      l = (l * vol) / 64; r = (r * vol) / 64;
       if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
       if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
-      int32_t al = l < 0 ? -l : l;
-      int32_t ar = r < 0 ? -r : r;
+      int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
       if (al > peak_l) peak_l = al;
       if (ar > peak_r) peak_r = ar;
       last_l = l; last_r = r;
       mixer_write((int16_t) l, (int16_t) r);
       for (int c = 0; c < 3; c++) {
-        int v = ayp_regs(0)[8 + c] & 15;
-        vu[c] = (uint8_t) (v * 16);
-        v = ayp_regs(1)[8 + c] & 15;
-        vu[3 + c] = (uint8_t) (v * 16);
+        vu[c] = (uint8_t) ((ayp_regs(0)[8 + c] & 15) * 16);
+        vu[3 + c] = (uint8_t) ((ayp_regs(1)[8 + c] & 15) * 16);
       }
     }
-    free -= n;
-    tick_left -= (uint32_t) n;
+    free -= n; tick_left -= (uint32_t) n;
   }
+#endif
 }
 
 static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_progress_t progress) {
@@ -292,12 +303,27 @@ static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_prog
   memset(title, 0, sizeof(title));
   const char *t = ay_engine_title();
   for (int n = 0; t && t[n] && n < (int) sizeof(title) - 1; n++) title[n] = t[n];
+#ifdef AY_HW
+  // The sound comes from the RTL YM2149 pair; the CPU only streams registers.
+  ay_hw_reset();
+  for (volatile int i = 0; i < 2000; i++) ;
+  ay_engine_tick();
+  ticks = 1;
+  for (int c = 0; c < nchips; c++) {
+    ay_apply(&ay[c], ayp_regs(c), c);
+    ay_hw_sync(c, 1);
+  }
+  ay_mix(AY_TICK, 0);
+  next_us = R_US + 20000u;
+  ay_hw_ctl(1, vol);
+#else
   ay_init(&ayemu[0]);
   ay_init(&ayemu[1]);
   ay_engine_tick();
   ticks = 1;
   apply_ay_regs();
   tick_left = 0;
+#endif
   active = 1;
   return 0;
 }
@@ -375,6 +401,9 @@ int psg_start(const play_src_t *src, uint32_t size, play_progress_t progress) { 
 void pt3_stop(void) {
   if (engine_mode) ay_engine_stop();
   else if (active) ayp_stop();
+#ifdef AY_HW
+  ay_hw_ctl(0, vol);
+#endif
   engine_mode = 0;
   active = 0; ended = 0; paused = 0;
 }
@@ -418,9 +447,15 @@ void pt3_audio(fmt_audio_t *o) {
 int pt3_get_volume(void) { return vol; }
 int pt3_set_volume(int v) {
   if (v < 0) v = 0; if (v > 64) v = 64; vol = v;
+#ifdef AY_HW
+  if (active) ay_hw_ctl(paused ? 0 : 1, vol);
+#endif
   return vol;
 }
 int pt3_pause(int on) {
   if (on < 0) paused = !paused; else paused = on ? 1 : 0;
+#ifdef AY_HW
+  if (active) ay_hw_ctl(paused ? 0 : 1, vol);
+#endif
   return paused;
 }
