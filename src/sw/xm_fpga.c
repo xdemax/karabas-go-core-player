@@ -7,6 +7,7 @@
 #include "mixer.h"
 #include "mmio.h"
 #include "analysis.h"
+#include "fastmix.h"
 
 #define XM_CH 32
 #define XM_PAT 256
@@ -499,150 +500,44 @@ static void next_tick(void) {
   X.tleft = X.spt;
 }
 
+static int16_t fmout[XM_MIXBUF * 2];
+static fm_voice_t fv[XM_CH];
+
 static void mix(int n) {
-  // Channel-major: for each channel keep pos/step/gains in registers and add a block into the
-  // stereo accumulators. The accumulators are interleaved (L,R), and a block that does not reach
-  // the sample end takes the branch-free path. Above 28 active voices the quietest ones are
-  // skipped: a dense 32-channel section must not starve the 48 kHz FIFO.
+  // The replayer still owns effects, envelopes and sample selection. The shared fastmix
+  // kernel only does the per-voice fixed-point resampling and accumulation.
   if (n > XM_MIXBUF) n = XM_MIXBUF;
-  for (int i = 0; i < n; i++) { mixbuf[2 * i] = 0; mixbuf[2 * i + 1] = 0; }
-
-  for (int c = 0; c < XM_CH; c++) mix_skip[c] = 0;
-  if (X.chn > 28) {
-    int order[XM_CH], cnt = 0;
-    for (int c = 0; c < X.chn; c++) {
-      xchan_t *p = &X.ch[c];
-      if (p->active && (p->lgain | p->rgain)) order[cnt++] = c;
-    }
-    if (cnt > 28) {
-      for (int i = 1; i < cnt; i++) {
-        int v = order[i], g = X.ch[v].mix_vol, j = i - 1;
-        while (j >= 0 && X.ch[order[j]].mix_vol < g) { order[j + 1] = order[j]; j--; }
-        order[j + 1] = v;
-      }
-      for (int i = 28; i < cnt; i++) mix_skip[order[i]] = 1;
-    }
-  }
-#ifdef XM_PROFILE
-  int prof_active = 0;
-  for (int c = 0; c < X.chn; c++) {
-    xchan_t *p = &X.ch[c];
-    if (p->active && (p->lgain | p->rgain) && !mix_skip[c]) prof_active++;
-  }
-  xm_prof_chan_samples += (uint64_t) prof_active * n;
-  if ((uint32_t) prof_active > xm_prof_peak_chan) xm_prof_peak_chan = prof_active;
-  xm_prof_blocks++;
-  uint32_t sec = xm_prof_out_samples / 48000u;
-  if (sec < XM_PROF_SEC) {
-    xm_prof_sec_chan_samples[sec] += (uint64_t) prof_active * n;
-    xm_prof_sec_samples[sec] += (uint32_t) n;
-    if ((uint32_t) prof_active > xm_prof_sec_peak[sec]) xm_prof_sec_peak[sec] = prof_active;
-  }
-  xm_prof_out_samples += (uint32_t) n;
-#endif
-
+  fm_set_max_mixed(X.chn > 28 ? 28 : FM_MAX_VOICES);
   for (int c = 0; c < X.chn; c++) {
     xchan_t *ch = &X.ch[c];
-    int lg = ch->lgain, rg = ch->rgain;
-    if (!ch->active || (lg | rg) == 0) continue;
-    uint32_t pos = ch->pos, step = ch->step, end = ch->end, loop = ch->loop, llen = ch->llen;
-    if (mix_skip[c]) {
-      // A voice dropped by the limiter still has to keep its sample position for the next block.
-      for (int i = 0; i < n; i++) {
-        uint32_t idx = pos >> 16;
-        if (idx >= end) {
-          if (!llen) { ch->active = 0; break; }
-          uint32_t over = idx - end;
-          if (over >= llen) over %= llen;
-          pos = ((loop + over) << 16) | (pos & 0xFFFF);
-        }
-        pos += step;
-      }
-      ch->pos = pos;
-      continue;
-    }
-    const uint8_t *data = ch->data;
-    uint64_t last = (uint64_t) pos + (uint64_t) step * (uint32_t) (n - 1);
-    if ((last >> 16) < end) {
-      int i = 0;
-      if (X.interp) {
-        for (; i + 1 < n; i += 2) {
-          uint32_t idx0 = pos >> 16;
-          uint32_t fr0 = (pos >> 8) & 0xFFu;
-          int a0 = (int8_t) data[idx0];
-          int b0 = (idx0 + 1 < end) ? (int8_t) data[idx0 + 1] : a0;
-          int s = a0 + (((b0 - a0) * (int32_t) fr0) >> 8);
-          mixbuf[2 * i] += (s * lg) >> 8;
-          mixbuf[2 * i + 1] += (s * rg) >> 8;
-          pos += step;
-          uint32_t idx1 = pos >> 16;
-          uint32_t fr1 = (pos >> 8) & 0xFFu;
-          int a1 = (int8_t) data[idx1];
-          int b1 = (idx1 + 1 < end) ? (int8_t) data[idx1 + 1] : a1;
-          s = a1 + (((b1 - a1) * (int32_t) fr1) >> 8);
-          mixbuf[2 * i + 2] += (s * lg) >> 8;
-          mixbuf[2 * i + 3] += (s * rg) >> 8;
-          pos += step;
-        }
-        if (i < n) {
-          uint32_t idx0 = pos >> 16;
-          uint32_t fr0 = (pos >> 8) & 0xFFu;
-          int a0 = (int8_t) data[idx0];
-          int b0 = (idx0 + 1 < end) ? (int8_t) data[idx0 + 1] : a0;
-          int s = a0 + (((b0 - a0) * (int32_t) fr0) >> 8);
-          mixbuf[2 * i] += (s * lg) >> 8;
-          mixbuf[2 * i + 1] += (s * rg) >> 8;
-          pos += step;
-        }
-      } else {
-        for (; i + 1 < n; i += 2) {
-          int s = (int8_t) data[pos >> 16];
-          mixbuf[2 * i] += (s * lg) >> 8;
-          mixbuf[2 * i + 1] += (s * rg) >> 8;
-          pos += step;
-          s = (int8_t) data[pos >> 16];
-          mixbuf[2 * i + 2] += (s * lg) >> 8;
-          mixbuf[2 * i + 3] += (s * rg) >> 8;
-          pos += step;
-        }
-        if (i < n) {
-          int s = (int8_t) data[pos >> 16];
-          mixbuf[2 * i] += (s * lg) >> 8;
-          mixbuf[2 * i + 1] += (s * rg) >> 8;
-          pos += step;
-        }
-      }
-    } else {
-      for (int i = 0; i < n; i++) {
-        uint32_t idx = pos >> 16;
-        if (idx >= end) {
-          if (!llen) { ch->active = 0; break; }
-          uint32_t over = idx - end;
-          if (over >= llen) over %= llen;
-          pos = ((loop + over) << 16) | (pos & 0xFFFF);
-          idx = loop + over;
-        }
-        int s;
-        if (X.interp) {
-          uint32_t fr = (pos >> 8) & 0xFFu;
-          int a = (int8_t) data[idx];
-          int b = (idx + 1 < end) ? (int8_t) data[idx + 1] : a;
-          s = a + (((b - a) * (int32_t) fr) >> 8);
-        } else {
-          s = (int8_t) data[idx];
-        }
-        mixbuf[2 * i] += (s * lg) >> 8;
-        mixbuf[2 * i + 1] += (s * rg) >> 8;
-        pos += step;
-      }
-    }
-    ch->pos = pos;
+    fm_voice_t *v = &fv[c];
+    fm_voice_init(v);
+    if (!ch->active || (ch->lgain | ch->rgain) == 0) continue;
+    v->data = ch->data;
+    v->length = ch->len;
+    v->loop_start = ch->loop;
+    v->loop_end = ch->llen ? (ch->loop + ch->llen) : 0;
+    v->pos = ch->pos >> 16;
+    v->frac = ch->pos & 0xFFFF;
+    v->step = ch->step;
+    v->volume = ch->mix_vol;
+    v->pan = (int) ch->pan - 128;
+    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0);
   }
-
+  fm_mix(fmout, n, fv, X.chn);
+  for (int c = 0; c < X.chn; c++) {
+    xchan_t *ch = &X.ch[c];
+    if (fv[c].flags & FM_ACTIVE) {
+      ch->pos = (fv[c].pos << 16) | (fv[c].frac & 0xFFFF);
+      ch->active = 1;
+    } else if (ch->active) {
+      ch->active = 0;
+    }
+  }
   int og = X.vol << (X.chn > 8 ? 1 : 0);
   for (int i = 0; i < n; i++) {
-    int32_t l = (mixbuf[2 * i] * og) >> 6;
-    int32_t r = (mixbuf[2 * i + 1] * og) >> 6;
+    int32_t l = (fmout[2 * i] * og) >> 6;
+    int32_t r = (fmout[2 * i + 1] * og) >> 6;
     if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
     if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
     int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;

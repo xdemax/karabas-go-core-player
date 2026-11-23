@@ -6,6 +6,7 @@
 #include "audio.h"
 #include "mixer.h"
 #include "analysis.h"
+#include "fastmix.h"
 #include "mmio.h"
 
 #define MOD_MAX_CH 8
@@ -313,54 +314,51 @@ static void next_tick(void) {
   M.tick_left = M.samples_per_tick;
 }
 
+static int16_t fmout[MIX_CHUNK * 2];
+static fm_voice_t fv[MOD_MAX_CH];
+
 static void mix(int n) {
+  // The inner loop is the shared fastmix kernel; the MOD replayer still owns periods,
+  // effects, sample selection and envelope state.
+  if (n > MIX_CHUNK) n = MIX_CHUNK;
+  fm_set_max_mixed(FM_MAX_VOICES);
+  for (int c = 0; c < M.chn; c++) {
+    mod_chan_t *ch = &M.ch[c];
+    fm_voice_t *v = &fv[c];
+    fm_voice_init(v);
+    if (!ch->active || !ch->step) continue;
+    v->data = ch->data;
+    v->length = ch->len;
+    v->loop_start = ch->loop_start;
+    v->loop_end = (ch->loop_len > 2) ? (ch->loop_start + ch->loop_len) : 0;
+    v->pos = ch->pos >> 16;
+    v->frac = ch->pos & 0xFFFF;
+    v->step = ch->step;
+    v->volume = ch->vol;
+    v->pan = ch->pan ? 127 : -128;
+    v->flags = FM_ACTIVE | FM_8BIT | ((ch->loop_len > 2) ? FM_LOOP : 0);
+  }
+  fm_mix(fmout, n, fv, M.chn);
+  for (int c = 0; c < M.chn; c++) {
+    mod_chan_t *ch = &M.ch[c];
+    if (fv[c].flags & FM_ACTIVE) {
+      ch->pos = (fv[c].pos << 16) | (fv[c].frac & 0xFFFF);
+      ch->active = 1;
+    } else if (ch->active) {
+      ch->active = 0;
+    }
+  }
   int shift = M.chn > 4 ? 1 : 0;
   for (int i = 0; i < n; i++) {
-    int32_t l = 0, r = 0;
-    for (int c = 0; c < M.chn; c++) {
-      mod_chan_t *ch = &M.ch[c];
-      if (!ch->active || !ch->step) continue;
-      uint32_t idx = ch->pos >> 16;
-      if (idx >= ch->len) {
-        if (ch->loop_len > 2) { ch->pos = ch->loop_start << 16; idx = ch->loop_start; }
-        else { ch->active = 0; continue; }
-      }
-      // Linear interpolation (the libxmp-style 16.16 phase): the native mixer used nearest
-      // samples before, which is the main reason MOD sounded rough next to the C engines.
-      uint32_t frac = (ch->pos >> 8) & 0xFFu;
-      uint32_t end = (ch->loop_len > 2) ? (ch->loop_start + ch->loop_len) : ch->len;
-      int s0 = ((const int8_t *) ch->data)[idx];
-      int s1 = (idx + 1 < end) ? ((const int8_t *) ch->data)[idx + 1] : s0;
-      int s = s0 + (((s1 - s0) * (int32_t) frac) >> 8);
-      int v = s * ch->vol;
-      {
-        int av = v < 0 ? -v : v;
-        av >>= 5;
-        if (av > 255) av = 255;
-        if (av > (int) s_vu[c]) s_vu[c] = (uint8_t) av;
-      }
-      if (ch->pan) r += v; else l += v;
-      ch->pos += ch->step;
-      if ((ch->pos >> 16) >= end) {
-        if (ch->loop_len > 2) {
-          while ((ch->pos >> 16) >= end) ch->pos -= ch->loop_len << 16;
-        } else {
-          ch->active = 0;
-        }
-      }
-    }
-    l >>= shift;
-    r >>= shift;
+    int32_t l = fmout[2 * i] >> shift;
+    int32_t r = fmout[2 * i + 1] >> shift;
     l = l * s_vol / 64;
     r = r * s_vol / 64;
     if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
     if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
-    {
-      int32_t al = l < 0 ? -l : l;
-      int32_t ar = r < 0 ? -r : r;
-      if (al > s_peak_l) s_peak_l = al;
-      if (ar > s_peak_r) s_peak_r = ar;
-    }
+    int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+    if (al > s_peak_l) s_peak_l = al;
+    if (ar > s_peak_r) s_peak_r = ar;
     s_last_l = l; s_last_r = r;
     mixer_write((int16_t) l, (int16_t) r);
   }
