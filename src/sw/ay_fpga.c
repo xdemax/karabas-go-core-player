@@ -413,18 +413,9 @@ void pt3_audio(fmt_audio_t *o) {
 int pt3_get_volume(void) { return vol; }
 int pt3_set_volume(int v) {
   if (v < 0) v = 0; if (v > 64) v = 64; vol = v;
-#ifdef AY_HW
-  if (active) ay_hw_ctl(paused ? 0 : 1, vol);
-#endif
   return vol;
 }
 int pt3_pause(int on) {
   if (on < 0) paused = !paused; else paused = on ? 1 : 0;
-#ifdef AY_HW
-  if (active) {
-    if (paused) ay_hw_ctl(0, vol);
-    else { next_us = R_US + 20000u; ay_hw_ctl(1, vol); }
-  }
-#endif
   return paused;
 }
