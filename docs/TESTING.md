@@ -1,8 +1,8 @@
 # Testing on the board
 
-The core is built for the **Mini G** (rev.G / G2) with the **VDAC32 shield** (ESP32-S3). **MOD, XM,
-PT3, PT2 and STC** play on the FPGA itself: the sound comes from the board's PCM5102 DAC / HDMI, no
-ESP32. **S3M** still uses the ESP32 (its I2S goes to the shield / an external DAC). No firmware change
+The core is built for **Karabas Go** and **Mini G** (rev.G / G2). **MOD, XM, PT3, PT2 and STC**
+play on the FPGA itself: on the Go the sound comes from the PCM5102 and the picture from VGA; on the
+Mini G from the PCM5102 / HDMI. **S3M / ESP32 is not used in the current build.** No firmware change
 is needed.
 
 ## What to put on the cards
@@ -24,7 +24,7 @@ is needed.
    Home / End, Enter on a directory.
 3. Enter on a `.mod` / `.xm` / `.pt3` / `.pt2` / `.stc`: the FPGA engine starts, the footer shows
    `playing …`, the sound is from the board. AY modules use the two RTL YM2149s.
-4. Enter on a `.s3m`: the file goes to the ESP32 (`sending...`, a bar, then `playing s3m`).
+4. `.s3m` is not playable in the current build (the ESP32 path is not used).
 5. Esc stops; Backspace goes up a directory.
 6. The optional LED matrix (the add-on of the Mini G) scrolls `KARABAS GO MUSIC PLAYER` once at
    startup, then shows the L/R audio meters of the player (`audio_peaks` -> `kg_mcu2` AUX). It is
@@ -57,5 +57,6 @@ src/sw/host/run_render_ay.sh s.pt3 out.wav 10
                                # render PT3/PT2/STC through the AY engine (host model)
 src/sw/host/run_sd_test.sh     # sd.c against an SDHC card model
 src/sim/spi/run_spi_sim.sh     # the SPI master against a slave model (Verilator)
-src/timing_ascii.sh minig      # the timing report of the bitstream (from /tmp)
+src/timing_ascii.sh go         # the timing report of the Go bitstream (from /tmp)
+src/timing_ascii.sh minig      # the timing report of the Mini G bitstream (from /tmp)
 ```

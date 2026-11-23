@@ -1,7 +1,7 @@
 {
     "id": "musicplayer",
     "name": "Music Player",
-    "build": "26112252",
+    "build": "26112309",
     "visible": true,
     "type": "osd",
     "order": 10,
@@ -13,6 +13,10 @@
         }
     ],
     "boards": {
+        "go": {
+            "link": 2,
+            "bitstream": "karabas_go.bin"
+        },
         "minig": {
             "link": 2,
             "bitstream": "karabas_minig.bin"

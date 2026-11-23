@@ -11,8 +11,8 @@ MCU link v2 (`kg_mcu2`).
 RP2040) — штатным file loader прошивки (`FL`-пункт, как в C64/NES/Sega).
 Прошивка остаётся штатной.
 
-Сейчас ядро собирается и проверяется на **Mini G**; **Go** используется как
-удобная тестовая плата. Остальные платы семейства — по мере проверки.
+Сейчас ядро собирается для **Go** и **Mini G**; проверка идёт на **Mini G**,
+**Go** — удобная тестовая плата. Остальные платы семейства — по мере проверки.
 
 ![Экран (host preview)](docs/screenshot.png)
 
@@ -25,10 +25,11 @@ RP2040) — штатным file loader прошивки (`FL`-пункт, как
   2.5 МБ играются из SRAM, большие — из SDRAM.
 - **SD1** — штатный file loader прошивки (`FL`, слот 1), `Menu+F5`.
 - **SDRAM** — 32 МБ MT48LC16M16A2, окно `0x10000000`.
-- **LED-матрицы** — L/R-индикаторы через `audio_peaks` → `kg_mcu2` AUX.
+- **LED-матрицы** — L/R-индикаторы через `audio_peaks` → `kg_mcu2` AUX
+  (на Mini G; на Go не используются).
 - **Прошивка** — без изменений; только штатные сервисы.
-- **Платы** — ядро рассчитано на Go / Mini / Mini G; текущая сборка и тесты —
-  Mini G, Go — удобная тестовая плата.
+- **Платы** — собраны **Go** и **Mini G**; текущие тесты — Mini G, Go —
+  удобная тестовая плата.
 - Ограничения: MP3 не поддерживается; S3M в текущей сборке нет.
 
 ## Документация
@@ -56,14 +57,17 @@ git submodule update --init --recursive
 
 ```sh
 make -C src/sw              # src/roms/player.bin — программа CPU (ROM .kg)
-cd src && make minig        # битстрим + musicplayer.kg
-make minig-report           # LUT/RAMB/timing
+cd src && make go           # битстрим Go + musicplayer.kg
+make go-report              # LUT/RAMB/timing Go
+make minig                  # битстрим Mini G (добавляет его в musicplayer.kg)
+make minig-report           # LUT/RAMB/timing Mini G
 make minig-coremode         # второй timing-прогон Mini G
-src/timing_ascii.sh minig   # trce из ASCII-каталога (кириллический путь ломает XML)
+src/timing_ascii.sh go      # trce из ASCII-каталога (кириллический путь ломает XML)
 ```
 
-`musicplayer.kg` положить на SD1 (корень или `cores/`) и выбрать
-**Music Player** в boot menu. Прошивка загрузит `roms/player.bin` в SRAM.
+`make all` собирает оба битстрима и кладёт их в один `musicplayer.kg`.
+Положить его на SD1 (корень или `cores/`) и выбрать **Music Player** в
+boot menu. Прошивка загрузит `roms/player.bin` в SRAM.
 
 ## Память и носители
 
@@ -78,7 +82,8 @@ src/timing_ascii.sh minig   # trce из ASCII-каталога (кириллич
 
 | Файл | Роль |
 |---|---|
-| `src/rtl/karabas_minig_top.v` | верхняя обёртка Mini G: SPI, SD2, обвязка |
+| `src/rtl/karabas_go_top.v` | верхняя обёртка Go: VGA, SPI/SD2, SDRAM, PCM5102 |
+| `src/rtl/karabas_minig_top.v` | верхняя обёртка Mini G: HDMI, SPI, SD2, обвязка |
 | `src/rtl/soc/menu_soc.v` | CPU, SRAM, видео, загрузчик, MMIO |
 | `src/rtl/spi/spi_master.v` | байтовый SPI master (mode 0, 4 CS) |
 | `src/rtl/soc/player_sdram.v` | контроллер SDRAM |

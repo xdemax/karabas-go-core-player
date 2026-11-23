@@ -81,7 +81,7 @@ const fmt_module_t fmt_foo = { "foo", "foo", detect, play, error };
 5. `eng_esp32.h` / `eng_esp32.c`: the `ESP32_FMT_FOO` value and its stream-load command.
 6. `src/sw/Makefile`: add `formats/foo.c` to `SRCS`.
 7. `src/core.json`: add `foo` to the `FL` item's `extensions` (the firmware's SD1 file browser).
-8. `make -C src/sw`, then `cd src && make minig-core` (the bitstream is unchanged).
+8. `make -C src/sw`, then `cd src && make go-core minig-core` (the bitstream is unchanged).
 
 ## Add a format on the FPGA
 

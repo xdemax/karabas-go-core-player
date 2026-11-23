@@ -146,13 +146,6 @@ assign WCS_N 			= 2'b11;
 assign WRD_N 			= 1'b1;
 assign WWR_N 			= 1'b1;
 assign WRESET_N 		= 1'b1;
-assign SDR_BA 			= 2'b00;
-assign SDR_A 			= 12'b0;
-assign SDR_CLK 		= 1'b0;
-assign SDR_DQM 		= 2'b00;
-assign SDR_WE_N 		= 1'b1;
-assign SDR_CAS_N 		= 1'b1;
-assign SDR_RAS_N 		= 1'b1;
 assign FDC_DRIVE 		= 2'b00;
 assign FDC_MOTOR 		= 1'b0;
 assign FDC_SIDE_N		= 1'b1;
@@ -162,20 +155,24 @@ assign MIDI_RESET_N	= 1'b1;
 assign FDC_STEP		= 1'b1;
 assign FDC_DIR			= 1'b1;
 // system clocks
-wire clk_sys, clk_12mhz, clk_cpu;
+wire clk_sys, clk_12mhz, clk_cpu, clk_sdr;
 wire locked, areset;
 wire signed [15:0] snd_out;   // the PCM sounds of menu_soc (clk_cpu)
 wire snd_t;
+wire signed [15:0] aud_l, aud_r;  // the stereo audio FIFO of the player (clk_cpu)
+wire aud_t;
 wire [7:0] midi_data;
 wire midi_wr;
 
 // VCO 50 * 18 / 2 = 450 MHz, phase 0: clk_sys 40.91 MHz (/11: the 800 x 600 video, the DAC), 12.16 MHz
-// (/37: MIDI_CLK), clk_cpu 75 MHz (/6: the menu CPU, the SRAM, the MCU link, the ESP and MIDI uarts)
+// (/37: MIDI_CLK), clk_cpu 75 MHz (/6: the menu CPU, the SRAM, the MCU link, the ESP and MIDI uarts),
+// clk_sdr 75 MHz with a 225 degree phase (the SDRAM clock)
 wire [5:0] pll_clk;
 kg_pll #(
 	.DIVCLK_DIVIDE(2), .CLKFBOUT_MULT(18),
 	.CLKOUT0_DIVIDE(11), .CLKOUT1_DIVIDE(37), .CLKOUT2_DIVIDE(6),
-	.BUFG_MASK(6'b000110)
+	.CLKOUT3_DIVIDE(6), .CLKOUT3_PHASE(225.0),
+	.BUFG_MASK(6'b001110)
 ) pll (
 	.clk_in				(CLK_50MHZ),
 	.rst					(1'b0),
@@ -184,8 +181,12 @@ kg_pll #(
 );
 assign clk_12mhz = pll_clk[1];
 assign clk_cpu = pll_clk[2];
+assign clk_sdr = pll_clk[3];
 BUFG bufg_clk_sys(.I(pll_clk[0]), .O(clk_sys)); // in the top, as on the Mini / Mini G (the net of the ucf)
 assign areset = ~locked;
+
+// SDRAM clock: 75 MHz, 225 degrees after clk_cpu
+ODDR2 u_sdr_clk (.Q(SDR_CLK), .C0(clk_sdr), .C1(~clk_sdr), .CE(1'b1), .D0(1'b1), .D1(1'b0), .R(1'b0), .S(1'b0));
 
 // the reset of the clk_cpu side, synchronous to it
 reg [1:0] areset_cpu = 2'b11;
@@ -196,18 +197,26 @@ wire reset_cpu = areset_cpu[1];
 ODDR2 u_midi_clk (.Q(MIDI_CLK), .C0(clk_12mhz), .C1(~clk_12mhz), .CE(1'b1), .D0(1'b1), .D1(1'b0), .R(1'b0), .S(1'b0));
 
 // ft control signals / mcu only access; kg_mcu2 runs on clk_cpu: its FT video setting into clk_sys first
-reg [1:0] ft_vga_s = 2'b00;
-always @(posedge clk_sys) ft_vga_s <= { ft_vga_s[0], mcu_ft_vga_on };
-wire vdac2_sel = ft_vga_s[1];
 wire [7:0] osd_r, osd_g, osd_b;   // the bitmap OSD over the picture of the menu (below)
 wire video_hs, video_vs, video_de;
-assign FT_SPI_CS_N 	= mcu_ft_spi_on ? mcu_ft_cs_n : 1'b1;
-assign FT_SPI_SCK 	= mcu_ft_spi_on ? MCU_SCK : 1'b1;
-assign FT_SPI_MOSI 	= mcu_ft_spi_on ? mcu_ft_mosi : 1'b1;
-assign FT_OE_N 		= ~vdac2_sel;
 
-// vga / ft mux. The video DAC takes the pixels with the rising V_CLK: in the mode of the menu it is the inverted
-// clk_sys, the middle of the pixel. The pixels and syncs leave flip-flops of the pads, a clock later both.
+// The player uses the VGA DAC; the FT812 video and SPI paths are not used on the Go.
+assign FT_SPI_CS_N 	= 1'b1;
+assign FT_SPI_SCK 	= 1'b1;
+assign FT_SPI_MOSI 	= 1'b1;
+assign FT_OE_N 		= 1'b1;
+
+// SD2: the byte SPI master of menu_soc reads the card directly (as on the Mini G).
+// The Go has no ESP32-S3 shield, so only SD2 is connected to the bus.
+wire spi_sck, spi_mosi;
+wire [3:0] spi_cs_n;
+wire spi_miso = ~spi_cs_n[0] ? SD_DO : 1'b1;
+assign SD_CLK 	= spi_sck;
+assign SD_DI 	= spi_mosi;
+assign SD_CS_N 	= spi_cs_n[0];
+
+// vga: the video DAC takes the pixels with the rising V_CLK, the inverted clk_sys (the middle of the pixel).
+// The pixels and syncs leave flip-flops of the pads, a clock later both.
 reg [7:0] vga_r_q = 8'd0, vga_g_q = 8'd0, vga_b_q = 8'd0;
 reg vga_hs_q = 1'b0, vga_vs_q = 1'b0;
 always @(posedge clk_sys) begin
@@ -217,26 +226,42 @@ always @(posedge clk_sys) begin
 	vga_hs_q <= video_hs;
 	vga_vs_q <= video_vs;
 end
-assign VGA_R[7:0] 	= (vdac2_sel ? 8'bZZZZZZZZ : vga_r_q);
-assign VGA_G[7:0] 	= (vdac2_sel ? 8'bZZZZZZZZ : vga_g_q);
-assign VGA_B[7:0] 	= (vdac2_sel ? 8'bZZZZZZZZ : vga_b_q);
-assign VGA_HS 			= (vdac2_sel ? 1'bZ : vga_hs_q);
-assign VGA_VS 			= (vdac2_sel ? 1'bZ : vga_vs_q);
-assign V_CLK 			= (vdac2_sel ? FT_CLK : ~clk_sys);
+assign VGA_R[7:0] 	= vga_r_q;
+assign VGA_G[7:0] 	= vga_g_q;
+assign VGA_B[7:0] 	= vga_b_q;
+assign VGA_HS 		= vga_hs_q;
+assign VGA_VS 		= vga_vs_q;
+assign V_CLK 		= ~clk_sys;
 
 //---------- DAC ------------
-// the PCM sounds of the menu (menu_sound, clk_cpu: a value with each snd_t toggle); the Go has no ADC here
+// the menu sounds and the player's stereo FIFO, saturated and sent to the PCM5102
 reg [2:0] snd_t_s = 3'd0;
 reg signed [15:0] snd_s = 16'sd0;
 always @(posedge clk_sys) begin
 	snd_t_s <= { snd_t_s[1:0], snd_t };
 	if (snd_t_s[2] != snd_t_s[1]) snd_s <= snd_out;   // stable: it changed with the toggle
 end
-kg_pcm5102 PCM5102(
+function [15:0] sat_add16(input [15:0] a, input [15:0] b);
+	reg signed [16:0] s;
+	begin
+		s = $signed({ a[15], a }) + $signed({ b[15], b });
+		sat_add16 = (s > 17'sd32767) ? 16'h7FFF : (s < -17'sd32768) ? 16'h8000 : s[15:0];
+	end
+endfunction
+reg [2:0] aud_t_s = 3'd0;
+reg signed [15:0] aud_l_s = 16'sd0, aud_r_s = 16'sd0;
+always @(posedge clk_sys) begin
+	aud_t_s <= { aud_t_s[1:0], aud_t };
+	if (aud_t_s[2] != aud_t_s[1]) begin aud_l_s <= aud_l; aud_r_s <= aud_r; end
+end
+wire [15:0] audio_mix_l = sat_add16(snd_s, aud_l_s);
+wire [15:0] audio_mix_r = sat_add16(snd_s, aud_r_s);
+
+kg_pcm5102 #(.DIV_BITS(2)) PCM5102(
 	.clk				(clk_sys),
 	.reset			(areset),
-	.left				(snd_s),
-	.right			(snd_s),
+	.left				(audio_mix_l),
+	.right			(audio_mix_r),
 	.din				(DAC_DAT),
 	.bck				(DAC_BCK),
 	.lrck				(DAC_LRCK)
@@ -259,7 +284,11 @@ wire [55:0] kbd;
 wire kbd_wr, ms_wr;
 wire [7:0] ms_x, ms_y, ms_z, ms_b;
 wire [15:0] joy_l, joy_r;
+wire [15:0] sw;                    // S0 = the OSD volume (byte 0)
 wire [1:0] ld_kind;
+wire ld_start;
+wire [31:0] ld_size;
+wire [63:0] ld_ext;
 wire ld_active, ld_end, ld_wr, ld_ready;
 wire [31:0] ld_addr;
 wire [7:0] ld_data;
@@ -297,20 +326,20 @@ menu_midi_mux midi_mux (
 );
 
 kg_mcu2 #(
-    .CAPS(16'h0210), .SW_N(2), .CS_FILTER(3), // CAPS bit 9 MIDI IN, bit 4 the core drives LD_READY (the menu program is loaded into the SRAM)
+    .CAPS(16'h0210), .SW_N(2), .SW_INIT(16'h000F), .CS_FILTER(3), // CAPS bit 9 MIDI IN, bit 4 the core drives LD_READY (the menu program is loaded into the SRAM); S0 = volume (option 15 = 64)
     .ENABLE_OSD(1), .ENABLE_PORTS(4'b0110), .PORT_IN_AW(6),
-    .ENABLE_FT(1), .ENABLE_SD2(1),
+    .ENABLE_FT(1), .ENABLE_SD2(0),
     .ENABLE_RPC(1), .RPC_SERVICES(16'h000F)    // SYS, CFG, CORES, HID (karabas-go-firmware docs/link_v2.md 5.9)
 ) mcu(
     .CLK(clk_cpu), .N_RESET(~reset_cpu),
     .MCU_SCK(MCU_SCK), .MCU_MOSI(MCU_MOSI), .MCU_MISO(MCU_MISO), .MCU_SS(MCU_CS_N), .MCU_INT(mcu_int),
     .MCU_SPI_FT_SS(MCU_SPI_FT_CS_N), .MCU_SPI_SD2_SS(MCU_SPI_SD2_CS_N),
 
-    .SW(), .SW_WR(), .SW_INDEX(), .SW_VALUE(), .HW_ID(), .DVI_ONLY(dvi_only), .CORE_BUILD(), .FW_BUILD(),
+    .SW(sw), .SW_WR(), .SW_INDEX(), .SW_VALUE(), .HW_ID(), .DVI_ONLY(dvi_only), .CORE_BUILD(), .FW_BUILD(),
     .BUSY(), .BTNS(), .RELOAD_REQ(1'b0), .RELOAD_CORE(8'd0),
     .KBD(kbd), .KBD_WR(kbd_wr), .PS2_CODE(), .PS2_KIND(), .PS2_WR(), .MS_X(ms_x), .MS_Y(ms_y), .MS_Z(ms_z),
     .MS_B(ms_b), .MS_WR(ms_wr), .JOY_L(joy_l), .JOY_R(joy_r), .JOY_WR(), .PS2_CMD(16'h0000), .PS2_CMD_WR(1'b0),
-    .LD_KIND(ld_kind), .LD_SLOT(), .LD_SIZE(), .LD_START(), .LD_ACTIVE(ld_active), .LD_END(ld_end),
+    .LD_KIND(ld_kind), .LD_SLOT(), .LD_SIZE(ld_size), .LD_EXT(ld_ext), .LD_START(ld_start), .LD_ACTIVE(ld_active), .LD_END(ld_end),
     .LD_ADDR(ld_addr), .LD_DATA(ld_data), .LD_WR(ld_wr), .LD_READY(ld_ready),
 
     .OSD_WR(osd_wr), .OSD_WADDR(osd_waddr), .OSD_WDATA(osd_wdata), .OSD_EN(osd_en),
@@ -329,7 +358,7 @@ kg_mcu2 #(
     .FT_SPI_ON(mcu_ft_spi_on), .FT_VGA_ON(mcu_ft_vga_on), .FT_RESET(), .FT_SCK(), .FT_MOSI(mcu_ft_mosi),
     .FT_MISO(FT_SPI_MISO), .FT_CS_N(mcu_ft_cs_n),
     .RPC_A(rpc_a), .RPC_WE(rpc_we), .RPC_WD(rpc_wd), .RPC_RD(rpc_rd),
-    .SD2_SCK(SD_CLK), .SD2_MOSI(SD_DI), .SD2_MISO(SD_DO), .SD2_CS_N(SD_CS_N)
+    .SD2_SCK(), .SD2_MOSI(), .SD2_MISO(SD_DO), .SD2_CS_N()
 );
 
 //--------- MIDI thru -------
@@ -366,20 +395,30 @@ wire [27:0] pal_wd;
 wire [23:0] grad_top, grad_bot;
 wire [15:0] sram_do, sram_oe_n;
 
+wire [15:0] sdr_dq_o, sdr_dq_oe_n;
+genvar gs;
+generate for (gs = 0; gs < 16; gs = gs + 1) begin : g_sdr
+    assign SDR_DQ[gs] = sdr_dq_oe_n[gs] ? 1'bz : sdr_dq_o[gs];
+end endgenerate
+
 menu_soc soc (
     .clk(clk_cpu), .reset(reset_cpu),
-    .ld_kind(ld_kind), .ld_active(ld_active), .ld_end(ld_end), .ld_addr(ld_addr), .ld_data(ld_data),
-    .ld_wr(ld_wr), .ld_ready(ld_ready),
-    .kbd(kbd), .kbd_wr(kbd_wr), .ms_x(ms_x), .ms_y(ms_y), .ms_z(ms_z), .ms_b(ms_b), .ms_wr(ms_wr), .joy_l(joy_l), .joy_r(joy_r),
+    .ld_kind(ld_kind), .ld_start(ld_start), .ld_size(ld_size), .ld_ext(ld_ext[31:0]), .ld_active(ld_active), .ld_end(ld_end),
+    .ld_addr(ld_addr), .ld_data(ld_data), .ld_wr(ld_wr), .ld_ready(ld_ready),
+    .sw(sw), .kbd(kbd), .kbd_wr(kbd_wr), .ms_x(ms_x), .ms_y(ms_y), .ms_z(ms_z), .ms_b(ms_b), .ms_wr(ms_wr), .joy_l(joy_l), .joy_r(joy_r),
     .vid_req(vid_req), .vid_adr(vid_adr), .vid_len(vid_len), .vid_we(vid_we), .vid_wa(vid_wa), .vid_wd(vid_wd),
     .pal_we(pal_we), .pal_wa(pal_wa), .pal_wd(pal_wd), .fb_sel(fb_sel), .fb_shown(fb_shown),
     .frame_t(frame_t), .show(fb_show), .grad_top(grad_top), .grad_bot(grad_bot),
     .snd_out(snd_out), .snd_t(snd_t),
+    .aud_l(aud_l), .aud_r(aud_r), .aud_t(aud_t),
     .midi_data(cpu_midi_data), .midi_wr(cpu_midi_wr), .midi_full(cpu_midi_full),
     .esp_rx_data(esp_uart_rx_data), .esp_rx_valid(esp_uart_rx_wr && esp_own), .esp_rx_ack(cpu_esp_ack),
     .esp_tx_data(cpu_esp_data), .esp_tx_wr(cpu_esp_wr), .esp_own(esp_own),
     .rpc_a(rpc_a), .rpc_we(rpc_we), .rpc_wd(rpc_wd), .rpc_rd(rpc_rd),
+    .spi_sck(spi_sck), .spi_mosi(spi_mosi), .spi_miso(spi_miso), .spi_cs_n(spi_cs_n),
     .dbg_uart(), .dbg_uart_wr(), .cpu_run(),
+    .sdr_a(SDR_A), .sdr_ba(SDR_BA), .sdr_dq_i(SDR_DQ), .sdr_dq_o(sdr_dq_o), .sdr_dq_oe_n(sdr_dq_oe_n),
+    .sdr_dqm(SDR_DQM), .sdr_ras_n(SDR_RAS_N), .sdr_cas_n(SDR_CAS_N), .sdr_we_n(SDR_WE_N),
     .MA(MA), .MD_I(MD), .MD_O(sram_do), .MD_OE_N(sram_oe_n), .MWR_N(MWR_N), .MRD_N(MRD_N)
 );
 genvar gi;

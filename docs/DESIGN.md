@@ -2,8 +2,10 @@
 
 ## The board and the pins (Mini G, rev.G / G2)
 
-The core is built for the Mini G only for now (`core.json` has the `minig` board). It is the menu
-core's Mini G top with the SPI bus of the VDAC32 shield taken from the MCU pass-through:
+The core is built for the **Go** and the **Mini G** (`core.json` has both boards). The Mini G top is
+the menu core's Mini G top with the SPI bus of the VDAC32 shield taken from the MCU pass-through.
+The Go top uses the VGA DAC, the same SPI master for SD2, the 32 MB SDRAM and the PCM5102; it does
+not use the FT812 or the ESP32-S3 shield.
 
 | Signal | FPGA pin | In the core |
 |---|---|---|
@@ -106,8 +108,8 @@ new one is streamed (the PSRAM is limited).
 
 ## Limits
 
-- Mini G only (the Go and Mini tops are still in the tree, not built, and the ESP32 pins are the Mini
-  G shield's).
+- Go and Mini G are built. The Mini top is still in the tree, not built. The Go has no LED matrix
+  and no ESP32-S3 shield; S3M is not in the current build.
 - SD2 is read by the core; SD1 only through the stock `FL` file loader (the firmware's browser),
   one file at a time, up to 2.5 MB (the SRAM file buffer), no file name in the core.
 - Read only, `.mod` / `.xm` / `.s3m` only, no subdirectory shortcuts or settings.
