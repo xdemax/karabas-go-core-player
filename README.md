@@ -11,8 +11,8 @@ MCU link v2 (`kg_mcu2`).
 RP2040) — штатным file loader прошивки (`FL`-пункт, как в C64/NES/Sega).
 Прошивка остаётся штатной.
 
-Сейчас ядро собирается для **Go** и **Mini G**; проверка идёт на **Mini G**,
-**Go** — удобная тестовая плата. Остальные платы семейства — по мере проверки.
+Ядро собирается для **Go**, **Mini** и **Mini G**; проверка идёт на **Mini G**,
+**Go** — удобная тестовая плата. Битстрим Mini включён в 1.0b, но на железе ещё не проверен.
 
 ![Экран (host preview)](docs/screenshot.png)
 
@@ -29,8 +29,8 @@ RP2040) — штатным file loader прошивки (`FL`-пункт, как
 - **LED-матрицы** — L/R-индикаторы через `audio_peaks` → `kg_mcu2` AUX
   (на Mini G; на Go не используются).
 - **Прошивка** — без изменений; только штатные сервисы.
-- **Платы** — собраны **Go** и **Mini G**; текущие тесты — Mini G, Go —
-  удобная тестовая плата.
+- **Платы** — в 1.0b включены **Go**, **Mini** и **Mini G**; проверены Go и Mini G,
+  Mini ждёт проверки на железе.
 - **MP3** — экспериментальный программный Helix; на 75 МГц возможны пропуски, формат скрыт из титульного списка, но выбирается в браузере.
 - **Титульный экран** показывает только стабильные форматы; IT/S3M/MP3 из него убраны и остаются доступны в списке файлов.
 - Ограничения: MP3 в 1.0b не гарантирует real-time на всех битрейтах.
@@ -62,13 +62,14 @@ git submodule update --init --recursive
 make -C src/sw              # src/roms/player.bin — программа CPU (ROM .kg)
 cd src && make go           # битстрим Go + musicplayer.kg
 make go-report              # LUT/RAMB/timing Go
+make mini                   # битстрим Mini (добавляет его в musicplayer.kg)
 make minig                  # битстрим Mini G (добавляет его в musicplayer.kg)
 make minig-report           # LUT/RAMB/timing Mini G
 make minig-coremode         # второй timing-прогон Mini G
 src/timing_ascii.sh go      # trce из ASCII-каталога (кириллический путь ломает XML)
 ```
 
-`make all` собирает оба битстрима и кладёт их в один `musicplayer.kg`.
+`make all` собирает все три битстрима и кладёт их в один `musicplayer.kg`.
 Положить его на SD1 (корень или `cores/`) и выбрать **Music Player** в
 boot menu. Прошивка загрузит `roms/player.bin` в SRAM.
 

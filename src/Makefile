@@ -15,7 +15,7 @@
 
 ISE_SETTINGS ?= /opt/Xilinx/14.7/ISE_DS/settings64.sh
 PART = xc6slx25-ftg256-2
-BOARDS = go minig    # the player core is built for the Go and the Mini G (core.json)
+BOARDS = go mini minig    # the player core is built for the Go, Mini and Mini G (core.json)
 
 SHELL = /bin/bash
 .SHELLFLAGS = -e -o pipefail -c

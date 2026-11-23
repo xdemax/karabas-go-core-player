@@ -130,9 +130,6 @@ assign FLASH_DI           = 1'b1;
 assign FLASH_SCK          = 1'b0;
 assign FLASH_WP_N         = 1'b1;
 assign FLASH_HOLD_N       = 1'b1;
-assign SDR_WE_N           = 1'b1;
-assign SDR_CAS_N          = 1'b1;
-assign SDR_RAS_N          = 1'b1;
 assign WCS_N              = 1'b1;
 assign WRD_N              = 1'b1;
 assign WWR_N              = 1'b1;
@@ -141,20 +138,18 @@ assign WRESET_N           = 1'b1;
 wire [7:0] midi_data;
 wire midi_wr;
 assign TAPE_OUT           = 1'b0;
-assign SDR_A              = 13'b0;
-assign SDR_CLK            = 1'b1;
-assign SDR_BA             = 2'b11;
-assign SDR_DQM            = 2'b11;
 assign WA                 = 3'b000;
 assign ESP_RESET_N        = 1'bZ;
 assign ESP_BOOT_N         = 1'bZ;
 assign MIDI_RESET_N       = 1'b1;
 
 // system clocks
-wire clk_sys, clk_sys_pll, clk_8mhz, clk_cpu, clk_12mhz;
+wire clk_sys, clk_sys_pll, clk_8mhz, clk_cpu, clk_sdr, clk_12mhz;
 wire locked, areset;
 wire signed [15:0] snd_out;   // the PCM sounds of menu_soc (clk_cpu)
 wire snd_t;
+wire signed [15:0] aud_l, aud_r;  // the stereo audio FIFO of the player (clk_cpu)
+wire aud_t;
 
 // VCO 50 * 18 / 2 = 450 MHz, phase 0: clk_sys 40.91 MHz (/11: the 800 x 600 video, HDMI, audio), clk_8 8.18 MHz
 // (/55: FT_CLK_OUT, the base of DCM_CLKGEN in hdmi_pll), clk_cpu 75 MHz (/6: the menu CPU, the SRAM, the MCU link,
@@ -163,7 +158,8 @@ wire snd_t;
 wire [5:0] pll_clk;
 kg_pll #(
     .DIVCLK_DIVIDE(2), .CLKFBOUT_MULT(18),
-    .CLKOUT0_DIVIDE(11), .CLKOUT1_DIVIDE(55), .CLKOUT2_DIVIDE(6), .CLKOUT3_DIVIDE(37),
+    .CLKOUT0_DIVIDE(11), .CLKOUT1_DIVIDE(55), .CLKOUT2_DIVIDE(6),
+    .CLKOUT3_DIVIDE(6), .CLKOUT3_PHASE(225.0),
     .BUFG_MASK(6'b001110)
 ) pll (
     .clk_in              (CLK_50MHZ),
@@ -174,7 +170,12 @@ kg_pll #(
 assign clk_sys_pll = pll_clk[0];
 assign clk_8mhz = pll_clk[1];
 assign clk_cpu = pll_clk[2];
-assign clk_12mhz = pll_clk[3];
+assign clk_sdr = pll_clk[3];
+// The PLL output 3 is now the SDRAM clock. The SAM2695 only needs a stable ~12 MHz
+// master clock; 75/6 = 12.5 MHz works and leaves the phase-correct SDRAM clock intact.
+reg [2:0] midi_clk_div = 3'd0;
+always @(posedge clk_cpu) midi_clk_div <= midi_clk_div + 3'd1;
+assign clk_12mhz = midi_clk_div[2];
 ODDR2 u_midi_clk (.Q(MIDI_CLK), .C0(clk_12mhz), .C1(~clk_12mhz), .CE(1'b1), .D0(1'b1), .D1(1'b0), .R(1'b0), .S(1'b0));
 BUFG bufg_clk_sys(.I(clk_sys_pll), .O(clk_sys));
 assign areset = ~locked;
@@ -186,6 +187,7 @@ wire reset_cpu = areset_cpu[1];
 
 // ft clk 8mhz out
 ODDR2 u_ft_clk (.Q(FT_CLK_OUT), .C0(clk_8mhz), .C1(~clk_8mhz), .CE(1'b1), .D0(1'b1), .D1(1'b0), .R(1'b0), .S(1'b0));
+ODDR2 u_sdr_clk (.Q(SDR_CLK), .C0(clk_sdr), .C1(~clk_sdr), .CE(1'b1), .D0(1'b1), .D1(1'b0), .R(1'b0), .S(1'b0));
 
 // MCU_SCK is not on a clock pin before rev.G: local routing (as the old menu)
 wire mcu_sck = MCU_SCK;
@@ -279,8 +281,14 @@ function [15:0] sat_add16(input [15:0] a, input [15:0] b);
         sat_add16 = (s > 17'sd32767) ? 16'h7FFF : (s < -17'sd32768) ? 16'h8000 : s[15:0];
     end
 endfunction
-wire [15:0] audio_mix_l = sat_add16(adc_l[23:8], snd_s);
-wire [15:0] audio_mix_r = sat_add16(adc_r[23:8], snd_s);
+reg [2:0] aud_t_s = 3'd0;
+reg signed [15:0] aud_l_s = 16'sd0, aud_r_s = 16'sd0;
+always @(posedge clk_sys) begin
+    aud_t_s <= { aud_t_s[1:0], aud_t };
+    if (aud_t_s[2] != aud_t_s[1]) begin aud_l_s <= aud_l; aud_r_s <= aud_r; end
+end
+wire [15:0] audio_mix_l = sat_add16(sat_add16(adc_l[23:8], snd_s), aud_l_s);
+wire [15:0] audio_mix_r = sat_add16(sat_add16(adc_r[23:8], snd_s), aud_r_s);
 
 //------- Sigma-Delta DAC ---------
 kg_sigma_delta_dac #(.MSBI(15)) dac_l(
@@ -315,9 +323,11 @@ wire kbd_wr, ms_wr;
 wire [7:0] ms_x, ms_y, ms_z, ms_b;
 wire [15:0] joy_l, joy_r;
 wire [1:0] ld_kind;
-wire ld_active, ld_end, ld_wr, ld_ready;
-wire [31:0] ld_addr;
+wire ld_start, ld_active, ld_end, ld_wr, ld_ready;
+wire [31:0] ld_addr, ld_size;
+wire [63:0] ld_ext;
 wire [7:0] ld_data;
+wire [15:0] sw;                    // S0 = the OSD volume (byte 0)
 // the RPC mailbox of kg_mcu2 (target 08) for menu_soc
 wire [10:0] rpc_a;
 wire rpc_we;
@@ -361,12 +371,12 @@ kg_mcu2 #(
     .MCU_SCK(mcu_sck), .MCU_MOSI(MCU_MOSI), .MCU_MISO(MCU_MISO), .MCU_SS(MCU_CS_N), .MCU_INT(mcu_int),
     .MCU_SPI_FT_SS(MCU_IO[3]), .MCU_SPI_SD2_SS(MCU_IO[2]),
 
-    .SW(), .SW_WR(), .SW_INDEX(), .SW_VALUE(), .HW_ID(), .DVI_ONLY(dvi_only), .CORE_BUILD(), .FW_BUILD(),
+    .SW(sw), .SW_WR(), .SW_INDEX(), .SW_VALUE(), .HW_ID(), .DVI_ONLY(dvi_only), .CORE_BUILD(), .FW_BUILD(),
     .BUSY(), .BTNS(), .RELOAD_REQ(1'b0), .RELOAD_CORE(8'd0),
     .KBD(kbd), .KBD_WR(kbd_wr), .PS2_CODE(), .PS2_KIND(), .PS2_WR(), .MS_X(ms_x), .MS_Y(ms_y), .MS_Z(ms_z),
     .MS_B(ms_b), .MS_WR(ms_wr), .JOY_L(joy_l), .JOY_R(joy_r), .JOY_WR(), .PS2_CMD(16'h0000), .PS2_CMD_WR(1'b0),
-    .LD_KIND(ld_kind), .LD_SLOT(), .LD_SIZE(), .LD_START(), .LD_ACTIVE(ld_active), .LD_END(ld_end),
-    .LD_ADDR(ld_addr), .LD_DATA(ld_data), .LD_WR(ld_wr), .LD_READY(ld_ready),
+    .LD_KIND(ld_kind), .LD_SLOT(), .LD_SIZE(ld_size), .LD_EXT(ld_ext), .LD_START(ld_start),
+    .LD_ACTIVE(ld_active), .LD_END(ld_end), .LD_ADDR(ld_addr), .LD_DATA(ld_data), .LD_WR(ld_wr), .LD_READY(ld_ready),
 
     .OSD_WR(osd_wr), .OSD_WADDR(osd_waddr), .OSD_WDATA(osd_wdata), .OSD_EN(osd_en),
     .OSD_FG(osd_fg), .OSD_BG(osd_bg), .OSD_ALPHA(osd_alpha), .OSD_PX(osd_px), .OSD_PY(osd_py),
@@ -422,20 +432,29 @@ wire [27:0] pal_wd;
 wire [23:0] grad_top, grad_bot;
 wire [15:0] sram_do, sram_oe_n;
 
+wire [15:0] sdr_dq_o, sdr_dq_oe_n;
+genvar gs;
+generate for (gs = 0; gs < 16; gs = gs + 1) begin : g_sdr
+    assign SDR_DQ[gs] = sdr_dq_oe_n[gs] ? 1'bz : sdr_dq_o[gs];
+end endgenerate
+
 menu_soc soc (
     .clk(clk_cpu), .reset(reset_cpu),
-    .ld_kind(ld_kind), .ld_active(ld_active), .ld_end(ld_end), .ld_addr(ld_addr), .ld_data(ld_data),
+    .ld_kind(ld_kind), .ld_start(ld_start), .ld_size(ld_size), .ld_ext(ld_ext[31:0]),
+    .ld_active(ld_active), .ld_end(ld_end), .ld_addr(ld_addr), .ld_data(ld_data),
     .ld_wr(ld_wr), .ld_ready(ld_ready),
-    .kbd(kbd), .kbd_wr(kbd_wr), .ms_x(ms_x), .ms_y(ms_y), .ms_z(ms_z), .ms_b(ms_b), .ms_wr(ms_wr), .joy_l(joy_l), .joy_r(joy_r),
+    .sw(sw), .kbd(kbd), .kbd_wr(kbd_wr), .ms_x(ms_x), .ms_y(ms_y), .ms_z(ms_z), .ms_b(ms_b), .ms_wr(ms_wr), .joy_l(joy_l), .joy_r(joy_r),
     .vid_req(vid_req), .vid_adr(vid_adr), .vid_len(vid_len), .vid_we(vid_we), .vid_wa(vid_wa), .vid_wd(vid_wd),
     .pal_we(pal_we), .pal_wa(pal_wa), .pal_wd(pal_wd), .fb_sel(fb_sel), .fb_shown(fb_shown),
     .frame_t(frame_t), .show(fb_show), .grad_top(grad_top), .grad_bot(grad_bot),
-    .snd_out(snd_out), .snd_t(snd_t),
+    .snd_out(snd_out), .snd_t(snd_t), .aud_l(aud_l), .aud_r(aud_r), .aud_t(aud_t),
     .midi_data(cpu_midi_data), .midi_wr(cpu_midi_wr), .midi_full(cpu_midi_full),
     .esp_rx_data(esp_uart_rx_data), .esp_rx_valid(esp_uart_rx_wr && esp_own), .esp_rx_ack(cpu_esp_ack),
     .esp_tx_data(cpu_esp_data), .esp_tx_wr(cpu_esp_wr), .esp_own(esp_own),
     .rpc_a(rpc_a), .rpc_we(rpc_we), .rpc_wd(rpc_wd), .rpc_rd(rpc_rd),
     .dbg_uart(), .dbg_uart_wr(), .cpu_run(),
+    .sdr_a(SDR_A), .sdr_ba(SDR_BA), .sdr_dq_i(SDR_DQ), .sdr_dq_o(sdr_dq_o), .sdr_dq_oe_n(sdr_dq_oe_n),
+    .sdr_dqm(SDR_DQM), .sdr_ras_n(SDR_RAS_N), .sdr_cas_n(SDR_CAS_N), .sdr_we_n(SDR_WE_N),
     .MA(MA), .MD_I(MD), .MD_O(sram_do), .MD_OE_N(sram_oe_n), .MWR_N(MWR_N), .MRD_N(MRD_N)
 );
 genvar gi;
