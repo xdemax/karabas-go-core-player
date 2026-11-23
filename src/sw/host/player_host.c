@@ -41,7 +41,11 @@ int fs_list(const char *path, fs_entry_t *out, int max, fs_keep_t keep) {
   int n = 0;
   for (unsigned i = 0; i < sizeof(demo) / sizeof(demo[0]) && n < max; i++) {
     if (keep && !keep(demo[i].name, demo[i].dir)) continue;
-    snprintf(out[n].name, FS_NAME_MAX, "%s", demo[i].name);
+    size_t len = strlen(demo[i].name) + 1;
+    out[n].name = malloc(len);
+    if (!out[n].name) return -3;
+    memcpy(out[n].name, demo[i].name, len);
+    out[n].path = NULL;
     out[n].size = demo[i].size;
     out[n].dir = (uint8_t) demo[i].dir;
     n++;
@@ -57,7 +61,11 @@ int fs_list_alloc(const char *path, fs_entry_t **out, fs_keep_t keep, fs_idle_t 
   *out = a;
   return n;
 }
+void fs_free_names(fs_entry_t *list, int n) { for (int i = 0; i < n; i++) { free(list[i].name); list[i].name = NULL; free(list[i].path); list[i].path = NULL; } }
+void fs_free_list(fs_entry_t *list, int n) { if (!list) return; fs_free_names(list, n); free(list); }
 int fs_open(const char *path, FIL *f) { (void) path; (void) f; return -1; }
+int playlist_supported(const char *name) { (void) name; return 0; }
+int playlist_load(const char *path, fs_entry_t **out) { (void) path; if (out) *out = NULL; return -2; }
 int fs_dir_exists(const char *path) { (void) path; return 1; }
 void fs_path_up(char *path) { int n = (int) strlen(path); while (n > 1 && path[n - 1] != '/') n--; if (n > 1) n--; path[n] = 0; if (!path[0]) { path[0] = '/'; path[1] = 0; } }
 

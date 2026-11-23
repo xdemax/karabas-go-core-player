@@ -47,7 +47,7 @@ typedef struct {
   const uint8_t *mod;
   uint32_t size;
   char title[21];
-  int chn, song, restart, npat, nins, linear;
+  int chn, song, restart, npat, nins, linear, interp;
   uint8_t orders[256];
   struct { const uint8_t *d, *end; int rows; } pat[XM_PAT];
   xins_t ins[XM_INS];
@@ -565,21 +565,52 @@ static void mix(int n) {
     uint64_t last = (uint64_t) pos + (uint64_t) step * (uint32_t) (n - 1);
     if ((last >> 16) < end) {
       int i = 0;
-      for (; i + 1 < n; i += 2) {
-        int s = (int8_t) data[pos >> 16];
-        mixbuf[2 * i] += (s * lg) >> 8;
-        mixbuf[2 * i + 1] += (s * rg) >> 8;
-        pos += step;
-        s = (int8_t) data[pos >> 16];
-        mixbuf[2 * i + 2] += (s * lg) >> 8;
-        mixbuf[2 * i + 3] += (s * rg) >> 8;
-        pos += step;
-      }
-      if (i < n) {
-        int s = (int8_t) data[pos >> 16];
-        mixbuf[2 * i] += (s * lg) >> 8;
-        mixbuf[2 * i + 1] += (s * rg) >> 8;
-        pos += step;
+      if (X.interp) {
+        for (; i + 1 < n; i += 2) {
+          uint32_t idx0 = pos >> 16;
+          uint32_t fr0 = (pos >> 8) & 0xFFu;
+          int a0 = (int8_t) data[idx0];
+          int b0 = (idx0 + 1 < end) ? (int8_t) data[idx0 + 1] : a0;
+          int s = a0 + (((b0 - a0) * (int32_t) fr0) >> 8);
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+          uint32_t idx1 = pos >> 16;
+          uint32_t fr1 = (pos >> 8) & 0xFFu;
+          int a1 = (int8_t) data[idx1];
+          int b1 = (idx1 + 1 < end) ? (int8_t) data[idx1 + 1] : a1;
+          s = a1 + (((b1 - a1) * (int32_t) fr1) >> 8);
+          mixbuf[2 * i + 2] += (s * lg) >> 8;
+          mixbuf[2 * i + 3] += (s * rg) >> 8;
+          pos += step;
+        }
+        if (i < n) {
+          uint32_t idx0 = pos >> 16;
+          uint32_t fr0 = (pos >> 8) & 0xFFu;
+          int a0 = (int8_t) data[idx0];
+          int b0 = (idx0 + 1 < end) ? (int8_t) data[idx0 + 1] : a0;
+          int s = a0 + (((b0 - a0) * (int32_t) fr0) >> 8);
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+        }
+      } else {
+        for (; i + 1 < n; i += 2) {
+          int s = (int8_t) data[pos >> 16];
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+          s = (int8_t) data[pos >> 16];
+          mixbuf[2 * i + 2] += (s * lg) >> 8;
+          mixbuf[2 * i + 3] += (s * rg) >> 8;
+          pos += step;
+        }
+        if (i < n) {
+          int s = (int8_t) data[pos >> 16];
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+        }
       }
     } else {
       for (int i = 0; i < n; i++) {
@@ -591,7 +622,15 @@ static void mix(int n) {
           pos = ((loop + over) << 16) | (pos & 0xFFFF);
           idx = loop + over;
         }
-        int s = (int8_t) data[idx];
+        int s;
+        if (X.interp) {
+          uint32_t fr = (pos >> 8) & 0xFFu;
+          int a = (int8_t) data[idx];
+          int b = (idx + 1 < end) ? (int8_t) data[idx + 1] : a;
+          s = a + (((b - a) * (int32_t) fr) >> 8);
+        } else {
+          s = (int8_t) data[idx];
+        }
         mixbuf[2 * i] += (s * lg) >> 8;
         mixbuf[2 * i + 1] += (s * rg) >> 8;
         pos += step;
@@ -647,6 +686,9 @@ static int parse_xm(uint32_t size) {
   if (X.song < 1 || X.song > 256) X.song = 1;
   if (X.restart < 0 || X.restart >= X.song) X.restart = 0;
   if (X.chn < 1 || X.chn > XM_CH) X.chn = XM_CH;
+  // Linear interpolation is a quality win, but a dense 32-channel XM needs the nearest-sample
+  // path to keep the 48 kHz FIFO alive. Keep interpolation for normal-width modules.
+  X.interp = X.chn <= 16;
   if (X.npat > XM_PAT) X.npat = XM_PAT;
   if (X.nins > XM_INS) X.nins = XM_INS;
   if (80u + 256u > size) { set_error("XM: order table"); return -1; }
@@ -758,16 +800,11 @@ int fpga_xm_start(const play_src_t *src, uint32_t size, play_progress_t progress
   if (!src || !size) { set_error("XM: empty"); return -1; }
   if (src->f) {
     if (size > SDRAM_FILE_MAX) { set_error("XM: over 32 MB"); return -1; }
-    uint8_t *dst = (uint8_t *) LD_FILE_BASE;
-    if (size > LD_FILE_MAX) {
-      // A big file (the 3 MB / 15 MB modules) goes to the 32 MB SDRAM; small ones stay in the
-      // fast SRAM. The SDRAM controller starts in parallel with the loader.
-      uint32_t t0 = R_US;
-      while (!(R_SDRAM & 1)) {
-        if ((uint32_t) (R_US - t0) > 200000u) { set_error("XM: SDRAM not ready"); return -1; }
-      }
-      dst = (uint8_t *) SDRAM_BASE;
+    uint32_t t0 = R_US;
+    while (!(R_SDRAM & 1)) {
+      if ((uint32_t) (R_US - t0) > 200000u) { set_error("XM: SDRAM not ready"); return -1; }
     }
+    uint8_t *dst = (uint8_t *) SDRAM_BASE;
     uint32_t off = 0;
     while (off < size) {
       uint32_t n = size - off;

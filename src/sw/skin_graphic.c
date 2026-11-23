@@ -12,6 +12,11 @@
 #define BODY_Y  HDR_H
 #define BODY_H  (FB_H - HDR_H - FOOT_H)
 #define LEFT_W  400
+#define NAME_X  20
+#define NAME_PAD 16
+#define NAME_SIZE_W 78
+#define MARQ_MS 50
+#define MARQ_STEP 2
 #define RIGHT_X LEFT_W
 #define RIGHT_W (FB_W - LEFT_W)
 #define LIST_Y  88
@@ -41,7 +46,9 @@ static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_sp
 static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent;
 
 static int last_sel = -1, last_top = -1, last_now = -1, last_paused = -1;
-static char last_path[256];
+static char last_path[FS_PATH_MAX];
+static int marq_off, marq_dir = 1;
+static uint32_t marq_t;
 static int last_prog = -1, disp_vu_l, disp_vu_r;
 static int disp_ch[32], disp_bands[SP_BARS];
 static int peak_bands[SP_BARS], cap_lo[SP_BARS], cap_hi[SP_BARS], peak_hold[SP_BARS];
@@ -98,7 +105,7 @@ static void draw_header(const player_view_t *v) {
 }
 
 static void draw_left_base(const player_view_t *v) {
-  gfx_fill(0, BODY_Y, LEFT_W, BODY_H, c_bg);
+  gfx_fill(0, BODY_Y, LEFT_W - 1, BODY_H, c_bg);
   char p[56];
   const char *path = v->path ? v->path : "/";
   int n = (int) strlen(path);
@@ -108,32 +115,82 @@ static void draw_left_base(const player_view_t *v) {
   gfx_fill(12, BODY_Y + 34, LEFT_W - 24, 1, c_line);
 }
 
+static int name_width(const player_view_t *v, int k) {
+  if (k < 0 || k >= v->nent) return 0;
+  const fs_entry_t *e = &v->ent[k];
+  char nm[FS_NAME_MAX + 2];
+  copy_fit(nm, e->name, sizeof(nm));
+  int j = (int) strlen(nm);
+  if (e->dir && j < (int) sizeof(nm) - 1) { nm[j++] = '/'; nm[j] = 0; }
+  return gfx_text_width(&f20, nm);
+}
+
+static int name_avail(const fs_entry_t *e) {
+  int right = LEFT_W - NAME_PAD;
+  if (!e->dir) right -= NAME_SIZE_W;
+  int w = right - NAME_X;
+  return w > 0 ? w : 0;
+}
+
+static void reset_marquee(void) {
+  marq_off = 0;
+  marq_dir = 1;
+  marq_t = R_US;
+}
+
 static void draw_row(const player_view_t *v, int k) {
   if (k < v->top || k >= v->top + ROWS) return;
   int r = k - v->top;
   int y = LIST_Y + r * ROW_H;
-  gfx_fill(0, y - 2, LEFT_W, ROW_H + 2, c_bg);
+  gfx_fill(0, y - 2, LEFT_W - 1, ROW_H + 2, c_bg);
   if (k == v->sel) gfx_solid_rect(8, y + 1, LEFT_W - 16, ROW_H - 4, c_sel);
   if (k < 0 || k >= v->nent) return;
 
-  char nm[40];
-  copy_fit(nm, v->ent[k].name, 34);
+  const fs_entry_t *e = &v->ent[k];
+  char nm[FS_NAME_MAX + 2];
+  copy_fit(nm, e->name, sizeof(nm));
   int j = (int) strlen(nm);
-  if (v->ent[k].dir && j < 38) { nm[j++] = '/'; nm[j] = 0; }
-  gfx_text_left(&f20, 20, y + ROW_H / 2, nm, r_text);
-  if (!v->ent[k].dir) {
+  if (e->dir && j < (int) sizeof(nm) - 1) { nm[j++] = '/'; nm[j] = 0; }
+  int avail = name_avail(e);
+  int w = gfx_text_width(&f20, nm);
+  int off = (k == v->sel && w > avail) ? marq_off : 0;
+  if (off > w - avail) off = w - avail;
+  if (off > 0) {
+    // Keep the size column and the panel clean while the long name slides.
+    gfx_keep(NAME_X + avail, y - 2, LEFT_W - (NAME_X + avail), ROW_H + 2);
+    gfx_text_left(&f20, NAME_X - off, y + ROW_H / 2, nm, r_text);
+    gfx_keep_off();
+  } else {
+    char fit[40];
+    copy_fit(fit, nm, 34);
+    gfx_text_left(&f20, NAME_X, y + ROW_H / 2, fit, r_text);
+  }
+  if (!e->dir) {
     char b[16], *z = b;
-    z = u2s(z, (v->ent[k].size + 1023u) / 1024u, 1);
+    z = u2s(z, (e->size + 1023u) / 1024u, 1);
     *z++ = 'K'; *z = 0;
     gfx_text_right(&f20, LEFT_W - 16, y + ROW_H / 2, b, r_dim);
   }
 }
 
+static void marquee_tick(const player_view_t *v) {
+  if (v->sel < 0 || v->sel >= v->nent) { reset_marquee(); return; }
+  int avail = name_avail(&v->ent[v->sel]);
+  int over = name_width(v, v->sel) - avail;
+  if (over <= 0) { reset_marquee(); return; }
+  if ((uint32_t) (R_US - marq_t) < MARQ_MS) return;
+  marq_t = R_US;
+  marq_off += marq_dir * MARQ_STEP;
+  if (marq_off >= over) { marq_off = over; marq_dir = -1; }
+  else if (marq_off <= 0) { marq_off = 0; marq_dir = 1; }
+  draw_row(v, v->sel);
+}
+
 static void draw_list_area(const player_view_t *v) {
-  gfx_fill(0, LIST_Y - 4, LEFT_W, (BODY_Y + BODY_H) - (LIST_Y - 4), c_bg);
+  gfx_fill(0, LIST_Y - 4, LEFT_W - 1, (BODY_Y + BODY_H) - (LIST_Y - 4), c_bg);
   if (v->idle) v->idle();
   if (!v->nent) {
-    gfx_text_center(&f20, LEFT_W / 2, 300, "no mod / xm / s3m files here", r_dim);
+    gfx_text_center(&f20, LEFT_W / 2, 300, "no mod / xm / s3m / it files here", r_dim);
     return;
   }
   for (int i = 0; i < ROWS; i++) {
@@ -527,6 +584,7 @@ static void draw_full(const player_view_t *v) {
   last_now = v->now;
   last_paused = v->now ? v->paused : -1;
   copy_fit(last_path, v->path ? v->path : "", sizeof(last_path));
+  reset_marquee();
 }
 
 // The live refresh draws into the visible buffer, without a clear or a buffer swap. Static text
@@ -535,6 +593,9 @@ static void draw_full(const player_view_t *v) {
 static void update_list(const player_view_t *v) {
   gfx_target(v->fb);
   col_init();
+  int changed = strcmp(v->path ? v->path : "", last_path) != 0 ||
+                v->top != last_top || v->sel != last_sel;
+  if (changed) reset_marquee();
   if (strcmp(v->path ? v->path : "", last_path)) {
     draw_left_base(v);
     draw_list_area(v);
@@ -544,6 +605,8 @@ static void update_list(const player_view_t *v) {
   } else if (v->sel != last_sel) {
     draw_row(v, last_sel);
     draw_row(v, v->sel);
+  } else {
+    marquee_tick(v);
   }
   last_top = v->top;
   last_sel = v->sel;

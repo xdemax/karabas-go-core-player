@@ -109,7 +109,7 @@ new one is streamed (the PSRAM is limited).
 ## Limits
 
 - Go and Mini G are built. The Mini top is still in the tree, not built. The Go has no LED matrix
-  and no ESP32-S3 shield; S3M is not in the current build.
+  and no ESP32-S3 shield. S3M and IT are played by the native MikMod engine and use the SDRAM.
 - SD2 is read by the core; SD1 only through the stock `FL` file loader (the firmware's browser),
   one file at a time, up to 2.5 MB (the SRAM file buffer), no file name in the core.
 - Read only, `.mod` / `.xm` / `.s3m` only, no subdirectory shortcuts or settings.

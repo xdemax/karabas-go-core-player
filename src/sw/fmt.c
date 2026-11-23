@@ -5,14 +5,13 @@
 #include "fmt.h"
 #include "analysis.h"
 #include "mixer.h"
-#include "eng_esp32.h"
 #include "fpga.h"
 
-extern const fmt_module_t fmt_pt1, fmt_asc, fmt_psc, fmt_sqt, fmt_stp, fmt_vtx, fmt_psg;
-static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_pt1, &fmt_asc, &fmt_psc, &fmt_sqt, &fmt_stp, &fmt_vtx, &fmt_psg, &fmt_s3m };
+extern const fmt_module_t fmt_pt1, fmt_asc, fmt_psc, fmt_sqt, fmt_stp, fmt_vtx, fmt_psg, fmt_mp3;
+static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_s3m, &fmt_it, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_pt1, &fmt_asc, &fmt_psc, &fmt_sqt, &fmt_stp, &fmt_vtx, &fmt_psg, &fmt_mp3 };
 #define NFMT (sizeof(fmt_modules) / sizeof(fmt_modules[0]))
 
-static const play_engine_t *const engines[] = { &fpga_engine, &esp32_engine };
+static const play_engine_t *const engines[] = { &fpga_engine };
 #define NENG (sizeof(engines) / sizeof(engines[0]))
 
 static int lower(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
@@ -42,14 +41,22 @@ const fmt_module_t *fmt_by_head(const uint8_t *head, uint32_t len) {
 
 int fmt_supported(const char *name) { return fmt_by_ext(name) != NULL; }
 
+// The formats advertised on the title screen. They are not the same as the formats accepted
+// by the browser: IT/S3M/MP3 stay playable if the user selects them, but are not advertised
+// while their quality/performance is still being worked on.
+static int title_hidden(const char *e) {
+  return strcmp(e, "it") == 0 || strcmp(e, "s3m") == 0 || strcmp(e, "mp3") == 0;
+}
+
 // "mod, xm, s3m": the extensions of the registry, in the registration order. A new format
-// module automatically appears in the startup panel of the skin.
+// module automatically appears in the startup panel of the skin unless it is hidden above.
 int fmt_supported_list(char *out, int max) {
   int n = 0;
   if (max <= 0) return 0;
   out[0] = 0;
   for (unsigned i = 0; i < NFMT; i++) {
     const char *e = fmt_modules[i]->ext;
+    if (title_hidden(e)) continue;
     int len = 0;
     while (e[len]) len++;
     if (n + len + (n ? 2 : 0) + 1 > max) break;

@@ -325,7 +325,13 @@ static void mix(int n) {
         if (ch->loop_len > 2) { ch->pos = ch->loop_start << 16; idx = ch->loop_start; }
         else { ch->active = 0; continue; }
       }
-      int s = ((const int8_t *) ch->data)[idx];
+      // Linear interpolation (the libxmp-style 16.16 phase): the native mixer used nearest
+      // samples before, which is the main reason MOD sounded rough next to the C engines.
+      uint32_t frac = (ch->pos >> 8) & 0xFFu;
+      uint32_t end = (ch->loop_len > 2) ? (ch->loop_start + ch->loop_len) : ch->len;
+      int s0 = ((const int8_t *) ch->data)[idx];
+      int s1 = (idx + 1 < end) ? ((const int8_t *) ch->data)[idx + 1] : s0;
+      int s = s0 + (((s1 - s0) * (int32_t) frac) >> 8);
       int v = s * ch->vol;
       {
         int av = v < 0 ? -v : v;
@@ -335,7 +341,6 @@ static void mix(int n) {
       }
       if (ch->pan) r += v; else l += v;
       ch->pos += ch->step;
-      uint32_t end = (ch->loop_len > 2) ? (ch->loop_start + ch->loop_len) : ch->len;
       if ((ch->pos >> 16) >= end) {
         if (ch->loop_len > 2) {
           while ((ch->pos >> 16) >= end) ch->pos -= ch->loop_len << 16;
@@ -499,14 +504,11 @@ int fpga_mod_start(const play_src_t *src, uint32_t size, play_progress_t progres
   if (!src || !size) { set_error("MOD: empty"); return -1; }
   if (src->f) {
     if (size > SDRAM_FILE_MAX) { set_error("MOD: over 32 MB"); return -1; }
-    uint8_t *dst = (uint8_t *) LD_FILE_BASE;
-    if (size > LD_FILE_MAX) {
-      uint32_t t0 = R_US;
-      while (!(R_SDRAM & 1)) {
-        if ((uint32_t) (R_US - t0) > 200000u) { set_error("MOD: SDRAM not ready"); return -1; }
-      }
-      dst = (uint8_t *) SDRAM_BASE;
+    uint32_t t0 = R_US;
+    while (!(R_SDRAM & 1)) {
+      if ((uint32_t) (R_US - t0) > 200000u) { set_error("MOD: SDRAM not ready"); return -1; }
     }
+    uint8_t *dst = (uint8_t *) SDRAM_BASE;
     uint32_t off = 0;
     while (off < size) {
       uint32_t n = size - off;

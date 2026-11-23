@@ -156,6 +156,39 @@ unsigned char *PT3_FindSig(unsigned char *buffer, long length)
     return 0;
 }
 
+// PT3 3.7 can pack both TurboSound chips into one module. The Mode byte is the
+// mirrored-pattern base; the first chip uses the position's pattern, the second
+// chip uses its mirror (base - 1 - pattern).
+static bool PT3_IsSingleTS(unsigned char *module, unsigned long length, unsigned int *mode_out)
+{
+    PT3_File *header = (PT3_File *)module;
+    unsigned int mode = (unsigned char)header->PT3_MusicName[0x62];
+    if(mode == 0x20 || mode == 0)
+        return false;
+    unsigned int maxpat = 0;
+    for(unsigned long i = 0; i < 255 && 0xc9 + i < length; i++)
+    {
+        unsigned int v = header->PT3_PositionList[i];
+        if(v == 0xff)
+            break;
+        if(v / 3 > maxpat)
+            maxpat = v / 3;
+    }
+    if(mode > maxpat && mode < maxpat * 2)
+    {
+        *mode_out = mode;
+        return true;
+    }
+    return false;
+}
+
+static unsigned int PT3_PosForChip(const AYSongInfo &info, unsigned long chip, unsigned int pos)
+{
+    if(!info.ts_single || chip == 0)
+        return pos;
+    return info.ts_mode * 3 - 3 - pos;
+}
+
 void PT3_Init(AYSongInfo &info)
 {
     int i;
@@ -183,11 +216,14 @@ void PT3_Init(AYSongInfo &info)
     {
         version = header->PT3_MusicName[13] - 0x30;
     }
-    unsigned char *ptr = PT3_FindSig(module + 0x63, info.module_len - 0x63);
-    if((unsigned long)ptr > 0)
+    unsigned int mode = 0;
+    if(PT3_IsSingleTS(module, info.module_len, &mode))
     {
+        // One-module TurboSound: both chips share the module, each has its own state.
         info.is_ts = true;
-        info.module1 = ptr;
+        info.ts_single = true;
+        info.ts_mode = mode;
+        info.module1 = module;
         info.data1 = (void *)new PT3_SongInfo;
         if(!info.data1)
         {
@@ -197,6 +233,23 @@ void PT3_Init(AYSongInfo &info)
         }
         memset(info.data1, 0, sizeof(PT3_SongInfo));
     }
+    else
+    {
+        unsigned char *ptr = PT3_FindSig(module + 0x63, info.module_len - 0x63);
+        if((unsigned long)ptr > 0)
+        {
+            info.is_ts = true;
+            info.module1 = ptr;
+            info.data1 = (void *)new PT3_SongInfo;
+            if(!info.data1)
+            {
+                delete (PT3_SongInfo *)info.data;
+                info.data = 0;
+                return;
+            }
+            memset(info.data1, 0, sizeof(PT3_SongInfo));
+        }
+    }
 
     void *data = info.data;
     module = info.module;
@@ -204,10 +257,17 @@ void PT3_Init(AYSongInfo &info)
     for(unsigned long y = 0; y < 2; y++)
     {
         i = header->PT3_PositionList[0];
-        b = header->PT3_MusicName[0x62];
-        if(b != 0x20)
+        if(info.ts_single)
         {
-            i = b * 3 - 3 - i;
+            i = PT3_PosForChip(info, y, i);
+        }
+        else
+        {
+            b = header->PT3_MusicName[0x62];
+            if(b != 0x20)
+            {
+                i = b * 3 - 3 - i;
+            }
         }
         PT3.Version = version;
         PT3.DelayCounter = 1;
@@ -646,9 +706,12 @@ void PT3_Play_Chip(AYSongInfo &info, unsigned long chip_num)
                 PT3.CurrentPosition++;
                 if(PT3.CurrentPosition == header->PT3_NumberOfPositions)
                     PT3.CurrentPosition = header->PT3_LoopPosition;
-                PT3_A.Address_In_Pattern = ay_sys_getword(&module[PT3_PatternsPointer + header->PT3_PositionList[PT3.CurrentPosition] * 2]);
-                PT3_B.Address_In_Pattern = ay_sys_getword(&module[PT3_PatternsPointer + header->PT3_PositionList[PT3.CurrentPosition] * 2 + 2]);
-                PT3_C.Address_In_Pattern = ay_sys_getword(&module[PT3_PatternsPointer + header->PT3_PositionList[PT3.CurrentPosition] * 2 + 4]);
+                unsigned int pos = header->PT3_PositionList[PT3.CurrentPosition];
+                if(info.ts_single)
+                    pos = PT3_PosForChip(info, chip_num, pos);
+                PT3_A.Address_In_Pattern = ay_sys_getword(&module[PT3_PatternsPointer + pos * 2]);
+                PT3_B.Address_In_Pattern = ay_sys_getword(&module[PT3_PatternsPointer + pos * 2 + 2]);
+                PT3_C.Address_In_Pattern = ay_sys_getword(&module[PT3_PatternsPointer + pos * 2 + 4]);
                 PT3.Noise_Base = 0;
             }
             PT3_PatternIntterpreter(info, PT3_A, chip_num);

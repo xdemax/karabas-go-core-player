@@ -29,6 +29,23 @@ static int hidden(const FILINFO *fi) {
 
 static int lower(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
 
+static char *name_copy(const char *s) {
+  size_t n = strlen(s) + 1;
+  char *p = malloc(n);
+  if (p) memcpy(p, s, n);
+  return p;
+}
+
+static void free_names(fs_entry_t *list, int n) {
+  for (int i = 0; i < n; i++) {
+    free(list[i].name); list[i].name = NULL;
+    free(list[i].path); list[i].path = NULL;
+  }
+}
+
+void fs_free_names(fs_entry_t *list, int n) { free_names(list, n); }
+void fs_free_list(fs_entry_t *list, int n) { if (!list) return; free_names(list, n); free(list); }
+
 static int cmp(const fs_entry_t *a, const fs_entry_t *b) {
   if (a->dir != b->dir) return a->dir ? -1 : 1;
   const char *p = a->name, *q = b->name;
@@ -43,7 +60,7 @@ static int cmp(const fs_entry_t *a, const fs_entry_t *b) {
 int fs_list(const char *path, fs_entry_t *out, int max, fs_keep_t keep) {
   static DIR d;
   static FILINFO fi;
-  char p[280];
+  char p[FS_PATH_MAX + 3];
   int n = 0;
   if (fs_mount() != 0) return -1;
   full(path, p, sizeof(p));
@@ -52,12 +69,12 @@ int fs_list(const char *path, fs_entry_t *out, int max, fs_keep_t keep) {
     if (hidden(&fi)) continue;
     int dir = (fi.fattrib & AM_DIR) != 0;
     if (keep && !keep(fi.fname, dir)) continue;
-    fs_entry_t *e = &out[n];
-    int i = 0;
-    for (; fi.fname[i] && i < FS_NAME_MAX - 1; i++) e->name[i] = fi.fname[i];
-    e->name[i] = 0;
-    e->size = (uint32_t) fi.fsize;
-    e->dir = (uint8_t) dir;
+    char *nm = name_copy(fi.fname);
+    if (!nm) { free_names(out, n); f_closedir(&d); return -3; }
+    out[n].name = nm;
+    out[n].path = NULL;
+    out[n].size = (uint32_t) fi.fsize;
+    out[n].dir = (uint8_t) dir;
     n++;
   }
   f_closedir(&d);
@@ -78,7 +95,7 @@ static int cmp_q(const void *a, const void *b) { return cmp((const fs_entry_t *)
 int fs_list_alloc(const char *path, fs_entry_t **out, fs_keep_t keep, fs_idle_t idle) {
   static DIR d;
   static FILINFO fi;
-  char p[280];
+  char p[FS_PATH_MAX + 3];
   fs_entry_t *arr = NULL;
   int n = 0, cap = 0;
   *out = NULL;
@@ -92,16 +109,16 @@ int fs_list_alloc(const char *path, fs_entry_t **out, fs_keep_t keep, fs_idle_t 
     if (n == cap) {
       int nc = cap ? cap * 2 : 64;
       fs_entry_t *na = realloc(arr, (size_t) nc * sizeof(fs_entry_t));
-      if (!na) { free(arr); f_closedir(&d); return -3; }
+      if (!na) { free_names(arr, n); free(arr); f_closedir(&d); return -3; }
       arr = na;
       cap = nc;
     }
-    fs_entry_t *e = &arr[n];
-    int i = 0;
-    for (; fi.fname[i] && i < FS_NAME_MAX - 1; i++) e->name[i] = fi.fname[i];
-    e->name[i] = 0;
-    e->size = (uint32_t) fi.fsize;
-    e->dir = (uint8_t) dir;
+    char *nm = name_copy(fi.fname);
+    if (!nm) { free_names(arr, n); free(arr); f_closedir(&d); return -3; }
+    arr[n].name = nm;
+    arr[n].path = NULL;
+    arr[n].size = (uint32_t) fi.fsize;
+    arr[n].dir = (uint8_t) dir;
     n++;
     if (idle && (n & 31) == 0) idle();   // keep the audio FIFO fed while a big directory is read
   }
@@ -113,7 +130,7 @@ int fs_list_alloc(const char *path, fs_entry_t **out, fs_keep_t keep, fs_idle_t 
 }
 
 int fs_open(const char *path, FIL *f) {
-  char p[280];
+  char p[FS_PATH_MAX + 3];
   if (fs_mount() != 0) return -1;
   full(path, p, sizeof(p));
   return f_open(f, p, FA_READ) == FR_OK ? 0 : -2;
@@ -121,7 +138,7 @@ int fs_open(const char *path, FIL *f) {
 
 int fs_dir_exists(const char *path) {
   static DIR d;
-  char p[280];
+  char p[FS_PATH_MAX + 3];
   if (fs_mount() != 0) return 0;
   full(path, p, sizeof(p));
   if (f_opendir(&d, p) != FR_OK) return 0;

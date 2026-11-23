@@ -211,18 +211,33 @@ static void ay_mix(int n, int emit) {
 void pt3_service(void) {
   if (!active || paused) return;
 #ifdef AY_HW
-  uint32_t now = R_US;
-  int guard = 0;
-  while ((int32_t) (now - next_us) >= 0 && active) {
-    uint32_t length = engine_mode ? (uint32_t) ay_engine_length() : ayp_length();
-    if (length && ticks >= length) { active = 0; ended = 1; ay_hw_ctl(0, vol); break; }
-    ay_engine_tick();
-    ticks++;
-    for (int c = 0; c < nchips; c++) { ay_apply(&ay[c], ayp_regs(c), c); ay_hw_sync(c, 0); }
-    // The RTL chips are the sound source. Refresh the display model at 12.5 Hz only.
-    if ((ticks & 3) == 0) ay_mix((int) AY_TICK, 0);
-    next_us += 20000u;
-    if (++guard >= 100) { next_us = now + 20000u; break; }
+  // Read the real mixed AY samples from the RTL tap and put them through the
+  // common mixer (filter + analyzer + audio FIFO). No software AY synthesis.
+  int free = audio_free();
+  while (free > 0 && active) {
+    if (!tick_left) {
+      uint32_t length = engine_mode ? (uint32_t) ay_engine_length() : ayp_length();
+      if (length && ticks >= length) { active = 0; ended = 1; ay_hw_ctl(0, vol); break; }
+      if (engine_mode) ay_engine_tick(); else ayp_tick();
+      ticks++;
+      for (int c = 0; c < nchips; c++) ay_hw_sync(c, 0);
+      tick_left = AY_TICK;
+    }
+    int n = free > AY_CHUNK ? AY_CHUNK : free;
+    if (n > (int) tick_left) n = (int) tick_left;
+    if (n <= 0) break;
+    for (int i = 0; i < n; i++) {
+      if ((R_AY_TAP_STAT & 1) == 0) { n = i; break; }
+      uint32_t v = R_AY_TAP;
+      int16_t l = (int16_t) (v >> 16), r = (int16_t) v;
+      int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+      if (al > peak_l) peak_l = al;
+      if (ar > peak_r) peak_r = ar;
+      last_l = l; last_r = r;
+      mixer_write(l, r);
+    }
+    if (n == 0) break;
+    free -= n; tick_left -= (uint32_t) n;
   }
 #else
   int free = audio_free();
@@ -277,8 +292,12 @@ static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_prog
 
   const uint8_t *d = (const uint8_t *) LD_FILE_BASE;
   if (src->f) {
-    uint8_t *dst = (uint8_t *) LD_FILE_BASE;
-    if (size > LD_FILE_MAX) { set_error("AY: over 2.5 MB"); return -1; }
+    uint8_t *dst = (uint8_t *) SDRAM_BASE;
+    if (size > SDRAM_FILE_MAX) { set_error("AY: over 32 MB"); return -1; }
+    uint32_t t0 = R_US;
+    while (!(R_SDRAM & 1)) {
+      if ((uint32_t) (R_US - t0) > 200000u) { set_error("AY: SDRAM not ready"); return -1; }
+    }
     uint32_t off = 0;
     while (off < size) {
       uint32_t n = size - off;
@@ -309,13 +328,8 @@ static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_prog
   for (volatile int i = 0; i < 2000; i++) ;
   ay_engine_tick();
   ticks = 1;
-  for (int c = 0; c < nchips; c++) {
-    ay_apply(&ay[c], ayp_regs(c), c);
-    ay_hw_sync(c, 1);
-  }
-  ay_mix(AY_TICK, 0);
-  next_us = R_US + 20000u;
-  ay_hw_ctl(1, vol);
+  for (int c = 0; c < nchips; c++) ay_hw_sync(c, 1);
+  tick_left = 0;
 #else
   ay_init(&ayemu[0]);
   ay_init(&ayemu[1]);
@@ -337,8 +351,12 @@ static int start_kind(int kind, const play_src_t *src, uint32_t size, play_progr
 
   const uint8_t *d = (const uint8_t *) LD_FILE_BASE;
   if (src->f) {
-    uint8_t *dst = (uint8_t *) LD_FILE_BASE;
-    if (size > LD_FILE_MAX) { set_error("AY: over 2.5 MB"); return -1; }
+    uint8_t *dst = (uint8_t *) SDRAM_BASE;
+    if (size > SDRAM_FILE_MAX) { set_error("AY: over 32 MB"); return -1; }
+    uint32_t t0 = R_US;
+    while (!(R_SDRAM & 1)) {
+      if ((uint32_t) (R_US - t0) > 200000u) { set_error("AY: SDRAM not ready"); return -1; }
+    }
     uint32_t off = 0;
     while (off < size) {
       uint32_t n = size - off;
@@ -431,7 +449,17 @@ void pt3_info(fmt_info_t *o) {
   o->size = pt3_size;
 }
 
+static void refresh_vu(void) {
+  const uint8_t *r0 = ayp_regs(0);
+  const uint8_t *r1 = ayp_regs(1);
+  for (int c = 0; c < 3; c++) {
+    vu[c] = (uint8_t) ((r0[8 + c] & 15) * 16);
+    vu[3 + c] = nchips > 1 ? (uint8_t) ((r1[8 + c] & 15) * 16) : 0;
+  }
+}
+
 void pt3_audio(fmt_audio_t *o) {
+  refresh_vu();
   o->level_l = last_l;
   o->level_r = last_r;
   o->peak_l = peak_l;
@@ -441,21 +469,20 @@ void pt3_audio(fmt_audio_t *o) {
   o->volume = vol;
   o->paused = paused;
   peak_l = peak_r = 0;
-  memset(vu, 0, sizeof(vu));
 }
 
 int pt3_get_volume(void) { return vol; }
 int pt3_set_volume(int v) {
   if (v < 0) v = 0; if (v > 64) v = 64; vol = v;
 #ifdef AY_HW
-  if (active) ay_hw_ctl(paused ? 0 : 1, vol);
+  if (active) ay_hw_ctl(0, vol);
 #endif
   return vol;
 }
 int pt3_pause(int on) {
   if (on < 0) paused = !paused; else paused = on ? 1 : 0;
 #ifdef AY_HW
-  if (active) ay_hw_ctl(paused ? 0 : 1, vol);
+  if (active) ay_hw_ctl(0, vol);
 #endif
   return paused;
 }

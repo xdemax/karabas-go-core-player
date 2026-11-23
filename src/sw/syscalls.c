@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include "mmio.h"
 
 extern char __heap_start[], __heap_end[];   // link.ld: the program, the heap, the stack below the sounds
@@ -22,3 +23,9 @@ int _lseek(int fd, int off, int w) { (void) fd; (void) off; (void) w; return 0; 
 void _exit(int c) { (void) c; for (;;) ; }
 int _kill(int pid, int sig) { (void) pid; (void) sig; errno = EINVAL; return -1; }
 int _getpid(void) { return 1; }
+
+int _gettimeofday(struct timeval *tv, void *tz) {
+  (void) tz;
+  if (tv) { tv->tv_sec = (time_t) (R_US / 1000000u); tv->tv_usec = (suseconds_t) (R_US % 1000000u); }
+  return 0;
+}

@@ -18,6 +18,12 @@ fs.writebytes("/b.XM", b"xm" * 100)
 fs.writebytes("/skip.txt", b"no")
 fs.writebytes("/.hidden.mod", b"hidden")
 fs.writebytes("/sub/c.s3m", b"s3m" * 10)
+fs.writebytes("/sub/list.ayl", b"ZX Spectrum Sound Chip Emulator Play List File v1.6\r\n"
+              b"..\\a.mod\r\n<\r\nName=First\r\n>\r\n"
+              b"..\\sub\\c.s3m\r\n")
+deep = "/sub/level2 with a long folder name/level3 another long folder name/level4"
+fs.makedirs(deep)
+fs.writebytes(deep + "/deep-track.mod", b"deep")
 fs.makedirs("/many")
 for i in range(600):
     fs.writebytes("/many/f%04d.mod" % i, b"")

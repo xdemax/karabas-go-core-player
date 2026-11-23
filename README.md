@@ -5,7 +5,7 @@
 фреймбуфер 800×600×8 в SRAM, блиттер/шрифты, клавиатура и джойстики через
 MCU link v2 (`kg_mcu2`).
 
-**MOD, XM, PT3, PT2 и STC играет сам FPGA**: микшеры MOD/XM на VexRiscv,
+**MOD/XM — FPGA-плееры, S3M/IT — MikMod, MP3 — экспериментальный Helix; PT3/PT2/STC — FPGA-реплеи**:
 трекерные реплеи и два YM2149 в RTL для PT3/PT2/STC; звук — через PCM5102
 или HDMI. **SD2** (слот FPGA) ядро читает само через SPI; **SD1** (карта
 RP2040) — штатным file loader прошивки (`FL`-пункт, как в C64/NES/Sega).
@@ -16,21 +16,24 @@ RP2040) — штатным file loader прошивки (`FL`-пункт, как
 
 ![Экран (host preview)](docs/screenshot.png)
 
-## Статус (2026-11-23)
+## Статус (2026-11-23, release 1.0b)
 
-- **MOD/XM** — FPGA-микшеры, 48 кГц stereo, до 32 каналов XM.
+- **MOD/XM** — FPGA-микшеры, 48 кГц stereo; 32-канальный XM идёт по быстрому пути.
+- **S3M/IT** — MikMod, 48 кГц stereo, сэмплы в SDRAM.
 - **PT3/PT2/STC** — FPGA-реплеи, два YM2149 (Turbo Sound), 3/6 каналов,
   ФНЧ на выходе AY.
-- **SD2** — SPI master в FPGA, SD SPI mode 0, FatFs R0.15; файлы до
-  2.5 МБ играются из SRAM, большие — из SDRAM.
-- **SD1** — штатный file loader прошивки (`FL`, слот 1), `Menu+F5`.
+- **SD2** — SPI master в FPGA, SD SPI mode 0, FatFs R0.15; музыка грузится
+  прямо в 32 МБ SDRAM.
+- **SD1** — поддержка временно отключена.
 - **SDRAM** — 32 МБ MT48LC16M16A2, окно `0x10000000`.
 - **LED-матрицы** — L/R-индикаторы через `audio_peaks` → `kg_mcu2` AUX
   (на Mini G; на Go не используются).
 - **Прошивка** — без изменений; только штатные сервисы.
 - **Платы** — собраны **Go** и **Mini G**; текущие тесты — Mini G, Go —
   удобная тестовая плата.
-- Ограничения: MP3 не поддерживается; S3M в текущей сборке нет.
+- **MP3** — экспериментальный программный Helix; на 75 МГц возможны пропуски, формат скрыт из титульного списка, но выбирается в браузере.
+- **Титульный экран** показывает только стабильные форматы; IT/S3M/MP3 из него убраны и остаются доступны в списке файлов.
+- Ограничения: MP3 в 1.0b не гарантирует real-time на всех битрейтах.
 
 ## Документация
 
@@ -71,9 +74,8 @@ boot menu. Прошивка загрузит `roms/player.bin` в SRAM.
 
 ## Память и носители
 
-- SRAM — быстрый буфер программы, фреймбуфера и модулей до 2.5 МБ.
-- SDRAM — 32 МБ, окно `0x10000000`; большие MOD/XM (3–15 МБ) стримятся
-  с SD2 и играются оттуда.
+- SRAM — программа, heap/stack и фреймбуферы; музыка — в SDRAM.
+- SDRAM — 32 МБ, окно `0x10000000`; модули и сэмплы MOD/XM/S3M/IT/MP3.
 - SD2 — карта FPGA, SPI mode 0; pass-through `msc2` на время работы ядра
   выключен.
 - SD1 — карта RP2040; доступ через file loader прошивки, без своего MCU.
@@ -91,11 +93,14 @@ boot menu. Прошивка загрузит `roms/player.bin` в SRAM.
 | `src/sw/main.c`, `ui.c` | GUI, файлы, меню |
 | `src/sw/sd.c`, `diskio.c`, `fs.c` | SD2, FatFs |
 | `src/sw/sd1.c` | файл SD1 из штатного loader |
-| `src/sw/mod_fpga.c`, `xm_fpga.c` | MOD/XM парсеры и микшеры |
+| `src/sw/mod_fpga.c`, `xm_fpga.c` | FPGA-плееры MOD/XM |
+| `src/sw/mikmod_fpga.c`, `src/sw/mikmod` | MikMod: S3M/IT |
+| `src/sw/mp3_fpga.c`, `src/sw/helix` | Helix: экспериментальный MP3 |
+| `src/sw/xmp_fpga.c`, `src/sw/libxmp` | libxmp (не входит в текущую сборку) |
 | `src/sw/ay_fpga.c`, `ay_players.cpp` | PT3/PT2/STC, YM2149 |
 | `src/sw/fpga.c`, `fmt.c` | общий движок и реестр форматов |
 | `src/sw/audio.c` | FIFO 48 кГц stereo |
-| `src/core.json` | `Volume`, `FL "SD1 MUSIC"` |
+| `src/core.json` | `Volume` (SD1 item отключён) |
 | `src/make_core.py` | сборка `.kg` |
 
 ## Управление
@@ -108,6 +113,6 @@ boot menu. Прошивка загрузит `roms/player.bin` в SRAM.
 | `Enter` | играть файл / войти в каталог |
 | `Esc` | остановить воспроизведение |
 | `Backspace` | на уровень выше |
-| `Menu+F5` / `Menu+Esc` | file browser SD1 (`SD1 MUSIC`) |
+| `Menu+F5` / `Menu+Esc` | SD1 временно отключён |
 
 Громкость — пункт `Volume` в OSD (Menu+Esc).

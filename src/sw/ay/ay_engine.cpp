@@ -16,6 +16,8 @@ struct AYSongInfo {
   unsigned long Length, Loop;
   void *data, *data1;
   bool is_ts;
+  bool ts_single;       // one PT3 module holds both chips (mirrored patterns)
+  unsigned int ts_mode; // mirrored-pattern base from the PT3 3.7 Mode byte
   unsigned char chip_type;
   const char *Name, *Author, *TrackName, *CompName, *PrgName;
 };

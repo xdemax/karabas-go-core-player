@@ -478,6 +478,11 @@ reg aud_stats_clr = 1'b0;
 reg signed [15:0] aud_l_r = 16'sd0, aud_r_r = 16'sd0;
 reg aud_t_r = 1'b0;
 
+// Hardware AY tap: the CPU reads the real mixed YM2149 samples for the common
+// output mixer/analyzer. The ring is written at the 48 kHz audio tick.
+reg [9:0] ay_tap_wr = 10'd0, ay_tap_rd = 10'd0;
+reg [31:0] ay_tap [0:1023];
+
 wire aud_read = aud_tick && !ay_active && !aud_empty;
 kg_sdpram #(.DW(32), .AW(AUD_W)) aud_ram (
 	.clka(clk), .wea(aud_we && !aud_full), .addra(aud_wr), .dina(aud_wdat),
@@ -511,6 +516,7 @@ always @(posedge clk) begin
 		aud_t_r <= 1'b0;
 		aud_drop <= 16'd0;
 		aud_under <= 16'd0;
+		ay_tap_wr <= 10'd0;
 	end else begin
 		if (aud_stats_clr) begin
 			aud_drop <= 16'd0;
@@ -521,6 +527,8 @@ always @(posedge clk) begin
 		end
 		if (aud_we && !aud_full) aud_wr <= aud_wr + 1'b1;
 		if (aud_tick) begin
+			ay_tap[ay_tap_wr] <= {ay_l, ay_r};
+			ay_tap_wr <= ay_tap_wr + 10'd1;
 			if (ay_active) begin
 				aud_l_r <= ay_l;
 				aud_r_r <= ay_r;
@@ -580,6 +588,7 @@ function signed [11:0] sat_add(input signed [11:0] a, input [7:0] d);
 endfunction
 
 always @(posedge clk) begin
+	if (cpu_reset) ay_tap_rd <= 10'd0;
 	io_ack <= 1'b0;
 	pal_we <= 1'b0;
 	dbg_uart_wr <= 1'b0;
@@ -718,6 +727,13 @@ always @(posedge clk) begin
 				end
 				8'h40: io_dat <= us;
 				8'hb0: io_dat <= { 16'd0, sw };
+				8'hd0: begin
+					if (ay_tap_rd != ay_tap_wr) begin
+						io_dat <= ay_tap[ay_tap_rd];
+						ay_tap_rd <= ay_tap_rd + 10'd1;
+					end else io_dat <= 32'd0;
+				end
+				8'hd4: io_dat <= { 31'd0, (ay_tap_rd != ay_tap_wr) };
 				8'h8c: io_dat <= { 23'd0, snd_playing[0], 8'd0 };
 				8'h9c: io_dat <= { 23'd0, snd_playing[1], 8'd0 };
 				8'ha0: io_dat <= { 31'd0, midi_full };

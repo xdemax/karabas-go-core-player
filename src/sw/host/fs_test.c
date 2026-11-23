@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "../fs.h"
+#include "../playlist.h"
 
 static FILE *img;
 static int failures;
@@ -25,7 +26,15 @@ static int keep(const char *name, int dir) {
   if (dir) return 1;
   const char *d = strrchr(name, '.');
   if (!d) return 0;
-  return !strcasecmp(d, ".mod") || !strcasecmp(d, ".xm") || !strcasecmp(d, ".s3m");
+  return !strcasecmp(d, ".mod") || !strcasecmp(d, ".xm") || !strcasecmp(d, ".s3m") ||
+         !strcasecmp(d, ".pt3") || !strcasecmp(d, ".ayl");
+}
+// the playlist parser asks the real registry; this test only needs the extensions
+int fmt_supported(const char *name) {
+  const char *d = strrchr(name, '.');
+  if (!d) return 0;
+  return !strcasecmp(d, ".mod") || !strcasecmp(d, ".xm") || !strcasecmp(d, ".s3m") ||
+         !strcasecmp(d, ".pt3");
 }
 
 int main(int argc, char **argv) {
@@ -43,15 +52,36 @@ int main(int argc, char **argv) {
     if (strcmp(e[3].name, "b.XM") || e[3].dir) FAIL("the fourth is not b.XM");
     if (e[2].size != 5000) FAIL("a.mod is %u bytes", e[2].size);
   }
+  fs_free_names(e, n);
 
   fs_entry_t *many = NULL;
   int nm = fs_list_alloc("/many", &many, keep, NULL);
   if (nm != 600) FAIL("many/: %d entries (want 600)", nm);
   else if (strcmp(many[0].name, "f0000.mod") || strcmp(many[599].name, "f0599.mod")) FAIL("many/ sort: %s .. %s", many[0].name, many[599].name);
-  free(many);
+  fs_free_list(many, nm);
 
   n = fs_list("/sub", e, 16, keep);
-  if (n != 1 || strcmp(e[0].name, "c.s3m")) FAIL("sub/: %d entries, first %s", n, n ? e[0].name : "-");
+  if (n != 3 || !e[0].dir || strcmp(e[0].name, "level2 with a long folder name") ||
+      strcmp(e[1].name, "c.s3m") || strcmp(e[2].name, "list.ayl"))
+    FAIL("sub/: %d entries, first %s", n, n ? e[0].name : "-");
+  fs_free_names(e, n < 0 ? 0 : n);
+
+  fs_entry_t *pl = NULL;
+  int npl = playlist_load("/sub/list.ayl", &pl);
+  if (npl != 2 || strcmp(pl[0].name, "a.mod") || strcmp(pl[0].path, "/a.mod") ||
+      strcmp(pl[1].name, "c.s3m") || strcmp(pl[1].path, "/sub/c.s3m"))
+    FAIL("playlist: %d entries", npl);
+  fs_free_list(pl, npl < 0 ? 0 : npl);
+
+  const char *deepdir = "/sub/level2 with a long folder name/level3 another long folder name/level4";
+  fs_entry_t *deep = NULL;
+  int nd = fs_list_alloc(deepdir, &deep, keep, NULL);
+  if (nd != 1 || strcmp(deep[0].name, "deep-track.mod")) FAIL("deep/: %d entries", nd);
+  fs_free_list(deep, nd < 0 ? 0 : nd);
+  FIL df;
+  if (fs_open("/sub/level2 with a long folder name/level3 another long folder name/level4/deep-track.mod", &df) != 0)
+    FAIL("open the deep file");
+  else f_close(&df);
 
   FIL f;
   if (fs_open("/a.mod", &f) != 0) FAIL("open a.mod");

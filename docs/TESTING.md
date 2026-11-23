@@ -2,45 +2,37 @@
 
 The core is built for **Karabas Go** and **Mini G** (rev.G / G2). **MOD, XM, PT3, PT2 and STC**
 play on the FPGA itself: on the Go the sound comes from the PCM5102 and the picture from VGA; on the
-Mini G from the PCM5102 / HDMI. **S3M / ESP32 is not used in the current build.** No firmware change
-is needed.
+Mini G from the PCM5102 / HDMI. **S3M and IT play through MikMod in the FPGA core.** No firmware
+change is needed.
 
 ## What to put on the cards
 
-- **SD1** (the card of the RP2040): `musicplayer.kg` (the root or `cores/`) and the modules in
-  `/mods` (`.mod`, `.xm`, `.pt3`, `.pt2`, `.stc`, `.s3m`). The core does not read this card itself; the stock file loader of the firmware (the
-  `SD1 MUSIC` OSD item, Menu+F5) sends the selected file to the core.
-- **SD2** (the FPGA slot): the `.mod` / `.xm` / `.pt3` / `.pt2` / `.stc` / `.s3m` files, from `/` down. The card must be
+- **SD1 music** is temporarily disabled. The core reads SD2 only; `musicplayer.kg` can still live on SD1.
+- **SD2** (the FPGA slot): the `.mod` / `.xm` / `.s3m` / `.it` / `.pt3` / `.pt2` / `.stc` files, from `/` down. The card must be
   FAT12 / FAT16 / FAT32 / exFAT with 512-byte sectors (FatFs R0.15 reads all of them). The core
-  owns this slot while it runs (`msc2` is off). Files up to 2.5 MB load into the fast SRAM; larger
-  ones (e.g. `Radix - I Realize.xm`, 2.8 MB) are copied into the board's 32 MB SDRAM first. The
-  load progress shows in the right panel; a 2.8 MB file takes a few seconds.
-- The ESP32-S3 module: its tracker firmware (`player/esp32`, API 1, feature 10).
+  owns this slot while it runs (`msc2` is off). Music files are copied directly into the board's
+  32 MB SDRAM; the load progress shows in the right panel.
+
 
 ## Steps
 
 1. Put the cards in, power on, pick **Music Player** in the boot menu.
 2. The list of the root of SD2. Up / Down, Left / Right (a screen up / down, also PgUp / PgDn),
    Home / End, Enter on a directory.
-3. Enter on a `.mod` / `.xm` / `.pt3` / `.pt2` / `.stc`: the FPGA engine starts, the footer shows
-   `playing …`, the sound is from the board. AY modules use the two RTL YM2149s.
-4. `.s3m` is not playable in the current build (the ESP32 path is not used).
+3. Enter on a `.mod` / `.xm` / `.s3m` / `.it` / `.pt3` / `.pt2` / `.stc`: the FPGA engine starts,
+   the footer shows `playing …`, the sound is from the board. AY modules use the two RTL YM2149s.
+4. S3M and IT use MikMod; their module and sample memory lives in the 32 MB SDRAM.
 5. Esc stops; Backspace goes up a directory.
 6. The optional LED matrix (the add-on of the Mini G) scrolls `KARABAS GO MUSIC PLAYER` once at
    startup, then shows the L/R audio meters of the player (`audio_peaks` -> `kg_mcu2` AUX). It is
    configured by the `matrix` key of `core.json`; the firmware's `[matrix]` settings apply too.
-7. **SD1**: Menu+F5 Space/pause +/- vol (or Menu+Esc, then `SD1 MUSIC`) opens the firmware's file browser at `/mods`;
-   Enter sends the file to the core, which plays it. The browser shows the name; the core shows
-   `playing SD1`. Esc closes the firmware OSD; the core's SD2 list is back.
+7. **SD1 music is disabled for now**; the player uses the SD2 list only.
 
 ## What can go wrong
 
 | Screen | Meaning |
 |---|---|
-| `no ESP32` | the module does not answer `GET_VER`: the shield, its CS (`K5` / `UBUS_26`), the SPI bus, or its firmware |
-| `no chunk request` / `module rejected the chunk` | the module's tracker refused the stream; check its firmware version and the free PSRAM |
-| `no mod / xm / pt3 / pt2 / stc / s3m files here` | no matching files in this directory |
-| `SD1: not mod/xm/...` / `SD1: file too big` | the FL file has no known signature / is over 2.5 MB |
+| `no mod / xm / s3m / it / pt3 / pt2 / stc files here` | no matching files in this directory |
 | `SD2: no card or no FAT` | the card is missing, not FAT / exFAT, or the SD init failed (check the card and the slot) |
 
 The core has no serial log on the board; the messages are on the screen (`src/sw/player.c`).

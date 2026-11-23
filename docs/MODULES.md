@@ -35,7 +35,8 @@ player.c        the GUI, the file list (SD2 / SD1), the keys, the progress, the 
   |     +-- formats/stc.c  -> ay_fpga.c     the YM2149 register stream (STC)
   |     +-- formats/ay_more.c -> ay_fpga.c  PT1/ASC/PSC/SQT/STP/VTX/PSG
   |     |                     fpga.c        the shared FPGA engine dispatcher
-  |     +-- formats/s3m.c  -> eng_esp32.c
+  |     +-- formats/s3m.c  -> mikmod_fpga.c
+  |     +-- formats/it.c   -> mikmod_fpga.c
   |
   +-- src.c     a play_src_t: a FatFs file on SD2, or the SRAM buffer from SD1
   +-- sd1.c     the SD1 file of the stock file loader (menu_soc 0x60 / 0x64 / 0x6c / 0x68)
@@ -66,7 +67,7 @@ typedef struct {
 } fmt_module_t;
 
 typedef struct {
-  const char *name;                 // "FPGA", "ESP32"
+  const char *name;                 // "FPGA"
   int (*init)(void);
   int (*stop)(void);
   const char *(*version)(void);
@@ -76,35 +77,19 @@ typedef struct {
 } play_engine_t;
 ```
 
-`play` starts the playback: the FPGA engine returns at once and mixes in `service`; the ESP engine
-streams the file and starts the module, then returns. The output of `play` is 0 or an error code;
-the module's `error()` has the text.
+`play` starts the playback: the FPGA engine returns at once and mixes in `service`. The output of
+`play` is 0 or an error code; the module's `error()` has the text.
 
-## Add a format (the usual case: the ESP32-S3 decodes it)
+## Add a format
 
-1. Implement the decoder in the ESP32 firmware (`player/esp32`), with a stream-load command and a
-   play.
-2. `formats/foo.c`:
-
-```c
-#include <string.h>
-#include "../fmt.h"
-#include "../eng_esp32.h"
-
-static int detect(const uint8_t *p, uint32_t n) { return ...; }
-static int play(const play_src_t *src, uint32_t size, play_progress_t progress) {
-  return esp32_play(ESP32_FMT_FOO, src, size, progress);
-}
-static const char *error(void) { return esp32_error(); }
-const fmt_module_t fmt_foo = { "foo", "foo", detect, play, error };
-```
-
+1. Write the decoder/mixer in the SRAM (the module bytes are at `0x080000` for an SD1 file, or copied
+   there from SD2 in `play`), like `mod_fpga.c`, or use a complete third-party engine like MikMod.
+2. `formats/foo.c` exposes a `fmt_module_t` with `detect()`, `play()` and `error()`.
 3. `fmt.h`: `extern const fmt_module_t fmt_foo;`
-4. `fmt.c`: add `&fmt_foo` to `fmt_modules[]`.
-5. `eng_esp32.h` / `eng_esp32.c`: the `ESP32_FMT_FOO` value and its stream-load command.
-6. `src/sw/Makefile`: add `formats/foo.c` to `SRCS`.
-7. `src/core.json`: add `foo` to the `FL` item's `extensions` (the firmware's SD1 file browser).
-8. `make -C src/sw`, then `cd src && make go-core minig-core` (the bitstream is unchanged).
+4. `fmt.c`: add `&fmt_foo` to `fmt_modules[]` and to the engine's dispatch.
+5. `src/sw/Makefile`: add the format and its engine sources to `SRCS` / `MIKMOD_SRCS`.
+6. `src/core.json`: add `foo` to the `FL` item's `extensions` (the firmware's SD1 file browser).
+7. `make -C src/sw`, then `cd src && make go-core minig-core` (the bitstream is unchanged).
 
 ## Add a format on the FPGA
 
@@ -116,8 +101,8 @@ const fmt_module_t fmt_foo = { "foo", "foo", detect, play, error };
 ## A different engine
 
 Add a `play_engine_t` and the format modules of that engine. Add the engine to `engines[]` in
-`fmt.c`; the player initializes all and shows the first one's name / version. The FPGA is first
-(no ESP32 needed for MOD / XM); the ESP32 is the second (S3M until its FPGA player).
+`fmt.c`; the player initializes all and shows the first one's name / version. The FPGA engine is
+the only one in the current build; S3M/IT use MikMod inside it; MP3 uses Helix, separately from the tracker engines.
 
 ## The audio FIFO (`menu_soc` 0x70 / 0x74)
 
@@ -155,4 +140,6 @@ need it. A new format is a new `formats/*.c` + a rebuild of the program (the bit
 | `stp` | `.stp` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `vtx` | `.vtx` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `psg` | `.psg` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
-| `s3m` | `.s3m` | ESP32 (for now) | `SCRM` at 0x2c |
+| `s3m` | `.s3m` | FPGA (MikMod) | `SCRM` at 0x2c |
+| `it` | `.it` | FPGA (MikMod) | `IMPM` at 0 |
+| `mp3` | `.mp3` | FPGA (Helix, experimental) | ID3 / MPEG sync |

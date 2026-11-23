@@ -33,12 +33,14 @@ extern uint8_t host_fb[2][0x80000];
 #define R_SW     MMIO(0xb0) // R: the bytes of the OSD switches S0..S3 (one byte per S item)
 #define R_AY     MMIO(0xc0) // W: { reset, 3'b0, chip, reg[3:0], data[7:0] } to the TS YM2149 pair
 #define R_AY_CTL MMIO(0xc4) // W: bit 0 active, bits 15..8 volume 0..64
+#define R_AY_TAP MMIO(0xd0) // R: real mixed AY samples, one per 48 kHz tick
+#define R_AY_TAP_STAT MMIO(0xd4) // R: bit 0 = a sample is waiting
 #define R_LDF    MMIO(0x60) // R: LOAD (file loader / FL item): bit 0 ready, 1 too big, 3..2 kind
 #define R_LDLEN  MMIO(0x64) // R: the size of the loaded file
 #define R_LDACK  MMIO(0x68) // W: acknowledge (clear ready / too big)
 #define R_LDEXT  MMIO(0x6c) // R: the extension of an FL item ("mod", "xm", "s3m"; 0 for the fileloader)
-#define LD_FILE_BASE 0x080000u   // the file of LOAD kind 1 / 2 in the SRAM
-#define LD_FILE_MAX  0x00280000u // the file buffer: 0x080000 .. 0x2fffff (2.5 MB)
+#define LD_FILE_BASE SDRAM_BASE  // music files and player sample data live in the 32 MB SDRAM
+#define LD_FILE_MAX  SDRAM_FILE_MAX // the whole SDRAM file window
 #define SDRAM_BASE     0x10000000u // the 32 MB SDRAM (the SD2 file buffer; see menu_soc)
 #define SDRAM_FILE_MAX 0x02000000u // the whole SDRAM window
 #define R_PAL(b, i) MMIO(0x400 + 0x400 * (b) + 4 * (i)) // W: entry i of the palette of frame buffer b:
