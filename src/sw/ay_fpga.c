@@ -257,6 +257,11 @@ static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_prog
   last_l = last_r = peak_l = peak_r = 0;
   memset(vu, 0, sizeof(vu));
   err[0] = 0;
+#ifdef AY_HW
+  // The AY path is the software synthesizer into the FIFO. Make sure the old
+  // RTL pair does not stay selected and mute the FIFO.
+  ay_hw_ctl(0, 0);
+#endif
   if (!src || size < 16) { set_error("AY: too short"); return -1; }
 
   const uint8_t *d = (const uint8_t *) LD_FILE_BASE;

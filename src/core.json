@@ -1,7 +1,7 @@
 {
     "id": "musicplayer",
     "name": "Music Player",
-    "build": "26112324",
+    "build": "26112325",
     "visible": true,
     "type": "osd",
     "order": 10,
