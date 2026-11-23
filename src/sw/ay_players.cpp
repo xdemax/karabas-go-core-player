@@ -60,6 +60,15 @@ static char g_title[64], g_error[48];
 static uint8_t g_regs[2][16];
 static uint16_t g_written[2];
 
+// One pass through the order list: the formats have no length field, but the players use
+// 64 rows per pattern and a fixed number of ticks per row. This is the same estimate the
+// UI needs for the progress bar; the actual loop can be shorter or longer by a delay effect.
+static uint32_t estimate_length(const Player &p) {
+  uint32_t positions = p.pos_count ? p.pos_count : 1;
+  uint32_t delay = p.delay ? p.delay : 1;
+  return positions * 64u * delay;
+}
+
 static uint16_t rd16(const uint8_t *p) { return (uint16_t) (p[0] | (p[1] << 8)); }
 static int clamp_note(int n) { return n < 0 ? 0 : (n > 95 ? 95 : n); }
 static uint8_t clamp_amp(int a) { return (uint8_t) (a < 0 ? 0 : (a > 15 ? 15 : a)); }
@@ -573,6 +582,8 @@ static int stc_start(Player &p, const uint8_t *m, uint32_t n) {
   p.pos_tab = rd16(m + 1);
   p.orn_tab = rd16(m + 3);
   p.pat_tab = rd16(m + 5);
+  p.pos_count = m[p.pos_tab];
+  if (!p.pos_count) p.pos_count = 1;
   p.delay = m[0];
   if (!p.delay) p.delay = 1;
   p.delay_left = 1;
@@ -637,6 +648,7 @@ extern "C" int ayp_start(int f, const uint8_t *m, uint32_t n) {
     const uint8_t *second = find_second_pt3(m, n);
     if (second && second > m && start_one(g_pl[1], f, second, (uint32_t) (n - (second - m))) == 0) g_nchips = 2;
   }
+  g_length = estimate_length(g_pl[0]);
   g_kind = f;
   g_active = 1;
   return 0;
