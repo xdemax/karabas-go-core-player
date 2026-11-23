@@ -214,14 +214,8 @@ void pt3_service(void) {
     for (int c = 0; c < nchips; c++) { ay_apply(&ay[c], ayp_regs(c), c); ay_hw_sync(c, 0); }
     // Keep the spectrum/VU display fed from the same register stream. This does not touch
     // the audio FIFO: the RTL chips are the sound source.
-    // The RTL chips are the sound source; the software model only feeds the
-    // level meters. Running it every fourth tick keeps the GUI responsive on 6ch.
-    if (engine_mode && (ticks & 3) != 0) {
-      audio_note_written((int) AY_TICK);
-    } else {
-      ay_mix((int) AY_TICK, 0);
-      audio_note_written((int) AY_TICK);
-    }
+    ay_mix((int) AY_TICK, 0);
+    audio_note_written((int) AY_TICK);
     next_us += 20000u;            // 20 ms
     if (++guard >= 100) { next_us = now + 20000u; break; }
   }

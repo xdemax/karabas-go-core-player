@@ -23,13 +23,15 @@
 #define SP_Y    270              // the spectrum label
 #define SP_BASE 462
 #define SP_H    160
-#define SP_BARS 60               // the original bar count, 1 px wide and adjacent
-#define SP_BW   1
-#define SP_GAP  0
+#define SP_BARS 60               // 2 px bars, 2 px gaps
+#define SP_BW   2
+#define SP_GAP  2
 #define SP_STEP (SP_BW + SP_GAP)
 #define SP_W    (SP_BARS * SP_BW + (SP_BARS - 1) * SP_GAP)
 #define SP_X    (PX + (PW - SP_W) / 2)
 #define SP_CAP  4
+#define SP_SEG  4                // one segment is cap-sized
+#define SP_SEG_STEP (SP_SEG + 1)
 // The UI used to show only the middle (yellow) third: the raw bands stay around
 // 85..170, which is exactly the yellow colour zone. Use that zone as the full scale.
 #define SP_LO   85
@@ -356,6 +358,13 @@ static void draw_spectrum_off(const player_view_t *v) {
   gfx_text_center(&f20, cx, SP_BASE - 24, b, r_pdim);
 }
 
+// Cut the solid bars into cap-sized segments. The background gaps are drawn over
+// every bar; this is one pass over the spectrum, not per-bar rectangle drawing.
+static void draw_spectrum_segments(void) {
+  for (int y = SP_BASE - SP_SEG; y > SP_BASE - SP_H; y -= SP_SEG_STEP)
+    gfx_fill(SP_X, y, SP_W, 1, c_panel);
+}
+
 static void update_spectrum(const player_view_t *v) {
   if (!v->spectrum) {
     if (!spec_off) {
@@ -454,6 +463,7 @@ static void update_spectrum(const player_view_t *v) {
     cap_lo[i] = lo;
     cap_hi[i] = hi;
   }
+  draw_spectrum_segments();
 }
 
 static void update_player_dynamic(const player_view_t *v, int force) {
