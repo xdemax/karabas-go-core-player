@@ -24,6 +24,8 @@ the hardware-mixer experiments.
 - [`docs/HW_MIXER_TZ.md`](docs/HW_MIXER_TZ.md) — main technical specification.
 - [`docs/PERFORMANCE_FINDINGS.md`](docs/PERFORMANCE_FINDINGS.md) — profiling of the
   current software mixer and the FPU audit.
+- [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) — all
+  considered options: fastmix limits, pre-render, ESP32/ESP8266, GUI, FPU.
 - [`docs/S3M_INTEGRATION.md`](docs/S3M_INTEGRATION.md) — the MikMod/S3M problem and
   possible integration paths.
 
