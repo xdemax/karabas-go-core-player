@@ -131,6 +131,7 @@ int fmt_set_volume(int v) { return v; }
 int fmt_pause(int on) { (void) on; return 0; }
 const char *fmt_engine_name(void) { return "FPGA"; }
 const char *fmt_engine_version(void) { return "1.0"; }
+const char *it_fpga_debug(void) { return ""; }
 
 int sd1_ready(void) { return 0; }
 const uint8_t *sd1_data(void) { return NULL; }

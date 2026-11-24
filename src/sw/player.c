@@ -9,6 +9,10 @@
 #include "fs.h"
 #include "browser.h"
 #include "playlist.h"
+#include "it_fpga.h"
+#ifndef PLAYER_BUILD
+#define PLAYER_BUILD "?"
+#endif
 #include "fmt.h"
 #include "src.h"
 #include "audio.h"
@@ -72,6 +76,8 @@ static void view_fill(int audio) {
 
   V.engine = fmt_engine_name();
   V.version = fmt_engine_version();
+  V.build = PLAYER_BUILD;
+  V.debug = it_fpga_debug();
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;

@@ -1,7 +1,11 @@
 # The program of the player core (rtl/soc/menu_soc.v): player.bin is the ROM of musicplayer.kg.
 XPACK  ?= $(HOME)/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin
 CROSS  := $(XPACK)/riscv-none-elf-
-CFLAGS := -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32imf -mabi=ilp32f -O2 -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
+BUILD_ID := $(shell sed -n 's/.*"build"[^"]*"\([^"]*\)".*/\1/p' ../core.json)
+CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32imf -mabi=ilp32f -O2 -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
+ifneq ($(IT_PROFILE),)
+CFLAGS += -DIT_PROFILE
+endif
 CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -fno-unwind-tables
 B      := build
 
@@ -36,6 +40,7 @@ HELIX_SRCS := helix/mp3dec.c helix/mp3tabs.c helix/bitstream.c helix/buffers.c h
               helix/huffman.c helix/imdct.c helix/scalfact.c helix/stproc.c helix/subband.c \
               helix/dqchan.c helix/dct32.c helix/hufftabs.c helix/polyphase.c helix/trigtabs.c
 OBJS   := $(B)/crt0.o $(addprefix $(B)/,$(SRCS:.c=.o)) $(addprefix $(B)/,$(MIKMOD_SRCS:.c=.o)) $(addprefix $(B)/,$(HELIX_SRCS:.c=.o)) $(B)/ay_players.o $(B)/ay/ay_engine.o
+$(B)/player.o: ../core.json
 $(B)/player.elf: $(OBJS) link.ld
 	$(CROSS)gcc $(CFLAGS) -nostdlib -nostartfiles -T link.ld -Wl,--gc-sections -o $@ $(OBJS) -lc_nano -lm -lgcc
 	$(CROSS)size $@

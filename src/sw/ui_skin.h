@@ -21,6 +21,8 @@ typedef struct {
   const char *error;
   const char *engine;
   const char *version;
+  const char *build;
+  const char *debug;
   const char *skin;
   const char *format;
   const char *title;

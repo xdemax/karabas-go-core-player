@@ -1,5 +1,6 @@
 // Full IT parser/replayer, using fastmix. MikMod remains available as the old path in fmt_it.
 #include <string.h>
+#include <stdio.h>
 #include "it_fpga.h"
 #include "it/it_parser.h"
 #include "it/it_player.h"
@@ -22,6 +23,9 @@ static char it_err[48];
 static int16_t it_out[IT_OUT_CHUNK * 2];
 static int32_t it_last_l, it_last_r, it_peak_l, it_peak_r;
 static uint8_t it_vu[FMT_CHANNELS];
+static char it_dbg[32];
+static uint32_t it_dbg_us, it_dbg_cycles, it_dbg_pcycles, it_dbg_cps;
+static int it_dbg_voices, it_dbg_alloc;
 
 static void it_error(const char *s) {
   int i = 0;
@@ -35,6 +39,9 @@ static void it_release(void) {
   it_file_size = it_file_used = 0;
   memset(it_vu, 0, sizeof(it_vu));
   it_last_l = it_last_r = it_peak_l = it_peak_r = 0;
+  it_dbg[0] = 0;
+  it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_cps = 0;
+  it_dbg_voices = it_dbg_alloc = 0;
 }
 
 int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress) {
@@ -77,6 +84,20 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   int rc = it_load(buf, size, &meta, &pcm, IT_LOAD_NOZEROCOPY, &diag, &it_mod);
   if (rc != IT_OK) { it_error(it_err_str(rc)); return -1; }
 
+  // The new engine keeps NNA voices and is heavier than MikMod. Dense files are
+  // left to the old proven engine until the voice path is optimized. The profile
+  // build raises the limit so the channel/voice threshold can be measured.
+#ifdef IT_PROFILE
+#define IT_CH_LIMIT 32
+#else
+#define IT_CH_LIMIT 16
+#endif
+  if (it_mod.used_channels > IT_CH_LIMIT) {
+    it_error("IT: too many channels, MikMod fallback");
+    it_release();
+    return -2;
+  }
+
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
   cfg.mixrate = 48000;
@@ -98,7 +119,13 @@ void it_fpga_service(void) {
   int free = audio_free();
   if (free <= 0) return;
   int n = free > IT_OUT_CHUNK ? IT_OUT_CHUNK : free;
+#ifdef IT_PROFILE
+  uint32_t c0 = R_CYCLES;
+#endif
   it_player_render(&it_pl, it_out, n);
+#ifdef IT_PROFILE
+  uint32_t c1 = R_CYCLES;
+#endif
   int v = it_volume;
   for (int i = 0; i < n; i++) {
     int32_t l = (int32_t)it_out[2 * i] * v / 64;
@@ -122,6 +149,25 @@ void it_fpga_service(void) {
       if (val > it_vu[x->host]) it_vu[x->host] = (uint8_t)val;
     }
   }
+#ifdef IT_PROFILE
+  uint32_t c2 = R_CYCLES;
+  it_dbg_pcycles += (uint32_t)(c1 - c0);
+  it_dbg_cycles += (uint32_t)(c2 - c0);
+  if ((uint32_t)(R_US - it_dbg_us) >= 1000000u) {
+    it_dbg_us = R_US;
+    it_dbg_cps = it_dbg_cycles;
+    uint32_t pct = it_dbg_cps / 750000u;          // 75 MHz: 750k cycles = 1%
+    uint32_t rpct = it_dbg_cps ?
+        (uint32_t)((uint64_t)it_dbg_pcycles * 100u / it_dbg_cps) : 0;
+    it_dbg_voices = it_player_active_voices(&it_pl);
+    it_dbg_alloc = it_pl.nv_hi;
+    snprintf(it_dbg, sizeof(it_dbg), "%d/%dv %lu%% r%lu",
+             it_dbg_voices, it_dbg_alloc,
+             (unsigned long)pct, (unsigned long)rpct);
+    it_dbg_cycles = 0;
+    it_dbg_pcycles = 0;
+  }
+#endif
 }
 
 int it_fpga_active(void) { return it_active; }
@@ -178,4 +224,11 @@ int it_fpga_set_volume(int v) {
 int it_fpga_pause(int on) {
   if (on < 0) it_paused = !it_paused; else it_paused = on ? 1 : 0;
   return it_paused;
+}
+const char *it_fpga_debug(void) {
+#ifdef IT_PROFILE
+  return it_active ? it_dbg : "";
+#else
+  return "";
+#endif
 }

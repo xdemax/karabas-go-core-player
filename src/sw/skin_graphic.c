@@ -55,7 +55,7 @@ static int peak_bands[SP_BARS], cap_lo[SP_BARS], cap_hi[SP_BARS], peak_hold[SP_B
 static int spec_off;
 static int chan_off;
 static uint32_t last_elapsed = 0xFFFFFFFFu;
-static char last_title[40], last_format[8], last_status[32], last_mix[40];
+static char last_title[40], last_format[8], last_status[32], last_mix[40], last_meta[48];
 
 static void col_init(void) {
   c_bg = gfx_color(0x0b0f18);
@@ -542,10 +542,26 @@ static void update_player_dynamic(const player_view_t *v, int force) {
 
 // ------------------------------------------------------------------ footer
 
+static void footer_meta(const player_view_t *v, char *out, int n) {
+  int i = 0;
+  const char *b = v->build ? v->build : "";
+  for (; b[0] && i < n - 1; b++) out[i++] = *b;
+  if (v->debug && v->debug[0]) {
+    if (i < n - 3) { out[i++] = ' '; out[i++] = ' '; }
+    const char *d = v->debug;
+    for (; d[0] && i < n - 1; d++) out[i++] = *d;
+  }
+  out[i] = 0;
+}
+
 static void draw_footer_static(const player_view_t *v) {
   gfx_fill(0, FB_H - FOOT_H, FB_W, FOOT_H, c_head);
   gfx_fill(0, FB_H - FOOT_H, FB_W, 1, c_line);
-  gfx_text_left(&f20, 20, FB_H - FOOT_H / 2, "Up/Dn L/R Enter Esc BkSp | Space +/- Tab F12 | Menu+F5 SD1", r_dim);
+  gfx_text_left(&f20, 20, FB_H - FOOT_H / 2, "Up/Dn L/R Enter Esc BkSp | Space +/- Tab F12", r_dim);
+  char meta[48];
+  footer_meta(v, meta, sizeof(meta));
+  gfx_text_left(&f20, 400, FB_H - FOOT_H / 2, meta, r_dim);
+  copy_fit(last_meta, meta, sizeof(last_meta));
   char st[32];
   copy_fit(st, v->status ? v->status : "", 28);
   gfx_text_right(&f20, FB_W - 20, FB_H - FOOT_H + 12, st, v->playing ? r_accent : r_dim);
@@ -559,12 +575,17 @@ static void update_footer(const player_view_t *v) {
   char st[32];
   copy_fit(st, v->status ? v->status : "", 28);
   const char *mx = v->mix ? v->mix : "";
-  if (strcmp(st, last_status) == 0 && strcmp(mx, last_mix) == 0) return;
-  gfx_fill(560, FB_H - FOOT_H + 2, FB_W - 560, FOOT_H - 4, c_head);
+  char meta[48];
+  footer_meta(v, meta, sizeof(meta));
+  if (strcmp(st, last_status) == 0 && strcmp(mx, last_mix) == 0 &&
+      strcmp(meta, last_meta) == 0) return;
+  gfx_fill(390, FB_H - FOOT_H + 2, FB_W - 390, FOOT_H - 4, c_head);
+  gfx_text_left(&f20, 400, FB_H - FOOT_H / 2, meta, r_dim);
   gfx_text_right(&f20, FB_W - 20, FB_H - FOOT_H + 12, st, v->playing ? r_accent : r_dim);
   gfx_text_right(&f20, FB_W - 20, FB_H - 10, mx, r_dim);
   copy_fit(last_status, st, sizeof(last_status));
   copy_fit(last_mix, mx, sizeof(last_mix));
+  copy_fit(last_meta, meta, sizeof(last_meta));
 }
 
 // ------------------------------------------------------------------ the skin entry points

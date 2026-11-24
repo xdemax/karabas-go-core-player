@@ -16,3 +16,4 @@ void it_fpga_audio(fmt_audio_t *o);
 int it_fpga_get_volume(void);
 int it_fpga_set_volume(int v);
 int it_fpga_pause(int on);
+const char *it_fpga_debug(void);
