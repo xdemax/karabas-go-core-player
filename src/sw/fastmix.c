@@ -14,12 +14,15 @@
  *
  * Custom CPU instructions (opcode 0x0b, funct3=0):
  *  - SETF (funct7=0): hidden_frac = rs1 & 0xFFFF
- *  - LERP16 (funct7=1): rd = s0 + (((s1-s0) * (hidden_frac >> 1)) >> 15); hidden_s = rd
+ *  - LERP1 (funct7=1): setup for 16-bit LERP (s0, s1); saves hidden state
+ *  - LERP2 (funct7=8): complete 16-bit LERP; rd = interpolated value
  *  - MAC (funct7=2): rd = rs1 + (hidden_s * (rs2 >> 8)), 32-bit wrap
  *  - GETF (funct7=3): rd = hidden_frac (zero-extend)
  *  - ADV (funct7=4): t = hidden_frac + (rs2 & 0xFFFF); hidden_frac = t & 0xFFFF; rd = rs1 + (rs2 >> 16) + (t >> 16)
  *  - ADVB (funct7=5): borrow = hidden_frac < (rs2 & 0xFFFF); hidden_frac = (hidden_frac - rs2) & 0xFFFF; rd = rs1 - (rs2 >> 16) - borrow
- *  - LERP8 (funct7=6): rd = s0*256 + (((s1-s0) * hidden_frac) >> 8); hidden_s = rd
+ *  - LERP8_1 (funct7=6): setup for 8-bit LERP (b0, b1); saves hidden state
+ *  - LERP8_2 (funct7=9): complete 8-bit LERP; rd = interpolated value
+ *  - SETS (funct7=7): hidden_s = rs1 (for nearest neighbor)
  *
  * Optimizations (compile-time opt-in, default off):
  *  - FM_OPT_UNROLL: unroll main loop 2x (fwd and bwd iterations) with
@@ -57,8 +60,11 @@ static int max_mixed = 32;
 #define FM_SETF(frac) \
   asm volatile (".insn r 0x0b, 0, 0, x0, %0, x0" : : "r"(frac))
 
-#define FM_LERP16(rd, s0, s1) \
-  asm volatile (".insn r 0x0b, 0, 1, %0, %1, %2" : "=r"(rd) : "r"(s0), "r"(s1))
+#define FM_LERP1(s0, s1) \
+  asm volatile (".insn r 0x0b, 0, 1, x0, %0, %1" : : "r"(s0), "r"(s1))
+
+#define FM_LERP2(s) \
+  asm volatile (".insn r 0x0b, 0, 8, %0, x0, x0" : "=r"(s))
 
 #define FM_MAC(rd, acc, gain) \
   asm volatile (".insn r 0x0b, 0, 2, %0, %1, %2" : "=r"(rd) : "r"(acc), "r"(gain))
@@ -72,26 +78,47 @@ static int max_mixed = 32;
 #define FM_ADVB(rd, pos, step) \
   asm volatile (".insn r 0x0b, 0, 5, %0, %1, %2" : "=r"(rd) : "r"(pos), "r"(step))
 
-#define FM_LERP8(rd, s0, s1) \
-  asm volatile (".insn r 0x0b, 0, 6, %0, %1, %2" : "=r"(rd) : "r"(s0), "r"(s1))
+#define FM_LERP8_1(b0, b1) \
+  asm volatile (".insn r 0x0b, 0, 6, x0, %0, %1" : : "r"(b0), "r"(b1))
+
+#define FM_LERP8_2(s) \
+  asm volatile (".insn r 0x0b, 0, 9, %0, x0, x0" : "=r"(s))
 
 #define FM_SETS(s) \
   asm volatile (".insn r 0x0b, 0, 7, x0, %0, x0" : : "r"(s))
 
 #else
 
-/* C fallback: hidden state in static variables. */
+/* C fallback: hidden state in static variables.
+ * Must match hardware exactly: same formulas, floor for negative via +32767/+255 */
 static uint32_t fm_hidden_frac;
 static int32_t fm_hidden_s;
+static uint32_t fm_hidden_p;
+static int fm_hidden_neg;
+static uint32_t fm_hidden_p8;
+static int fm_hidden_neg8;
+static int32_t fm_hidden_s0;
+static int32_t fm_hidden_s08;
 
 #define FM_SETF(frac) \
   (fm_hidden_frac = (frac) & 0xFFFFu)
 
-#define FM_LERP16(rd, s0, s1) do { \
-  int32_t _s0 = (s0), _s1 = (s1); \
-  int32_t _diff = _s1 - _s0; \
-  (rd) = _s0 + (((_diff * (int32_t)(fm_hidden_frac >> 1)) >> 15)); \
-  fm_hidden_s = (rd); \
+#define FM_LERP1(s0, s1) do { \
+  int32_t _s0 = (s0); \
+  int32_t _s1 = (s1); \
+  int32_t _d = _s1 - _s0; \
+  fm_hidden_neg = (_d < 0); \
+  uint32_t _ad = fm_hidden_neg ? (uint32_t)(-_d) : (uint32_t)_d; \
+  fm_hidden_p = _ad * (fm_hidden_frac >> 1); \
+  fm_hidden_s0 = _s0; \
+} while (0)
+
+#define FM_LERP2(s) do { \
+  uint32_t _q_tmp = fm_hidden_neg ? (fm_hidden_p + 32767u) : fm_hidden_p; \
+  uint32_t _q = _q_tmp >> 15; \
+  int32_t _sh = fm_hidden_neg ? -(int32_t)_q : (int32_t)_q; \
+  (s) = fm_hidden_s0 + _sh; \
+  fm_hidden_s = (s); \
 } while (0)
 
 #define FM_MAC(rd, acc, gain) do { \
@@ -115,12 +142,22 @@ static int32_t fm_hidden_s;
   (rd) = (uint32_t)(pos) - ((step) >> 16) - _borrow; \
 } while (0)
 
-#define FM_LERP8(rd, s0, s1) do { \
-  int32_t _s0 = (int32_t)(int8_t)(s0); \
-  int32_t _s1 = (int32_t)(int8_t)(s1); \
-  int32_t _diff = _s1 - _s0; \
-  (rd) = _s0 * 256 + (((_diff * (int32_t)fm_hidden_frac) >> 8)); \
-  fm_hidden_s = (rd); \
+#define FM_LERP8_1(b0, b1) do { \
+  int32_t _s0 = (int32_t)(int8_t)(b0); \
+  int32_t _s1 = (int32_t)(int8_t)(b1); \
+  int32_t _d = _s1 - _s0; \
+  fm_hidden_neg8 = (_d < 0); \
+  uint32_t _ad = fm_hidden_neg8 ? (uint32_t)(-_d) : (uint32_t)_d; \
+  fm_hidden_p8 = _ad * fm_hidden_frac; \
+  fm_hidden_s08 = _s0; \
+} while (0)
+
+#define FM_LERP8_2(s) do { \
+  uint32_t _q_tmp = fm_hidden_neg8 ? (fm_hidden_p8 + 255u) : fm_hidden_p8; \
+  uint32_t _q = _q_tmp >> 8; \
+  int32_t _sh = fm_hidden_neg8 ? -(int32_t)_q : (int32_t)_q; \
+  (s) = (fm_hidden_s08 << 8) + _sh; \
+  fm_hidden_s = (s); \
 } while (0)
 
 #define FM_SETS(s) \
@@ -199,10 +236,12 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     } else {
       if (is8) {
         int32_t s0 = p8[pos], s1 = p8[pos + 1];
-        FM_LERP8(s, s0, s1);
+        FM_LERP8_1(s0, s1);
+        FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP16(s, s0, s1);
+        FM_LERP1(s0, s1);
+        FM_LERP2(s);
       }
     }
     
@@ -236,10 +275,12 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     } else {
       if (is8) {
         int32_t s0 = p8[pos], s1 = p8[pos + 1];
-        FM_LERP8(s, s0, s1);
+        FM_LERP8_1(s0, s1);
+        FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP16(s, s0, s1);
+        FM_LERP1(s0, s1);
+        FM_LERP2(s);
       }
     }
     
@@ -276,10 +317,12 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     } else {
       if (is8) {
         int32_t s0 = p8[pos], s1 = p8[pos + 1];
-        FM_LERP8(s, s0, s1);
+        FM_LERP8_1(s0, s1);
+        FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP16(s, s0, s1);
+        FM_LERP1(s0, s1);
+        FM_LERP2(s);
       }
     }
     
@@ -314,10 +357,12 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     } else {
       if (is8) {
         int32_t s0 = p8[pos], s1 = p8[pos + 1];
-        FM_LERP8(s, s0, s1);
+        FM_LERP8_1(s0, s1);
+        FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP16(s, s0, s1);
+        FM_LERP1(s0, s1);
+        FM_LERP2(s);
       }
     }
 
