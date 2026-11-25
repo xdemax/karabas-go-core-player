@@ -5,7 +5,6 @@ import spinal.lib._
 import vexriscv.{plugin, VexRiscv, VexRiscvConfig}
 import vexriscv.plugin._
 import vexriscv.ip.{DataCacheConfig, InstructionCacheConfig}
-import vexriscv.ip.fpu._
 
 /** Karabas player CPU: larger caches and a single-precision FPU. */
 object GenKarabas extends App {
@@ -71,13 +70,9 @@ object GenKarabas extends App {
         new MulPlugin,
         new DivPlugin,
         new CsrPlugin(CsrPluginConfig.small),
-        new FpuPlugin(
-          externalFpu = false,
-          simHalt = false,
-          p = FpuParameter(withDouble = false)
-        ),
+        new CustomMixAluPlugin,
         new BranchPlugin(
-          earlyBranch = false,
+          earlyBranch = true,
           catchAddressMisaligned = true
         ),
         new YamlPlugin("VexRiscv.yaml")
