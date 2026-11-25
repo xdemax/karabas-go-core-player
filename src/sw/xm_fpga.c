@@ -599,11 +599,15 @@ void fpga_xm_service(void) {
   }
 
   if ((uint32_t) (R_US - xm_dbg_us) >= 1000000u) {
+    uint32_t dt = (uint32_t) (R_US - xm_dbg_us);      /* the REAL window */
     xm_dbg_us = R_US;
     int voices = 0;
     for (int c = 0; c < X.chn; c++)
       if (X.ch[c].active && (X.ch[c].lgain | X.ch[c].rgain)) voices++;
-    uint32_t pct = xm_dbg_cycles / 750000u;                 /* 75 MHz: 750k = 1 % */
+    /* Percent of the CPU: 75 cycles per us at 75 MHz, divided by the real window;
+     * otherwise a late service call makes the number exceed 100 %. */
+    if (!dt) dt = 1;
+    uint32_t pct = (uint32_t) ((uint64_t) xm_dbg_cycles * 100u / ((uint64_t) dt * 75u));
     uint32_t rpct = xm_dbg_cycles
         ? (uint32_t) ((uint64_t) xm_dbg_pcycles * 100u / xm_dbg_cycles) : 0;
     snprintf(xm_dbg, sizeof(xm_dbg), "%d/%dv %lu%% r%lu",

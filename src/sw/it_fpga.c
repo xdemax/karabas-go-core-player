@@ -213,9 +213,12 @@ void it_fpga_service(void) {
   it_dbg_pcycles += (uint32_t)(c1 - c0);
   it_dbg_cycles += (uint32_t)(c2 - c0);
   if ((uint32_t)(R_US - it_dbg_us) >= 1000000u) {
+    uint32_t dt = (uint32_t) (R_US - it_dbg_us);      // the REAL window
     it_dbg_us = R_US;
     it_dbg_cps = it_dbg_cycles;
-    uint32_t pct = it_dbg_cps / 750000u;          // 75 MHz: 750k cycles = 1%
+    /* Percent of the CPU over the real window (see the XM engine for the reasoning). */
+    if (!dt) dt = 1;
+    uint32_t pct = (uint32_t) ((uint64_t) it_dbg_cps * 100u / ((uint64_t) dt * 75u));
     uint32_t rpct = it_dbg_cps ?
         (uint32_t)((uint64_t)it_dbg_pcycles * 100u / it_dbg_cps) : 0;
     it_dbg_voices = it_player_active_voices(&it_pl);
