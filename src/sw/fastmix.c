@@ -11,10 +11,19 @@
  *  - format (8/16), direction and ramping are compile-time constants of
  *    each kernel instance (always_inline + switch once per segment).
  *  - no float, no malloc, no memcpy, no function pointers per sample.
+ *
+ * Optimizations (compile-time opt-in, default off):
+ *  - FM_OPT_UNROLL: unroll main loop 2x (fwd and bwd iterations) with
+ *    const/restrict pointers to enable better ILP and scheduling (default: on, disable with -DFM_OPT_UNROLL=0).
  */
 #include "fastmix.h"
 
 #define FM_CHUNK 256
+
+/* Optimizations: set to 1 to enable. */
+#ifndef FM_OPT_UNROLL
+#define FM_OPT_UNROLL 1
+#endif
 
 #if defined(__GNUC__)
 #define FM_AI static inline __attribute__((always_inline))
@@ -43,6 +52,22 @@ FM_AI int32_t lerp16(int32_t s0, int32_t s1, int32_t frac)
   return s0 + (((s1 - s0) * (frac >> 1)) >> 15);
 }
 
+/* Advance frac and pos forward (no-branch version for rv32im). */
+FM_AI void advance_pos_fwd(uint32_t *ppos, uint32_t *pfrac, uint32_t si, uint32_t sf)
+{
+  uint32_t carry = (*pfrac + sf) >> 16;
+  *pfrac = (*pfrac + sf) & 0xFFFF;
+  *ppos += si + carry;
+}
+
+/* Advance frac and pos backward. */
+FM_AI void advance_pos_bwd(uint32_t *ppos, uint32_t *pfrac, uint32_t si, uint32_t sf)
+{
+  uint32_t borrow = (*pfrac < sf) ? 1 : 0;
+  *pfrac = (*pfrac - sf) & 0xFFFF;
+  *ppos -= si + borrow;
+}
+
 /* ------------------------------------------------------------------ */
 /* kernels: n frames, no boundary inside                              */
 
@@ -50,8 +75,8 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
                 uint32_t *ppos, uint32_t *pfrac, uint32_t step, int n,
                 int32_t *pgl, int32_t *pgr, int32_t dl, int32_t dr)
 {
-  const int16_t *p16 = (const int16_t *)d;
-  const int8_t *p8 = (const int8_t *)d;
+  const int16_t * const p16 = (const int16_t *)d;
+  const int8_t * const p8 = (const int8_t *)d;
   uint32_t pos = *ppos;
   int32_t frac = (int32_t)*pfrac;
   const int32_t si = (int32_t)(step >> 16);
@@ -59,6 +84,80 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
   int32_t gl = *pgl, gr = *pgr;
   const int32_t gl8 = gl >> 8, gr8 = gr >> 8;
 
+#if FM_OPT_UNROLL
+  int32_t *ap = a;
+  int i = 0;
+  /* Process pairs of iterations unrolled */
+  for (; i + 1 < n; i += 2) {
+    int32_t s;
+    /* Iteration 1 (forward/backward depending on bwd) */
+    if (is8) {
+      int32_t s0 = p8[pos], s1 = p8[pos + 1];
+      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    } else {
+      s = lerp16(p16[pos], p16[pos + 1], frac);
+    }
+    if (ramping) {
+      gl += dl; gr += dr;
+      ap[0] += s * (gl >> 8);
+      ap[1] += s * (gr >> 8);
+    } else {
+      ap[0] += s * gl8;
+      ap[1] += s * gr8;
+    }
+    ap += 2;
+    if (!bwd) {
+      advance_pos_fwd(&pos, (uint32_t *)&frac, si, sf);
+    } else {
+      advance_pos_bwd(&pos, (uint32_t *)&frac, si, sf);
+    }
+
+    /* Iteration 2 (backward path) */
+    if (is8) {
+      int32_t s0 = p8[pos], s1 = p8[pos + 1];
+      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    } else {
+      s = lerp16(p16[pos], p16[pos + 1], frac);
+    }
+    if (ramping) {
+      gl += dl; gr += dr;
+      ap[0] += s * (gl >> 8);
+      ap[1] += s * (gr >> 8);
+    } else {
+      ap[0] += s * gl8;
+      ap[1] += s * gr8;
+    }
+    ap += 2;
+    if (!bwd) {
+      advance_pos_fwd(&pos, (uint32_t *)&frac, si, sf);
+    } else {
+      advance_pos_bwd(&pos, (uint32_t *)&frac, si, sf);
+    }
+  }
+  /* Handle remaining frame if n is odd */
+  if (i < n) {
+    int32_t s;
+    if (is8) {
+      int32_t s0 = p8[pos], s1 = p8[pos + 1];
+      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    } else {
+      s = lerp16(p16[pos], p16[pos + 1], frac);
+    }
+    if (ramping) {
+      gl += dl; gr += dr;
+      ap[0] += s * (gl >> 8);
+      ap[1] += s * (gr >> 8);
+    } else {
+      ap[0] += s * gl8;
+      ap[1] += s * gr8;
+    }
+    if (!bwd) {
+      advance_pos_fwd(&pos, (uint32_t *)&frac, si, sf);
+    } else {
+      advance_pos_bwd(&pos, (uint32_t *)&frac, si, sf);
+    }
+  }
+#else
   while (n-- > 0) {
     int32_t s;
     if (is8) {
@@ -67,6 +166,7 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
     } else {
       s = lerp16(p16[pos], p16[pos + 1], frac);
     }
+
     if (ramping) {
       gl += dl;
       gr += dr;
@@ -77,16 +177,15 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
       a[1] += s * gr8;
     }
     a += 2;
+
     if (!bwd) {
-      frac += sf;
-      pos += (uint32_t)si + (uint32_t)(frac >> 16);
-      frac &= 0xFFFF;
+      advance_pos_fwd(&pos, (uint32_t *)&frac, si, sf);
     } else {
-      frac -= sf;
-      pos -= (uint32_t)si;
-      if (frac < 0) { frac += 65536; pos--; }
+      advance_pos_bwd(&pos, (uint32_t *)&frac, si, sf);
     }
   }
+#endif
+
   *ppos = pos;
   *pfrac = (uint32_t)frac;
   *pgl = gl;
@@ -217,6 +316,7 @@ static void render(fm_voice_t *v, int32_t *a, int n, int32_t *gl, int32_t *gr,
       a += 2; n--;
       continue;
     }
+
     if (v->step == 0) {
       cnt = n;
     } else if (v->dir == 0) {
