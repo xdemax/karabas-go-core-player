@@ -27,6 +27,8 @@ int src_read(play_src_t *s, uint32_t off, void *buf, uint32_t n, UINT *got) {
   (void) s; (void) off; (void) buf; (void) n; if (got) *got = 0; return -1;
 }
 
+void mixer_write_noana(int16_t l, int16_t r) { audio_write(l, r); }
+
 static void wr32(uint8_t *p, uint32_t v) { p[0]=v; p[1]=v>>8; p[2]=v>>16; p[3]=v>>24; }
 static void wr16(uint8_t *p, uint16_t v) { p[0]=v; p[1]=v>>8; }
 

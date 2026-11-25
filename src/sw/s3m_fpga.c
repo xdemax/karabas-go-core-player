@@ -166,8 +166,9 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
     }
     hoff *= 16;
     if (hoff + 32 > size) {
-      s3m_error("S3M sample header truncated");
-      return -1;
+      m->smp[s].data = NULL;
+      m->smp[s].len = 0;
+      continue;
     }
     
     uint8_t type = read8(buf, hoff, size);
@@ -182,10 +183,8 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
       continue;
     }
     
-    // memseg at +13-15 (3 bytes, little-endian) - paragraph address
-    uint32_t memseg = read8(buf, hoff + 13, size) | 
-                      (read8(buf, hoff + 14, size) << 8) | 
-                      (read8(buf, hoff + 15, size) << 16);
+    // memseg at +14 u16: points directly to sample data
+    uint32_t memseg = read16le(buf, hoff + 14, size);
     uint32_t doff = memseg * 16;
     
     // length at +16 u32
@@ -327,7 +326,6 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   s3m_mod.row = 0;
   s3m_mod.tick = 0;
   s3m_mod.tleft = s3m_mod.spt = 0;
-  s3m_mod.gvol = 64;
   
   s3m_mod.sample_acc = 0;
   s3m_mod.samples_per_tick = (2500ull * 48000) / (s3m_mod.bpm * 32);
@@ -355,7 +353,7 @@ static const uint32_t s3m_note_steps[12] = {
 };
 
 static uint32_t s3m_note_to_step(int note) {
-  if (note < 12 || note > 96) return 0;
+  if (note < 12 || note > 107) return 0;
   int octave = (note - 12) / 12;
   int semitone = (note - 12) % 12;
   uint32_t step = s3m_note_steps[semitone];
@@ -375,7 +373,7 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
   
   if (vol > 0 && vol <= 64) v->vol = vol;
   
-  if (note > 0 && note <= 84) {
+  if (note > 0 && note <= 107) {
     v->pos = 0;
     v->step = s3m_note_to_step(note);
     v->active = 1;
@@ -465,7 +463,7 @@ void s3m_fpga_service(void) {
             }
             
             if (ch < m->chn) {
-              if (note) s3m_note_on(m, ch, note - 1, instr, vol);
+              if (note) s3m_note_on(m, ch, note + 11, instr, vol);
               if (vol == 255) s3m_note_off(&m->vox[ch]);
               
               if (eff) {
