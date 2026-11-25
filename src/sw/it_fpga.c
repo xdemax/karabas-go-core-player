@@ -129,57 +129,39 @@ void it_fpga_service(void) {
   int v = it_volume;
   
   int out_count = 0;
-  for (int i = 0; i < n; i++) {
-    int32_t t = (int32_t)it_out[2 * i] * v; int32_t l = (t + ((t >> 31) & 63)) >> 6;
-    t = (int32_t)it_out[2 * i + 1] * v; int32_t r = (t + ((t >> 31) & 63)) >> 6;
-    
-    if (it_mixrate == 48000) {
-      if (out_count >= IT_OUT_MAX) break;
+  if (it_mixrate == 48000 || it_mixrate == 0) {
+    for (int i = 0; i < n && out_count < IT_OUT_MAX; i++) {
+      int32_t t = (int32_t)it_out[2 * i] * v;
+      int32_t l = (t + ((t >> 31) & 63)) >> 6;
+      t = (int32_t)it_out[2 * i + 1] * v;
+      int32_t r = (t + ((t >> 31) & 63)) >> 6;
       it_out_resampled[2 * out_count] = (int16_t)l;
       it_out_resampled[2 * out_count + 1] = (int16_t)r;
       out_count++;
-    } else {
-      rs_acc += 48000;
-      while (rs_acc >= it_mixrate) {
-        if (out_count >= IT_OUT_MAX) break;
-        rs_acc -= it_mixrate;
-        
-        int32_t out_l, out_r;
-        if (!rs_initialized || it_mixrate == 0) {
-          out_l = l;
-          out_r = r;
-        } else {
-          uint32_t phase = (rs_acc * 1000000u) / it_mixrate;
-          int32_t frac = phase / 10000;
-          if (frac > 1000) frac = 1000;
-          
-          out_l = rs_prev_l + ((l - rs_prev_l) * frac / 1000);
-          out_r = rs_prev_r + ((r - rs_prev_r) * frac / 1000);
-        }
-        
-        it_out_resampled[2 * out_count] = (int16_t)out_l;
-        it_out_resampled[2 * out_count + 1] = (int16_t)out_r;
-        out_count++;
-      }
     }
-    
-    rs_prev_l = l;
-    rs_prev_r = r;
-    rs_initialized = 1;
+  } else {
+    uint32_t step = (it_mixrate << 16) / 48000u;   /* input samples per output, Q16 */
+    for (int i = 0; i < n; i++) {
+      int32_t t = (int32_t)it_out[2 * i] * v;
+      int32_t l = (t + ((t >> 31) & 63)) >> 6;
+      t = (int32_t)it_out[2 * i + 1] * v;
+      int32_t r = (t + ((t >> 31) & 63)) >> 6;
+      if (!rs_initialized) {
+        rs_prev_l = l; rs_prev_r = r; rs_acc = 0; rs_initialized = 1;
+      }
+      while (rs_acc < 65536u && out_count < IT_OUT_MAX) {
+        int32_t ol = rs_prev_l + (int32_t)(((int64_t)(l - rs_prev_l) * (int32_t)rs_acc) >> 16);
+        int32_t or_ = rs_prev_r + (int32_t)(((int64_t)(r - rs_prev_r) * (int32_t)rs_acc) >> 16);
+        it_out_resampled[2 * out_count] = (int16_t)ol;
+        it_out_resampled[2 * out_count + 1] = (int16_t)or_;
+        out_count++;
+        rs_acc += step;
+      }
+      rs_acc -= 65536u;
+      rs_prev_l = l; rs_prev_r = r;
+    }
   }
-  
-  for (int i = 0; i < out_count; i++) {
-    int32_t out_l = it_out_resampled[2 * i];
-    int32_t out_r = it_out_resampled[2 * i + 1];
-    int32_t al = out_l < 0 ? -out_l : out_l;
-    int32_t ar = out_r < 0 ? -out_r : out_r;
-    if (al > it_peak_l) it_peak_l = al;
-    if (ar > it_peak_r) it_peak_r = ar;
-    it_last_l = out_l;
-    it_last_r = out_r;
-    mixer_write_noana((int16_t)out_l, (int16_t)out_r);
-  }
-  
+
   if (it_pl.finished) {
     it_active = 0;
     it_ended = 1;

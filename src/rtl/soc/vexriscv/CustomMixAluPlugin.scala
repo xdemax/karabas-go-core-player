@@ -23,7 +23,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
     val common = List(
       IS_CUSTOM_MIX            -> True,
       REGFILE_WRITE_VALID      -> True,
-      BYPASSABLE_EXECUTE_STAGE -> True,
+      BYPASSABLE_EXECUTE_STAGE -> False,
       BYPASSABLE_MEMORY_STAGE  -> True,
       RS1_USE                  -> True,
       RS2_USE                  -> True
@@ -32,16 +32,24 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
     decoderService.add(M"0000000----------000-----0001011", List(
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> False,
       RS1_USE -> True, RS2_USE -> False))
-    decoderService.add(M"0000001----------000-----0001011", common) // LERP16
+    // LERP16: not bypassable (long multiply path must not feed the decode bypass)
+    decoderService.add(M"0000001----------000-----0001011", List(
+      IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
+      BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
+      RS1_USE -> True, RS2_USE -> True))
     decoderService.add(M"0000010----------000-----0001011", common) // MAC
     // GETF (3): no sources
     decoderService.add(M"0000011----------000-----0001011", List(
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
-      BYPASSABLE_EXECUTE_STAGE -> True, BYPASSABLE_MEMORY_STAGE -> True,
+      BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
       RS1_USE -> False, RS2_USE -> False))
     decoderService.add(M"0000100----------000-----0001011", common) // ADV
     decoderService.add(M"0000101----------000-----0001011", common) // ADVB
-    decoderService.add(M"0000110----------000-----0001011", common) // LERP8
+    // LERP8: not bypassable either
+    decoderService.add(M"0000110----------000-----0001011", List(
+      IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
+      BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
+      RS1_USE -> True, RS2_USE -> True))
   }
 
   override def build(pipeline: VexRiscv): Unit = {
@@ -91,9 +99,10 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
 
            // funct7=2: MAC - g = rs2[31:8]; rd = rs1 + (hidden_s * g)
           is(2) {
-            val g = rs2.asSInt >> 8
-            val prod = hidden_s * g
-             val result = sign32(rs1) + prod.resize(32 bits)
+            // gains are Q16 and non-negative in the tracker mixer (<= 2.0)
+            val g = (rs2(18 downto 0) >> 8).asSInt.resize(11)
+            val prod = (hidden_s * g).resize(32)
+            val result = (sign32(rs1) + prod).resize(32)
             rd := result.asUInt
           }
 
