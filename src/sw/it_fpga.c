@@ -99,8 +99,12 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   int want = it_mod.used_channels <= 16 ? 48000 : 32000;
   audio_set_rate(want);
   int measured = audio_rate_test();
-  uint32_t rate = (uint32_t) (measured > 0 ? measured : want);
-  if (measured > 0 && measured != want) audio_set_rate(measured);
+  uint32_t rate = 48000;
+  if (measured > 0) {
+    int lo = want - want / 20, hi = want + want / 20;    // accept within 5 %
+    if (measured >= lo && measured <= hi) rate = (uint32_t) measured;
+  }
+  if (rate != (uint32_t) want) { audio_set_rate((int) rate); audio_rate_test(); }
   it_mixrate = rate;
   cfg.mixrate = rate;
   cfg.flags = 0;

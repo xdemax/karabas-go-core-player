@@ -602,8 +602,13 @@ static int parse_xm(uint32_t size) {
   int want = X.chn <= 16 ? 48000 : 32000;
   audio_set_rate(want);
   int measured = audio_rate_test();
-  X.rate = (uint32_t) (measured > 0 ? measured : want);
-  if (measured > 0 && measured != want) audio_set_rate(measured);
+  uint32_t rate = 48000;
+  if (measured > 0) {
+    int lo = want - want / 20, hi = want + want / 20;    // accept within 5 %
+    if (measured >= lo && measured <= hi) rate = (uint32_t) measured;
+  }
+  if (rate != (uint32_t) want) { audio_set_rate((int) rate); audio_rate_test(); }
+  X.rate = rate;
   // Linear interpolation is a quality win, but a dense 32-channel XM needs the nearest-sample
   // path to keep the 48 kHz FIFO alive. Keep interpolation for normal-width modules.
   X.interp = X.chn <= 16;

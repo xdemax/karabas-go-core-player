@@ -21,16 +21,11 @@ void audio_note_written(int n) { if (n > 0) nwritten += (uint32_t) n; }
 uint32_t audio_written(void) { return nwritten; }
 int audio_rate(void) { return aud_hz; }
 
-// Returns the rate the hardware actually runs at. The mixer MUST use this value:
-// if the FPGA register does not take the new rate, falling back to 48 kHz keeps the
-// mixer and the FIFO in step (otherwise the pitch and the tempo drift).
+// The write may not be observable by an immediate read (the store can still be in
+// flight), so this only sets the request. The real rate is whatever audio_rate_test()
+// measures afterwards, and the mixer must use that measured value.
 int audio_set_rate(int hz) {
   MMIO(0x44) = (uint32_t) hz;
-  uint32_t rb = MMIO(0x44) & 0x1FFFFFFu;
-  if (rb != (uint32_t) hz) {
-    hz = 48000;
-    MMIO(0x44) = 48000u;
-  }
   aud_hz = hz;
   return hz;
 }
