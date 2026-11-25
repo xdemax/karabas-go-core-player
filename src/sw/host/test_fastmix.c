@@ -266,6 +266,7 @@ static void test_nearest(void)
   int i;
   
   vinit(&v, buf, 4, 0, 0.5, 256, -128);
+  v.flags |= FM_NEAREST;
   fm_mix(out, 16, &v, 1);
   
   /* Expected: each src sample repeated twice (step 0.5 → 2 frames per sample) */
