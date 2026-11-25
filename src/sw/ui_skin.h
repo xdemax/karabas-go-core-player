@@ -85,6 +85,7 @@ typedef struct {
 extern const ui_skin_t skin_graphic;
 
 const ui_skin_t *skin_current(void);
+int ui_list_rows(void);   // rows the file list shows (owned by the skin)
 const char *skin_name(void);
 void skin_next(void);
 

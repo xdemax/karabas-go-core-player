@@ -138,6 +138,8 @@ static void reset_marquee(void) {
   marq_t = R_US;
 }
 
+int ui_list_rows(void) { return ROWS; }
+
 static void draw_row(const player_view_t *v, int k) {
   if (k < v->top || k >= v->top + ROWS) return;
   int r = k - v->top;

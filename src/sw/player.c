@@ -20,7 +20,7 @@
 #include "audio.h"
 #include "spi.h"
 
-#define ROWS 14
+#define ROWS ui_list_rows()
 #define HEAVY_CHANNELS 24       // the analyzer gives up above this; keep the mixer fed instead
 
 static browser_t br;
