@@ -12,6 +12,7 @@
 #define PER_MAX  0x7FFFFF
 #define DECLICK_FRAMES 96
 #define START_RAMP     64
+#define MAX_VOICES     32  /* hard limit to match IT voice stealing */
 
 static const it_pattern_t g_empty_pat = { NULL, 0, 64, 64 };
 static const uint16_t s3m_tab[12] = { 1712,1616,1524,1440,1356,1280,1208,1140,1076,1016,960,907 };
@@ -142,10 +143,12 @@ static int vox_alloc(it_player_t *p)
 {
     int i, best = 0, cls_best = 99;
     int32_t bv = 0x7FFFFFFF;
-    for (i = 0; i < FM_MAX_VOICES; i++) {
+    /* First pass: find a free slot, but only if under MAX_VOICES limit */
+    for (i = 0; i < MAX_VOICES; i++) {
         if (p->vox[i].state == IT_VS_FREE) { if (i + 1 > p->nv_hi) p->nv_hi = i + 1; return i; }
     }
-    for (i = 0; i < FM_MAX_VOICES; i++) {
+    /* At capacity: steal the quietest voice by priority: DYING > BG > MASTER, then by volume */
+    for (i = 0; i < MAX_VOICES; i++) {
         const it_voice_t *v = &p->vox[i];
         int cls = v->state == IT_VS_DYING ? 0 : (v->state == IT_VS_BG ? 1 : 2);
         if (cls < cls_best || (cls == cls_best && v->out_vol < bv)) { cls_best = cls; bv = v->out_vol; best = i; }
@@ -256,7 +259,14 @@ static void voice_tick(it_player_t *p, int i)
         if (f->ramp == 0 || !(f->flags & FM_ACTIVE)) vox_free(p, i);
         return;
     }
-    if (!(f->flags & FM_ACTIVE) || (!(f->flags & FM_LOOP) && f->pos >= f->length)) { vox_free(p, i); return; }
+    /* For non-looped samples or BG voices with their sample ended, free when sample is done.
+       For looped samples, the voice lives until fadeout/envelope kills it. */
+    if (!(f->flags & FM_ACTIVE)) { vox_free(p, i); return; }
+    if (!(f->flags & FM_LOOP) && f->pos >= f->length) { vox_free(p, i); return; }
+    /* BG voice with sample end should die unless it has active fadeout/envelope sustaining it */
+    if (v->state == IT_VS_BG && (f->flags & FM_LOOP) && f->pos >= f->length) {
+        if (!ins || !ins->fadeout) { vox_free(p, i); return; }
+    }
 
     if (ins) {
         if ((ins->vol.flags & IT_ENV_ON) && !(v->env_off & 1)) {
@@ -320,7 +330,13 @@ static void voice_tick(it_player_t *p, int i)
         if ((ins->pan.flags & IT_ENV_ON) && !(v->env_off & 2))   env_advance(&ins->pan,   &v->env_pos[1], v->keyoff);
         if ((ins->pitch.flags & IT_ENV_ON) && !(v->env_off & 4)) env_advance(&ins->pitch, &v->env_pos[2], v->keyoff);
     }
-    if (v->state == IT_VS_BG && vol == 0 && ev == 0) vox_kill(p, i);
+    /* BG voice dies if computed volume reaches zero (from envelope, fadeout, or channel volume).
+       Don't kill while ramping to avoid clicks. This covers:
+       - Envelope ended at zero (ev -> 0 -> vol -> 0)
+       - Fadeout completed (fade -> 0 -> vol -> 0)
+       - Channel/sample volume zero
+       Main bug fix: envelope-disabled voices were stuck because ev stayed at default. */
+    if (v->state == IT_VS_BG && vol == 0 && f->ramp == 0) vox_kill(p, i);
 }
 
 /* ======================================================================= */

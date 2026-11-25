@@ -544,10 +544,11 @@ static void update_player_dynamic(const player_view_t *v, int force) {
 
 static void footer_meta(const player_view_t *v, char *out, int n) {
   int i = 0;
-  const char *b = v->build ? v->build : "";
+  // When a live diagnostic string exists it wins the footer slot: the build id is long
+  // enough to push it out of the visible area.
+  const char *b = (v->debug && v->debug[0]) ? "" : (v->build ? v->build : "");
   for (; b[0] && i < n - 1; b++) out[i++] = *b;
   if (v->debug && v->debug[0]) {
-    if (i < n - 3) { out[i++] = ' '; out[i++] = ' '; }
     const char *d = v->debug;
     for (; d[0] && i < n - 1; d++) out[i++] = *d;
   }
