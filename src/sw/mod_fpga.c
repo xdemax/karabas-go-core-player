@@ -352,8 +352,10 @@ static void mix(int n) {
   for (int i = 0; i < n; i++) {
     int32_t l = fmout[2 * i] >> shift;
     int32_t r = fmout[2 * i + 1] >> shift;
-    l = l * s_vol / 64;
-    r = r * s_vol / 64;
+    // Calibrated against libopenmpt on dintro.mod: unity gain was 1.6x too quiet
+    // (RMS 2002 vs 3226), so apply 8/5. Peak stays below full scale.
+    l = (l * s_vol * 8) / (64 * 5);
+    r = (r * s_vol * 8) / (64 * 5);
     if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
     if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
     int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
