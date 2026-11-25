@@ -15,16 +15,11 @@ else
 FM_ALU_TAG := N
 FM_ALU_CFLAGS :=
 endif
-ifneq ($(IT_PROFILE),)
-FM_PROF_TAG := p
-else
-FM_PROF_TAG :=
-endif
-BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)$(FM_PROF_TAG)
+BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)
 CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS $(FM_ALU_CFLAGS) -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
-ifneq ($(IT_PROFILE),)
+# The voice/CPU diagnostic in the footer is always on: it costs ~2 reads per service call
+# and has repeatedly been the only way to tell what the device is actually doing.
 CFLAGS += -DIT_PROFILE
-endif
 CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -fno-unwind-tables
 B      := build
 

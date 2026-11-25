@@ -25,6 +25,9 @@ static char it_err[48];
 static int16_t it_out[IT_OUT_CHUNK * 2];
 static int16_t it_out_resampled[IT_OUT_MAX * 2];
 static uint32_t it_mixrate;
+static uint32_t it_total_ms;      /* real song length, computed once at load */
+static uint32_t it_elapsed_ms;    /* wall-clock playback time, for the progress bar */
+static uint32_t it_elapsed_rem;
 static rs_t rs;
 static int32_t it_last_l, it_last_r, it_peak_l, it_peak_r;
 static uint8_t it_vu[FMT_CHANNELS];
@@ -48,6 +51,35 @@ static void it_release(void) {
   it_dbg[0] = 0;
   it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_cps = 0;
   it_dbg_voices = it_dbg_alloc = 0;
+}
+
+/* Walk the song once without mixing: run ticks until the end or until an order repeats
+ * (a real loop). This gives the true length in ms instead of "orders / total orders",
+ * which made the progress bar jump when the song uses order jumps. */
+static it_player_t it_sim;
+static uint32_t it_probe_duration(const it_player_t *src, uint32_t rate)
+{
+  uint8_t seen[32];
+  uint64_t frames = 0;
+  int guard = 0, last = -1;
+
+  if (!rate) rate = 48000;
+  memset(seen, 0, sizeof(seen));
+  memcpy(&it_sim, src, sizeof(it_sim));
+  while (!it_sim.finished && guard++ < 60000) {
+    int o = it_sim.ord;
+    if (o != last) {                       /* an order spans many ticks */
+      if (o >= 0 && o < 256) {
+        uint8_t bit = (uint8_t) (1u << (o & 7));
+        if (seen[o >> 3] & bit) break;     /* back to an order we already played: loop */
+        seen[o >> 3] |= bit;
+      }
+      last = o;
+    }
+    it_player_tick(&it_sim);
+    frames += it_player_tick_frames(&it_sim);
+  }
+  return (uint32_t) (frames * 1000ull / rate);
 }
 
 int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress) {
@@ -102,6 +134,9 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   // reference and no clipping. 256 was 2.6x too hot and clipped (audible distortion).
   cfg.out_gain = 112;
   it_player_init(&it_pl, &it_mod, &cfg);
+  it_total_ms = it_probe_duration(&it_pl, it_mixrate);
+  it_elapsed_ms = 0;
+  it_elapsed_rem = 0;
   fm_reset();
   fm_set_max_mixed(32);
   rs_init(&rs, it_mixrate);
@@ -154,6 +189,11 @@ void it_fpga_service(void) {
     it_last_r = r;
     mixer_write_it((int16_t)l, (int16_t)r);
   }
+  {
+    uint32_t rem = it_elapsed_rem + (uint32_t) ((uint64_t) n * 1000u);
+    it_elapsed_ms += rem / (it_mixrate ? it_mixrate : 48000u);
+    it_elapsed_rem = rem % (it_mixrate ? it_mixrate : 48000u);
+  }
 
   if (it_pl.finished) {
     it_active = 0;
@@ -204,8 +244,11 @@ const char *it_fpga_title(void) {
 
 int it_fpga_position(uint32_t *cur, uint32_t *total) {
   if (!it_active) return 0;
-  *cur = it_pl.ord;
-  *total = it_mod.song_len ? it_mod.song_len : 1;
+  /* Both in seconds: the bar and the remaining time are then monotonic even when the
+   * song jumps between orders. */
+  *cur = it_elapsed_ms / 1000u;
+  *total = it_total_ms / 1000u;
+  if (!*total) *total = 1;
   return 1;
 }
 
