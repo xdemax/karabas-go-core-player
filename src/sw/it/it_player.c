@@ -4,7 +4,6 @@
  */
 #include "it_player.h"
 #include "it_tables.h"
-#include "it_mix.h"
 #include <string.h>      /* init only (memset) - not used in the tick path */
 
 #define LF_MAX   9000
@@ -898,7 +897,7 @@ void it_player_render(it_player_t *p, int16_t *dst, int frames)
             if (p->left == 0) continue;
         }
         n = frames < (int)p->left ? frames : (int)p->left;
-        it_mix(dst, n, p->fm, p->nv_hi);
+        fm_mix(dst, n, p->fm, p->nv_hi);
         dst += 2 * n; frames -= n; p->left -= (uint32_t)n;
     }
 }
