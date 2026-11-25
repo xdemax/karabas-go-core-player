@@ -171,7 +171,7 @@ void it_fpga_service(void) {
     if (ar > it_peak_r) it_peak_r = ar;
     it_last_l = l;
     it_last_r = r;
-    mixer_write_noana((int16_t)l, (int16_t)r);
+    mixer_write((int16_t)l, (int16_t)r);
   }
 
   if (it_pl.finished) {
