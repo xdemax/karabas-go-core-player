@@ -532,8 +532,7 @@ static void mix(int n) {
     v->step = ch->step;
     v->volume = ch->mix_vol;
     v->pan = (int) ch->pan - 128;
-    int use_nearest = (X.rate < 48000) ? FM_NEAREST : 0;
-    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0) | use_nearest;
+    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0);
   }
   fm_mix(fmout, n, fv, X.chn);
   for (int c = 0; c < X.chn; c++) {
@@ -552,33 +551,25 @@ void fpga_xm_service(void) {
   int free = audio_free();
   while (free > 2 && X.active) {
     int n = free > XM_CHUNK ? XM_CHUNK : free;
-    if (X.rate && X.rate < 48000) {
-      int lim = (int)(((int64_t)free * X.rate) / 48000) - 2;
-      if (n > lim) n = lim;
-    }
+    int lim = free - 2;
+    if (n > lim) n = lim;
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
     mix(n);
     
-    int out_count = 0;
-    for (int i = 0; i < n && out_count < 512; i++) {
+    for (int i = 0; i < n; i++) {
       int16_t l = fmout[2 * i];
       int16_t r = fmout[2 * i + 1];
-      int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
-      out_count += nout;
-    }
-    
-    for (int i = 0; i < out_count; i++) {
       int32_t og = (int32_t)X.vol << (X.chn > 8 ? 1 : 0);
-      int32_t l = ((int32_t)fmout_resampled[2 * i] * og) >> 6;
-      int32_t r = ((int32_t)fmout_resampled[2 * i + 1] * og) >> 6;
-      if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
-      if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
-      int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+      int32_t ml = ((int32_t)l * og) >> 6;
+      int32_t mr = ((int32_t)r * og) >> 6;
+      if (ml > 32767) ml = 32767; else if (ml < -32768) ml = -32768;
+      if (mr > 32767) mr = 32767; else if (mr < -32768) mr = -32768;
+      int32_t al = ml < 0 ? -ml : ml, ar = mr < 0 ? -mr : mr;
       if (al > X.peak_l) X.peak_l = al;
       if (ar > X.peak_r) X.peak_r = ar;
-      X.last_l = l; X.last_r = r;
-      mixer_write((int16_t) l, (int16_t) r);
+      X.last_l = ml; X.last_r = mr;
+      mixer_write((int16_t) ml, (int16_t) mr);
     }
     
     free -= n;
@@ -608,6 +599,7 @@ static int parse_xm(uint32_t size) {
   if (X.chn < 1 || X.chn > XM_CH) X.chn = XM_CH;
   // Per-file rate based on channel count
   X.rate = X.chn <= 16 ? 48000 : 32000;
+  audio_set_rate((int) X.rate);
   // Linear interpolation is a quality win, but a dense 32-channel XM needs the nearest-sample
   // path to keep the 48 kHz FIFO alive. Keep interpolation for normal-width modules.
   X.interp = X.chn <= 16;

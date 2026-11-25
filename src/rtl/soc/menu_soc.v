@@ -459,11 +459,12 @@ spi_master spi (
 
 // ------------------------------------------------------------------ the FPGA audio FIFO
 
-// The player's mixer writes 48 kHz stereo samples here; the audio tick pops one; the top takes
-// L / R to the DAC and HDMI. 8192 samples (~170 ms) hide the SD reads and the drawing.
+// The player's mixer writes stereo samples here; the audio tick pops one at the configured rate;
+// the top takes L / R to the DAC and HDMI. 8192 samples (~170 ms at 48 kHz) hide the SD reads.
 localparam AUD_W = 13;                       // 8192 entries (~170 ms at 48 kHz)
-localparam [26:0] AUD_RATE = 27'd48000;
+localparam [26:0] AUD_RATE = 27'd48000;     // default rate
 localparam [31:0] AUD_CLK = MS_DIV * 1000;
+reg [26:0] aud_rate = 27'd48000;
 
 // The FIFO is an explicit block RAM (kg_sdpram), not an array that XST may turn into
 // distributed LUTRAM when the AY output is muxed into the same always block.
@@ -498,11 +499,11 @@ wire aud_empty = (aud_wr == aud_rd);
 
 always @(posedge clk) begin
 	aud_tick <= 1'b0;
-	if (aud_acc + AUD_RATE >= AUD_CLK) begin
-		aud_acc <= aud_acc + AUD_RATE - AUD_CLK;
+	if (aud_acc + aud_rate >= AUD_CLK) begin
+		aud_acc <= aud_acc + aud_rate - AUD_CLK;
 		aud_tick <= 1'b1;
 	end else
-		aud_acc <= aud_acc + AUD_RATE;
+		aud_acc <= aud_acc + aud_rate;
 end
 
 always @(posedge clk) begin
@@ -516,6 +517,7 @@ always @(posedge clk) begin
 		aud_drop <= 16'd0;
 		aud_under <= 16'd0;
 		ay_tap_wr <= 10'd0;
+		aud_rate <= AUD_RATE;
 	end else begin
 		if (aud_stats_clr) begin
 			aud_drop <= 16'd0;
@@ -687,6 +689,7 @@ always @(posedge clk) begin
 				8'h58: begin spi_div <= d_dat_o[15:0]; spi_div_wr <= 1'b1; end
 				8'h68: file_ack <= 1'b1;
 				8'h70: begin aud_wdat <= d_dat_o; aud_we <= 1'b1; end
+				8'h80: aud_rate <= d_dat_o[26:0];
 				8'hc0: begin
 					ay_addr <= d_dat_o[11:8];
 					ay_data <= d_dat_o[7:0];
@@ -748,6 +751,7 @@ always @(posedge clk) begin
 				8'hbc: io_dat <= { 31'd0, sdram_ready };
 				8'h78: io_dat <= { 16'd0, aud_drop };
 				8'h7c: io_dat <= { 16'd0, aud_under };
+				8'h80: io_dat <= { 5'd0, aud_rate };
 				default: io_dat <= 32'd0;
 			endcase
 		end

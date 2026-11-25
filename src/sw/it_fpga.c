@@ -94,15 +94,15 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
-  uint32_t rate = it_mod.used_channels <= 16 ? 48000 : 24000;
+  uint32_t rate = it_mod.used_channels <= 16 ? 48000 : 32000;
   it_mixrate = rate;
   cfg.mixrate = rate;
-  cfg.flags = (rate < 48000) ? IT_CFG_NEAREST : 0;
+  cfg.flags = 0;
   cfg.out_gain = 256;            // calibrated later on target
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
   fm_set_max_mixed(32);
-  rs_init(&rs, it_mixrate);
+  audio_set_rate((int) rate);
 
   it_active = 1;
   it_ended = 0;
@@ -116,10 +116,8 @@ void it_fpga_service(void) {
   int free = audio_free();
   if (free <= 2) return;
   int n = free > IT_OUT_CHUNK ? IT_OUT_CHUNK : free;
-  if (it_mixrate && it_mixrate < 48000) {
-    int lim = (int)(((int64_t)free * it_mixrate) / 48000) - 2;
-    if (n > lim) n = lim;
-  }
+  int lim = free - 2;
+  if (n > lim) n = lim;
   if (n <= 0) return;
 #ifdef IT_PROFILE
   uint32_t c0 = R_CYCLES;
@@ -130,20 +128,12 @@ void it_fpga_service(void) {
 #endif
   int v = it_volume;
   
-  int out_count = 0;
-  for (int i = 0; i < n && out_count < IT_OUT_MAX; i++) {
+  for (int i = 0; i < n; i++) {
     int32_t t = (int32_t)it_out[2 * i] * v;
     int32_t l = (t + ((t >> 31) & 63)) >> 6;
     t = (int32_t)it_out[2 * i + 1] * v;
     int32_t r = (t + ((t >> 31) & 63)) >> 6;
     
-    int nout = rs_frame(&rs, (int16_t)l, (int16_t)r, (int16_t(*)[2])&it_out_resampled[2 * out_count]);
-    out_count += nout;
-  }
-
-  for (int i = 0; i < out_count; i++) {
-    int32_t l = it_out_resampled[2 * i];
-    int32_t r = it_out_resampled[2 * i + 1];
     int32_t al = l < 0 ? -l : l;
     int32_t ar = r < 0 ? -r : r;
     if (al > it_peak_l) it_peak_l = al;

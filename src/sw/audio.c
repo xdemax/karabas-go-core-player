@@ -12,6 +12,11 @@ void audio_note_written(int n) { if (n > 0) nwritten += (uint32_t) n; }
 uint32_t audio_written(void) { return nwritten; }
 int audio_rate(void) { return aud_hz; }
 
+void audio_set_rate(int hz) {
+  MMIO(0x80) = (uint32_t) hz;
+  aud_hz = hz;
+}
+
 void audio_write(int16_t l, int16_t r) {
   MMIO(0x70) = ((uint32_t) (uint16_t) l << 16) | (uint32_t) (uint16_t) r;
   nwritten++;
@@ -20,6 +25,7 @@ void audio_write(int16_t l, int16_t r) {
 // Fill the FIFO with silence and measure how long the audio side takes to pop it. The result is
 // the real hardware sample rate (48000 when the clock/tick are right); -1 if it does not drain.
 int audio_rate_test(void) {
+  if (aud_hz != 48000) return -1;  // already configured to a non-default rate
   for (int i = 0; i < AUDIO_CAP - 1; i++) audio_write(0, 0);
   int f1 = audio_free();                 // the index takes ~ms: the FIFO already drained some
   uint32_t t1 = R_US;
