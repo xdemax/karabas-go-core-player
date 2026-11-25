@@ -89,11 +89,11 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
   cfg.mixrate = 48000;
-  cfg.flags = (it_mod.used_channels > 16) ? IT_CFG_NEAREST : 0;
+  cfg.flags = (it_mod.used_channels > 24) ? IT_CFG_NEAREST : 0;
   cfg.out_gain = 256;            // calibrated later on target
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
-  fm_set_max_mixed(it_mod.used_channels > 16 ? 16 : 32);
+  fm_set_max_mixed(32);
 
   it_active = 1;
   it_ended = 0;
@@ -116,13 +116,13 @@ void it_fpga_service(void) {
 #endif
   int v = it_volume;
   for (int i = 0; i < n; i++) {
-    int32_t l = (int32_t)it_out[2 * i] * v / 64;
-    int32_t r = (int32_t)it_out[2 * i + 1] * v / 64;
+    int32_t t = (int32_t)it_out[2 * i] * v; int32_t l = (t + ((t >> 31) & 63)) >> 6;
+    t = (int32_t)it_out[2 * i + 1] * v; int32_t r = (t + ((t >> 31) & 63)) >> 6;
     int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
     if (al > it_peak_l) it_peak_l = al;
     if (ar > it_peak_r) it_peak_r = ar;
     it_last_l = l; it_last_r = r;
-    mixer_write((int16_t)l, (int16_t)r);
+    mixer_write_noana((int16_t)l, (int16_t)r);
   }
   if (it_pl.finished) {
     it_active = 0;

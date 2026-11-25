@@ -470,8 +470,6 @@ module VexRiscv (
   wire       [26:0]   _zz_iBusWishbone_ADR_1;
   wire       [31:0]   writeBack_MEMORY_LOAD_DATA;
   wire       [51:0]   memory_MUL_LOW;
-  wire       [31:0]   execute_BRANCH_CALC;
-  wire                execute_BRANCH_DO;
   wire       [33:0]   memory_MUL_HH;
   wire       [33:0]   execute_MUL_HH;
   wire       [33:0]   execute_MUL_HL;
@@ -560,8 +558,8 @@ module VexRiscv (
   wire       [31:0]   execute_FORMAL_PC_NEXT;
   wire       [31:0]   decode_FORMAL_PC_NEXT;
   wire       [31:0]   memory_PC;
-  wire       [31:0]   memory_BRANCH_CALC;
-  wire                memory_BRANCH_DO;
+  wire       [31:0]   execute_BRANCH_CALC;
+  wire                execute_BRANCH_DO;
   wire       [31:0]   execute_PC;
   wire                execute_PREDICTION_HAD_BRANCHED1;
   wire                execute_BRANCH_COND_RESULT;
@@ -676,7 +674,7 @@ module VexRiscv (
   wire       [1:0]    decode_BRANCH_CTRL;
   wire       [1:0]    _zz_decode_BRANCH_CTRL_1;
   wire       [31:0]   decode_INSTRUCTION;
-  reg        [31:0]   _zz_memory_to_writeBack_FORMAL_PC_NEXT;
+  reg        [31:0]   _zz_execute_to_memory_FORMAL_PC_NEXT;
   reg        [31:0]   _zz_decode_to_execute_FORMAL_PC_NEXT;
   wire       [31:0]   decode_PC;
   wire       [31:0]   writeBack_PC;
@@ -696,7 +694,7 @@ module VexRiscv (
   reg                 execute_arbitration_haltByOther;
   reg                 execute_arbitration_removeIt;
   wire                execute_arbitration_flushIt;
-  wire                execute_arbitration_flushNext;
+  reg                 execute_arbitration_flushNext;
   reg                 execute_arbitration_isValid;
   wire                execute_arbitration_isStuck;
   wire                execute_arbitration_isStuckByOthers;
@@ -707,7 +705,7 @@ module VexRiscv (
   wire                memory_arbitration_haltByOther;
   reg                 memory_arbitration_removeIt;
   wire                memory_arbitration_flushIt;
-  reg                 memory_arbitration_flushNext;
+  wire                memory_arbitration_flushNext;
   reg                 memory_arbitration_isValid;
   wire                memory_arbitration_isStuck;
   wire                memory_arbitration_isStuckByOthers;
@@ -845,7 +843,7 @@ module VexRiscv (
   wire                FpuPlugin_port_completion_payload_written /* verilator public */ ;
   wire                BranchPlugin_jumpInterface_valid;
   wire       [31:0]   BranchPlugin_jumpInterface_payload;
-  wire                BranchPlugin_branchExceptionPort_valid;
+  reg                 BranchPlugin_branchExceptionPort_valid;
   wire       [3:0]    BranchPlugin_branchExceptionPort_payload_code;
   wire       [31:0]   BranchPlugin_branchExceptionPort_payload_badAddr;
   wire                BranchPlugin_inDebugNoFetchFlag;
@@ -1301,6 +1299,7 @@ module VexRiscv (
   wire                _zz_execute_BranchPlugin_branch_src2_4;
   reg        [18:0]   _zz_execute_BranchPlugin_branch_src2_5;
   wire       [31:0]   execute_BranchPlugin_branchAdder;
+  wire                when_BranchPlugin_l304;
   wire                when_Pipeline_l124;
   reg        [31:0]   decode_to_execute_PC;
   wire                when_Pipeline_l124_1;
@@ -1454,10 +1453,6 @@ module VexRiscv (
   wire                when_Pipeline_l124_75;
   reg        [33:0]   memory_to_writeBack_MUL_HH;
   wire                when_Pipeline_l124_76;
-  reg                 execute_to_memory_BRANCH_DO;
-  wire                when_Pipeline_l124_77;
-  reg        [31:0]   execute_to_memory_BRANCH_CALC;
-  wire                when_Pipeline_l124_78;
   reg        [51:0]   memory_to_writeBack_MUL_LOW;
   wire                when_Pipeline_l151;
   wire                when_Pipeline_l154;
@@ -3339,8 +3334,6 @@ module VexRiscv (
 
   assign writeBack_MEMORY_LOAD_DATA = writeBack_DBusCachedPlugin_rspShifted;
   assign memory_MUL_LOW = ($signed(_zz_memory_MUL_LOW) + $signed(_zz_memory_MUL_LOW_6));
-  assign execute_BRANCH_CALC = {execute_BranchPlugin_branchAdder[31 : 1],1'b0};
-  assign execute_BRANCH_DO = ((execute_PREDICTION_HAD_BRANCHED1 != execute_BRANCH_COND_RESULT) || execute_BranchPlugin_missAlignedTarget);
   assign memory_MUL_HH = execute_to_memory_MUL_HH;
   assign execute_MUL_HH = ($signed(execute_MulPlugin_aHigh) * $signed(execute_MulPlugin_bHigh));
   assign execute_MUL_HL = ($signed(execute_MulPlugin_aHigh) * $signed(execute_MulPlugin_bSLow));
@@ -3408,8 +3401,8 @@ module VexRiscv (
   assign execute_FORMAL_PC_NEXT = decode_to_execute_FORMAL_PC_NEXT;
   assign decode_FORMAL_PC_NEXT = (decode_PC + 32'h00000004);
   assign memory_PC = execute_to_memory_PC;
-  assign memory_BRANCH_CALC = execute_to_memory_BRANCH_CALC;
-  assign memory_BRANCH_DO = execute_to_memory_BRANCH_DO;
+  assign execute_BRANCH_CALC = {execute_BranchPlugin_branchAdder[31 : 1],1'b0};
+  assign execute_BRANCH_DO = ((execute_PREDICTION_HAD_BRANCHED1 != execute_BRANCH_COND_RESULT) || execute_BranchPlugin_missAlignedTarget);
   assign execute_PC = decode_to_execute_PC;
   assign execute_PREDICTION_HAD_BRANCHED1 = decode_to_execute_PREDICTION_HAD_BRANCHED1;
   assign execute_BRANCH_COND_RESULT = _zz_execute_BRANCH_COND_RESULT_1;
@@ -3680,9 +3673,9 @@ module VexRiscv (
   assign decode_BRANCH_CTRL = _zz_decode_BRANCH_CTRL_1;
   assign decode_INSTRUCTION = IBusCachedPlugin_iBusRsp_output_payload_rsp_inst;
   always @(*) begin
-    _zz_memory_to_writeBack_FORMAL_PC_NEXT = memory_FORMAL_PC_NEXT;
+    _zz_execute_to_memory_FORMAL_PC_NEXT = execute_FORMAL_PC_NEXT;
     if(BranchPlugin_jumpInterface_valid) begin
-      _zz_memory_to_writeBack_FORMAL_PC_NEXT = BranchPlugin_jumpInterface_payload;
+      _zz_execute_to_memory_FORMAL_PC_NEXT = BranchPlugin_jumpInterface_payload;
     end
   end
 
@@ -3767,13 +3760,25 @@ module VexRiscv (
 
   always @(*) begin
     execute_arbitration_removeIt = 1'b0;
+    if(BranchPlugin_branchExceptionPort_valid) begin
+      execute_arbitration_removeIt = 1'b1;
+    end
     if(execute_arbitration_isFlushed) begin
       execute_arbitration_removeIt = 1'b1;
     end
   end
 
   assign execute_arbitration_flushIt = 1'b0;
-  assign execute_arbitration_flushNext = 1'b0;
+  always @(*) begin
+    execute_arbitration_flushNext = 1'b0;
+    if(BranchPlugin_branchExceptionPort_valid) begin
+      execute_arbitration_flushNext = 1'b1;
+    end
+    if(BranchPlugin_jumpInterface_valid) begin
+      execute_arbitration_flushNext = 1'b1;
+    end
+  end
+
   always @(*) begin
     memory_arbitration_haltItself = 1'b0;
     if(when_MulDivIterativePlugin_l128) begin
@@ -3786,25 +3791,13 @@ module VexRiscv (
   assign memory_arbitration_haltByOther = 1'b0;
   always @(*) begin
     memory_arbitration_removeIt = 1'b0;
-    if(BranchPlugin_branchExceptionPort_valid) begin
-      memory_arbitration_removeIt = 1'b1;
-    end
     if(memory_arbitration_isFlushed) begin
       memory_arbitration_removeIt = 1'b1;
     end
   end
 
   assign memory_arbitration_flushIt = 1'b0;
-  always @(*) begin
-    memory_arbitration_flushNext = 1'b0;
-    if(BranchPlugin_branchExceptionPort_valid) begin
-      memory_arbitration_flushNext = 1'b1;
-    end
-    if(BranchPlugin_jumpInterface_valid) begin
-      memory_arbitration_flushNext = 1'b1;
-    end
-  end
-
+  assign memory_arbitration_flushNext = 1'b0;
   always @(*) begin
     writeBack_arbitration_haltItself = 1'b0;
     if(when_DBusCachedPlugin_l554) begin
@@ -4946,6 +4939,9 @@ module VexRiscv (
 
   always @(*) begin
     CsrPlugin_exceptionPortCtrl_exceptionValids_execute = CsrPlugin_exceptionPortCtrl_exceptionValidsRegs_execute;
+    if(BranchPlugin_branchExceptionPort_valid) begin
+      CsrPlugin_exceptionPortCtrl_exceptionValids_execute = 1'b1;
+    end
     if(execute_arbitration_isFlushed) begin
       CsrPlugin_exceptionPortCtrl_exceptionValids_execute = 1'b0;
     end
@@ -4953,9 +4949,6 @@ module VexRiscv (
 
   always @(*) begin
     CsrPlugin_exceptionPortCtrl_exceptionValids_memory = CsrPlugin_exceptionPortCtrl_exceptionValidsRegs_memory;
-    if(BranchPlugin_branchExceptionPort_valid) begin
-      CsrPlugin_exceptionPortCtrl_exceptionValids_memory = 1'b1;
-    end
     if(memory_arbitration_isFlushed) begin
       CsrPlugin_exceptionPortCtrl_exceptionValids_memory = 1'b0;
     end
@@ -5470,11 +5463,18 @@ module VexRiscv (
   end
 
   assign execute_BranchPlugin_branchAdder = (execute_BranchPlugin_branch_src1 + execute_BranchPlugin_branch_src2);
-  assign BranchPlugin_jumpInterface_valid = ((memory_arbitration_isValid && memory_BRANCH_DO) && (! 1'b0));
-  assign BranchPlugin_jumpInterface_payload = memory_BRANCH_CALC;
-  assign BranchPlugin_branchExceptionPort_valid = (memory_arbitration_isValid && (memory_BRANCH_DO && memory_BRANCH_CALC[1]));
+  assign BranchPlugin_jumpInterface_valid = ((execute_arbitration_isValid && execute_BRANCH_DO) && (! 1'b0));
+  assign BranchPlugin_jumpInterface_payload = execute_BRANCH_CALC;
+  always @(*) begin
+    BranchPlugin_branchExceptionPort_valid = (execute_arbitration_isValid && (execute_BRANCH_DO && execute_BRANCH_CALC[1]));
+    if(when_BranchPlugin_l304) begin
+      BranchPlugin_branchExceptionPort_valid = 1'b0;
+    end
+  end
+
   assign BranchPlugin_branchExceptionPort_payload_code = 4'b0000;
-  assign BranchPlugin_branchExceptionPort_payload_badAddr = memory_BRANCH_CALC;
+  assign BranchPlugin_branchExceptionPort_payload_badAddr = execute_BRANCH_CALC;
+  assign when_BranchPlugin_l304 = 1'b0;
   assign IBusCachedPlugin_decodePrediction_rsp_wasWrong = BranchPlugin_jumpInterface_valid;
   assign when_Pipeline_l124 = (! execute_arbitration_isStuck);
   assign when_Pipeline_l124_1 = (! memory_arbitration_isStuck);
@@ -5586,9 +5586,7 @@ module VexRiscv (
   assign when_Pipeline_l124_73 = (! memory_arbitration_isStuck);
   assign when_Pipeline_l124_74 = (! memory_arbitration_isStuck);
   assign when_Pipeline_l124_75 = (! writeBack_arbitration_isStuck);
-  assign when_Pipeline_l124_76 = (! memory_arbitration_isStuck);
-  assign when_Pipeline_l124_77 = (! memory_arbitration_isStuck);
-  assign when_Pipeline_l124_78 = (! writeBack_arbitration_isStuck);
+  assign when_Pipeline_l124_76 = (! writeBack_arbitration_isStuck);
   assign decode_arbitration_isFlushed = ((|{writeBack_arbitration_flushNext,{memory_arbitration_flushNext,execute_arbitration_flushNext}}) || (|{writeBack_arbitration_flushIt,{memory_arbitration_flushIt,{execute_arbitration_flushIt,decode_arbitration_flushIt}}}));
   assign execute_arbitration_isFlushed = ((|{writeBack_arbitration_flushNext,memory_arbitration_flushNext}) || (|{writeBack_arbitration_flushIt,{memory_arbitration_flushIt,execute_arbitration_flushIt}}));
   assign memory_arbitration_isFlushed = ((|writeBack_arbitration_flushNext) || (|{writeBack_arbitration_flushIt,memory_arbitration_flushIt}));
@@ -6246,10 +6244,10 @@ module VexRiscv (
       decode_to_execute_FORMAL_PC_NEXT <= _zz_decode_to_execute_FORMAL_PC_NEXT;
     end
     if(when_Pipeline_l124_7) begin
-      execute_to_memory_FORMAL_PC_NEXT <= execute_FORMAL_PC_NEXT;
+      execute_to_memory_FORMAL_PC_NEXT <= _zz_execute_to_memory_FORMAL_PC_NEXT;
     end
     if(when_Pipeline_l124_8) begin
-      memory_to_writeBack_FORMAL_PC_NEXT <= _zz_memory_to_writeBack_FORMAL_PC_NEXT;
+      memory_to_writeBack_FORMAL_PC_NEXT <= memory_FORMAL_PC_NEXT;
     end
     if(when_Pipeline_l124_9) begin
       decode_to_execute_MEMORY_FORCE_CONSTISTENCY <= decode_MEMORY_FORCE_CONSTISTENCY;
@@ -6444,12 +6442,6 @@ module VexRiscv (
       memory_to_writeBack_MUL_HH <= memory_MUL_HH;
     end
     if(when_Pipeline_l124_76) begin
-      execute_to_memory_BRANCH_DO <= execute_BRANCH_DO;
-    end
-    if(when_Pipeline_l124_77) begin
-      execute_to_memory_BRANCH_CALC <= execute_BRANCH_CALC;
-    end
-    if(when_Pipeline_l124_78) begin
       memory_to_writeBack_MUL_LOW <= memory_MUL_LOW;
     end
     if(when_CsrPlugin_l1669) begin
