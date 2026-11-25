@@ -23,7 +23,6 @@ static int it_active, it_ended, it_paused;
 static int it_volume = 64;
 static char it_err[48];
 static int16_t it_out[IT_OUT_CHUNK * 2];
-static int16_t it_out_resampled[IT_OUT_MAX * 2];
 static uint32_t it_mixrate;
 static uint32_t it_total_ms;      /* real song length, computed once at load */
 static uint32_t it_elapsed_ms;    /* wall-clock playback time, for the progress bar */
@@ -172,53 +171,54 @@ void it_fpga_service(void) {
     if (n > lim) n = lim;
   }
   if (n <= 0) return;
-#ifdef IT_PROFILE
-  uint32_t c0 = R_CYCLES;
-#endif
+
   it_player_render(&it_pl, it_out, n);
-#ifdef IT_PROFILE
-  uint32_t c1 = R_CYCLES;
-#endif
   int v = it_volume;
   
-#ifdef IT_PROFILE
-  uint32_t c_mix_end = R_CYCLES;
-  it_dbg_pcycles += (uint32_t)(c_mix_end - c0);
-#endif
-  int out_count = 0;
-  for (int i = 0; i < n && out_count < IT_OUT_MAX; i++) {
+  int frames_fed_to_rs = 0;
+  
+  for (int i = 0; i < n; i++) {
     int32_t t = (int32_t)it_out[2 * i] * v;
     int32_t l = (t + ((t >> 31) & 63)) >> 6;
     t = (int32_t)it_out[2 * i + 1] * v;
     int32_t r = (t + ((t >> 31) & 63)) >> 6;
     
-    int nout = rs_frame(&rs, (int16_t)l, (int16_t)r, (int16_t(*)[2])&it_out_resampled[2 * out_count]);
-    out_count += nout;
+    int16_t out_tmp[2][2];
+    int nout = rs_frame(&rs, (int16_t)l, (int16_t)r, out_tmp);
+    frames_fed_to_rs++;
+    
+    if (nout >= 1) {
+      int32_t ol = out_tmp[0][0];
+      int32_t or = out_tmp[0][1];
+      int32_t al = ol < 0 ? -ol : ol;
+      int32_t ar = or < 0 ? -or : or;
+      if (al > it_peak_l) it_peak_l = al;
+      if (ar > it_peak_r) it_peak_r = ar;
+      it_last_l = ol;
+      it_last_r = or;
+      mixer_write_it((int16_t)ol, (int16_t)or);
+    }
+    
+    if (nout >= 2) {
+      int32_t ol = out_tmp[1][0];
+      int32_t or = out_tmp[1][1];
+      int32_t al = ol < 0 ? -ol : ol;
+      int32_t ar = or < 0 ? -or : or;
+      if (al > it_peak_l) it_peak_l = al;
+      if (ar > it_peak_r) it_peak_r = ar;
+      it_last_l = ol;
+      it_last_r = or;
+      mixer_write_it((int16_t)ol, (int16_t)or);
+    }
   }
 
-  for (int i = 0; i < out_count; i++) {
-    int32_t l = it_out_resampled[2 * i];
-    int32_t r = it_out_resampled[2 * i + 1];
-    int32_t al = l < 0 ? -l : l;
-    int32_t ar = r < 0 ? -r : r;
-    if (al > it_peak_l) it_peak_l = al;
-    if (ar > it_peak_r) it_peak_r = ar;
-    it_last_l = l;
-    it_last_r = r;
-    mixer_write_it((int16_t)l, (int16_t)r);
-  }
+  /* Update elapsed time based on frames fed to resampler (at mixrate) */
   {
-    uint32_t rem = it_elapsed_rem + (uint32_t) ((uint64_t) n * 1000u);
+    uint32_t rem = it_elapsed_rem + (uint32_t) ((uint64_t) frames_fed_to_rs * 1000u);
     it_elapsed_ms += rem / (it_mixrate ? it_mixrate : 48000u);
     it_elapsed_rem = rem % (it_mixrate ? it_mixrate : 48000u);
   }
 
-#ifdef IT_PROFILE
-  it_dbg_ocycles += (uint32_t)(R_CYCLES - c_mix_end);
-#endif
-  /* A song that ends by jumping back (Bxx) never reaches the end of the order list, so
-   * "finished" is never set and the track loops forever. Use the measured length as the
-   * authority: once we have played it, stop and let the playlist move on. */
   if (!it_pl.finished && it_total_ms && it_elapsed_ms > it_total_ms + 1500u) {
     it_active = 0;
     it_ended = 1;
@@ -236,43 +236,6 @@ void it_fpga_service(void) {
       if (val > it_vu[x->host]) it_vu[x->host] = (uint8_t)val;
     }
   }
-#ifdef IT_PROFILE
-  uint32_t c2 = R_CYCLES;
-  it_dbg_pcycles += (uint32_t)(c1 - c0);
-  it_dbg_cycles += (uint32_t)(c2 - c0);
-  if ((uint32_t)(R_US - it_dbg_us) >= 1000000u) {
-    uint32_t dt = (uint32_t) (R_US - it_dbg_us);      // the REAL window
-    it_dbg_us = R_US;
-    it_dbg_cps = it_dbg_cycles;
-    /* Percent of the CPU over the real window (see the XM engine for the reasoning). */
-    if (!dt) dt = 1;
-    uint32_t pct = (uint32_t) ((uint64_t) it_dbg_cps * 100u / ((uint64_t) dt * 75u));
-    uint32_t mpct = it_dbg_cps ?
-        (uint32_t)((uint64_t)it_dbg_pcycles * 100u / it_dbg_cps) : 0;
-    uint32_t opct = it_dbg_cps ?
-        (uint32_t)((uint64_t)it_dbg_ocycles * 100u / it_dbg_cps) : 0;
-    it_dbg_voices = it_player_active_voices(&it_pl);
-    it_dbg_alloc = it_pl.nv_hi;
-    {
-      char *q = it_dbg;
-      q = dbg_u(q, (uint32_t) it_dbg_voices);
-      *q++ = '/';
-      q = dbg_u(q, (uint32_t) it_dbg_alloc);
-      *q++ = 'v'; *q++ = ' ';
-      q = dbg_u(q, pct);
-      *q++ = '%'; *q++ = ' ';
-      *q++ = 'm';
-      q = dbg_u(q, mpct);
-      *q++ = ' ';
-      *q++ = 'o';
-      q = dbg_u(q, opct);
-      *q = 0;
-    }
-    it_dbg_cycles = 0;
-    it_dbg_pcycles = 0;
-    it_dbg_ocycles = 0;
-  }
-#endif
 }
 
 int it_fpga_active(void) { return it_active; }
