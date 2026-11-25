@@ -37,6 +37,7 @@ static uint32_t np_start, np_cur, np_total, np_us;
 static uint32_t nav_t;
 static int view_ch;
 static int spectrum_on = 1;
+static int font_step;            /* Shift+= / Shift+- change the file list font */
 static int volume_setting = 64;
 static int osd_raw = -1;
 static char mix_msg[40];
@@ -93,6 +94,7 @@ static void view_fill(int audio) {
     } else V.debug = "";
   }
   V.logging = log_enabled;
+  V.font_step = font_step;
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;
@@ -310,6 +312,12 @@ static void key(key_ev_t *e) {
       return;
     }
     case K_MINUS: case K_EQUAL: {
+      if (e->shift) {                       /* Shift+= / Shift+- : file list font */
+        if (e->key == K_EQUAL) { if (font_step < 4) font_step++; }
+        else { if (font_step > 0) font_step--; }
+        update_list_view();
+        return;
+      }
       int v = volume_setting + (e->key == K_EQUAL ? 4 : -4);
       if (v < 0) v = 0;
       if (v > 64) v = 64;

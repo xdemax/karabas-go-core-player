@@ -13,6 +13,8 @@
 #define IT_META_BYTES (64u * 1024u)
 #define IT_OUT_CHUNK  64
 #define IT_OUT_MAX    512
+#define IT_RING_SIZE  1024
+#define IT_RING_LOW   512
 
 static uint8_t it_meta[IT_META_BYTES];
 static it_module_t it_mod;
@@ -30,6 +32,9 @@ static uint32_t it_elapsed_rem;
 static rs_t rs;
 static int32_t it_last_l, it_last_r, it_peak_l, it_peak_r;
 static uint8_t it_vu[FMT_CHANNELS];
+static int16_t it_rb[IT_RING_SIZE * 2];  /* ring buffer of 48 kHz output frames */
+static int it_rb_wr;                      /* write position in ring buffer */
+static int it_rb_n;                       /* number of frames in ring buffer */
 
 /* Minimal unsigned formatter: avoids pulling the whole printf machinery into the
  * firmware (it is linked on every page and was hurting the I-cache). */
@@ -60,6 +65,8 @@ static void it_release(void) {
   memset(it_vu, 0, sizeof(it_vu));
   it_last_l = it_last_r = it_peak_l = it_peak_r = 0;
   memset(&rs, 0, sizeof(rs));
+  it_rb_wr = 0;
+  it_rb_n = 0;
   it_dbg[0] = 0;
   it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_ocycles = it_dbg_cps = 0;
   it_dbg_voices = it_dbg_alloc = 0;
@@ -163,8 +170,11 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 
 void it_fpga_service(void) {
   if (!it_active || it_paused) return;
+  
   int free = audio_free();
   if (free <= 2) return;
+  
+  /* Determine how much input to render */
   int n = free > IT_OUT_CHUNK ? IT_OUT_CHUNK : free;
   if (it_mixrate && it_mixrate < 48000) {
     int lim = (int)(((int64_t)free * it_mixrate) / 48000) - 2;
@@ -174,7 +184,6 @@ void it_fpga_service(void) {
 
   it_player_render(&it_pl, it_out, n);
   int v = it_volume;
-  
   int frames_fed_to_rs = 0;
   
   for (int i = 0; i < n; i++) {
@@ -196,7 +205,15 @@ void it_fpga_service(void) {
       if (ar > it_peak_r) it_peak_r = ar;
       it_last_l = ol;
       it_last_r = or;
-      mixer_write_it((int16_t)ol, (int16_t)or);
+      
+      /* Store first output frame in ring buffer */
+      if (it_rb_n < IT_RING_SIZE) {
+        int idx = (it_rb_wr * 2) % (IT_RING_SIZE * 2);
+        it_rb[idx] = (int16_t)ol;
+        it_rb[idx + 1] = (int16_t)or;
+        it_rb_wr = (it_rb_wr + 1) % IT_RING_SIZE;
+        it_rb_n++;
+      }
     }
     
     if (nout >= 2) {
@@ -208,8 +225,24 @@ void it_fpga_service(void) {
       if (ar > it_peak_r) it_peak_r = ar;
       it_last_l = ol;
       it_last_r = or;
-      mixer_write_it((int16_t)ol, (int16_t)or);
+      
+      /* Store second output frame in ring buffer */
+      if (it_rb_n < IT_RING_SIZE) {
+        int idx = (it_rb_wr * 2) % (IT_RING_SIZE * 2);
+        it_rb[idx] = (int16_t)ol;
+        it_rb[idx + 1] = (int16_t)or;
+        it_rb_wr = (it_rb_wr + 1) % IT_RING_SIZE;
+        it_rb_n++;
+      }
     }
+  }
+
+  /* Drain ring buffer to FIFO */
+  while (it_rb_n > 0 && audio_free() > 0) {
+    int rb_rd = (it_rb_wr - it_rb_n + IT_RING_SIZE) % IT_RING_SIZE;
+    int rb_idx = (rb_rd * 2) % (IT_RING_SIZE * 2);
+    mixer_write_it(it_rb[rb_idx], it_rb[rb_idx + 1]);
+    it_rb_n--;
   }
 
   /* Update elapsed time based on frames fed to resampler (at mixrate) */

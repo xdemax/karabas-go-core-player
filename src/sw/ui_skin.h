@@ -24,6 +24,7 @@ typedef struct {
   const char *build;
   const char *debug;
   int logging;                   // 1 when the session log is being written
+  int font_step;                 // file list font size step (0 = default)
   const char *skin;
   const char *format;
   const char *title;

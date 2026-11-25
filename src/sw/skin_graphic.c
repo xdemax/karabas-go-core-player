@@ -21,6 +21,12 @@
 #define RIGHT_W (FB_W - LEFT_W)
 #define LIST_Y  88
 #define ROW_H   38
+/* File list font ladder: Shift+= makes it bigger, Shift+- smaller (fonts are discrete). */
+static const font_t *const list_fonts[] = { &f26, &f27, &f28, &f29, &f30 };
+static const int list_rows_h[] = { 38, 39, 40, 41, 42 };
+static int cur_font_step;
+static const font_t *list_font(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > 4) s = 4; return list_fonts[s]; }
+static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > 4) s = 4; return list_rows_h[s]; }
 #define ROWS    ((FB_H - LIST_Y - FOOT_H) / ROW_H)
 
 #define PX      (RIGHT_X + 20)   // the right panel content: x = 420, width = 360
@@ -127,7 +133,7 @@ static int name_width(const player_view_t *v, int k) {
 
 static int name_avail(const fs_entry_t *e) {
   int right = LEFT_W - NAME_PAD;
-  if (!e->dir) right -= NAME_SIZE_W;
+  if (!e->dir) right -= (NAME_SIZE_W * list_row_h()) / 38;
   int w = right - NAME_X;
   return w > 0 ? w : 0;
 }
@@ -138,14 +144,16 @@ static void reset_marquee(void) {
   marq_t = R_US;
 }
 
-int ui_list_rows(void) { return ROWS; }
+int ui_list_rows(void) { return (FB_H - LIST_Y - FOOT_H) / list_row_h(); }
 
 static void draw_row(const player_view_t *v, int k) {
   if (k < v->top || k >= v->top + ROWS) return;
   int r = k - v->top;
-  int y = LIST_Y + r * ROW_H;
-  gfx_fill(0, y - 2, LEFT_W - 1, ROW_H + 2, c_bg);
-  if (k == v->sel) gfx_solid_rect(8, y + 1, LEFT_W - 16, ROW_H - 4, c_sel);
+  const int rh = list_row_h();
+  const font_t *lf = list_font();
+  int y = LIST_Y + r * rh;
+  gfx_fill(0, y - 2, LEFT_W - 1, rh + 2, c_bg);
+  if (k == v->sel) gfx_solid_rect(8, y + 1, LEFT_W - 16, rh - 4, c_sel);
   if (k < 0 || k >= v->nent) return;
 
   const fs_entry_t *e = &v->ent[k];
@@ -154,24 +162,24 @@ static void draw_row(const player_view_t *v, int k) {
   int j = (int) strlen(nm);
   if (e->dir && j < (int) sizeof(nm) - 1) { nm[j++] = '/'; nm[j] = 0; }
   int avail = name_avail(e);
-  int w = gfx_text_width(&f26, nm);
+  int w = gfx_text_width(lf, nm);
   int off = (k == v->sel && w > avail) ? marq_off : 0;
   if (off > w - avail) off = w - avail;
   if (off > 0) {
     // Keep the size column and the panel clean while the long name slides.
-    gfx_keep(NAME_X + avail, y - 2, LEFT_W - (NAME_X + avail), ROW_H + 2);
-    gfx_text_left(&f26, NAME_X - off, y + ROW_H / 2, nm, r_text);
+    gfx_keep(NAME_X + avail, y - 2, LEFT_W - (NAME_X + avail), rh + 2);
+    gfx_text_left(lf, NAME_X - off, y + rh / 2, nm, r_text);
     gfx_keep_off();
   } else {
     char fit[40];
     copy_fit(fit, nm, 34);
-    gfx_text_left(&f26, NAME_X, y + ROW_H / 2, fit, r_text);
+    gfx_text_left(lf, NAME_X, y + rh / 2, fit, r_text);
   }
   if (!e->dir) {
     char b[16], *z = b;
     z = u2s(z, (e->size + 1023u) / 1024u, 1);
     *z++ = 'K'; *z = 0;
-    gfx_text_right(&f26, LEFT_W - 16, y + ROW_H / 2, b, r_dim);
+    gfx_text_right(lf, LEFT_W - 16, y + rh / 2, b, r_dim);
   }
 }
 
@@ -189,6 +197,7 @@ static void marquee_tick(const player_view_t *v) {
 }
 
 static void draw_list_area(const player_view_t *v) {
+  cur_font_step = v->font_step;
   gfx_fill(0, LIST_Y - 4, LEFT_W - 1, (BODY_Y + BODY_H) - (LIST_Y - 4), c_bg);
   if (v->idle) v->idle();
   if (!v->nent) {
