@@ -67,88 +67,141 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
       val hidden_frac = Reg(UInt(16 bits)) init 0
       val hidden_s = Reg(SInt(18 bits)) init 0
 
+      // 2-cycle ALU state machine
+      val busy = Reg(Bool) init False
+      val saved_rs1 = Reg(UInt(32 bits))
+      val saved_rs2 = Reg(UInt(32 bits))
+      val saved_funct7 = Reg(UInt(7 bits))
+      val saved_product_lerp16 = Reg(UInt(32 bits))
+      val saved_product_lerp8 = Reg(UInt(32 bits))
+      val saved_sum_adv = Reg(UInt(32 bits))
+      val saved_carry_adv = Reg(UInt(1 bit))
+
       // Helper functions for sign extension
       def sign8(v: UInt): SInt = v(7 downto 0).asSInt
       def sign16(v: UInt): SInt = v(15 downto 0).asSInt
       def sign32(v: UInt): SInt = v.asSInt
 
-      // Intermediate results
-      val funct7_val = funct7
+      // Funct7 codes for multi-cycle ops
+      val is_lerp16 = funct7 === 1
+      val is_mac = funct7 === 2
+      val is_lerp8 = funct7 === 6
+      val is_adv = funct7 === 4
+      val is_advb = funct7 === 5
+      val is_multicycle = is_lerp16 || is_mac || is_lerp8 || is_adv || is_advb
+
+      // Reset busy when instruction invalid
+      when(!execute.arbitration.isValid) {
+        busy := False
+      }
 
       when(execute.input(IS_CUSTOM_MIX)) {
-        switch(funct7_val) {
-          // funct7=0: SETF - hidden_frac = rs1[15:0]
+        when(!busy) {
+          // Cycle 1: Save operands, compute product, halt
+          when(is_multicycle) {
+            saved_rs1 := rs1
+            saved_rs2 := rs2
+            saved_funct7 := funct7
+            busy := True
+            execute.arbitration.haltItself := True
+
+            // Precompute products for LERP16 and LERP8
+            when(is_lerp16) {
+              val s0 = sign16(rs1).resize(18)
+              val s1 = sign16(rs2).resize(18)
+              val dif = (s1 - s0).resize(19)
+              val neg = dif < 0
+              val ad = Mux(neg, (-dif).asUInt, dif.asUInt)
+              val p = ad * (hidden_frac >> 1)
+              saved_product_lerp16 := p.resize(32)
+            }
+            when(is_lerp8) {
+              val s0 = sign8(rs1).resize(10)
+              val s1 = sign8(rs2).resize(10)
+              val dif = (s1 - s0).resize(11)
+              val neg = dif < 0
+              val ad = Mux(neg, (-dif).asUInt, dif.asUInt)
+              val p = ad * hidden_frac
+              saved_product_lerp8 := p.resize(32)
+            }
+            when(is_adv) {
+              val sf = rs2(15 downto 0)
+              val t = hidden_frac +^ sf
+              saved_sum_adv := t(31 downto 16).resize(32)
+              saved_carry_adv := t(16)
+            }
+          }
+        }.otherwise {
+          // Cycle 2: Complete computation and write
+          busy := False
+
+          switch(saved_funct7) {
+            // LERP16 - complete after product is ready
+            is(1) {
+              val s0 = sign16(saved_rs1).resize(18)
+              val s1 = sign16(saved_rs2).resize(18)
+              val dif = (s1 - s0).resize(19)
+              val neg = dif < 0
+              val p = saved_product_lerp16.asUInt
+              val q = (p + Mux(neg, U(32767, p.getWidth bits), U(0, p.getWidth bits))) >> 15
+              val shifted = Mux(neg, -(q.asSInt), q.asSInt).resize(32)
+              val result = (s0.resize(32) + shifted).resize(32)
+              rd := result.asUInt
+              hidden_s := result.resize(18 bits)
+            }
+
+            // MAC - multiply already done in cycle 1 by hidden_s
+            is(2) {
+              val g = (saved_rs2(18 downto 0) >> 8).asSInt.resize(11)
+              val prod = (hidden_s * g).resize(32)
+              val result = (sign32(saved_rs1) + prod).resize(32)
+              rd := result.asUInt
+            }
+
+            // ADV - complete carry addition
+            is(4) {
+              val carry_bit = Mux(saved_carry_adv === 1, U(1, 32 bits), U(0, 32 bits))
+              rd := (saved_rs1 +^ (saved_rs2 >> 16) +^ carry_bit).resize(32 bits)
+              hidden_frac := (hidden_frac + (saved_rs2(15 downto 0)))(15 downto 0)
+            }
+
+            // ADVB - complete with borrow
+            is(5) {
+              val sf = saved_rs2(15 downto 0)
+              val borrow = Mux(hidden_frac < sf, U(1, 32 bits), U(0, 32 bits))
+              rd := (saved_rs1 - (saved_rs2 >> 16) - borrow).resize(32 bits)
+              hidden_frac := (hidden_frac - sf)(15 downto 0)
+            }
+
+            // LERP8 - complete after product is ready
+            is(6) {
+              val s0 = sign8(saved_rs1).resize(10)
+              val p = saved_product_lerp8.asUInt
+              val neg = sign8(saved_rs2).asSInt < sign8(saved_rs1).asSInt
+              val q = (p + Mux(neg, U(255, p.getWidth bits), U(0, p.getWidth bits))) >> 8
+              val frac_part = Mux(neg, -(q.asSInt), q.asSInt).resize(32)
+              val result = ((s0.resize(32) << 8) + frac_part).resize(32)
+              rd := result.asUInt
+              hidden_s := result.resize(18 bits)
+            }
+          }
+
+          when(execute.input(REGFILE_WRITE_VALID)) {
+            execute.insert(REGFILE_WRITE_DATA) := rd.asBits
+          }
+        }
+      }.otherwise {
+        // Single-cycle instructions (SETF, GETF)
+        switch(funct7) {
           is(0) {
             hidden_frac := rs1(15 downto 0)
           }
-
-          // funct7=1: LERP16 - rd = s0 + ((s1 - s0) * (hidden_frac >> 1) >> 15)
-          is(1) {
-            val s0 = sign16(rs1).resize(18)
-            val s1 = sign16(rs2).resize(18)
-            val dif = (s1 - s0).resize(19)
-            val neg = dif < 0
-            val ad = Mux(neg, (-dif).asUInt, dif.asUInt)
-            val p = ad * (hidden_frac >> 1)
-            val q = (p + Mux(neg, U(32767, p.getWidth bits), U(0, p.getWidth bits))) >> 15
-            val shifted = Mux(neg, -(q.asSInt), q.asSInt).resize(32)
-            val result = (s0.resize(32) + shifted).resize(32)
-            rd := result.asUInt
-            hidden_s := result.resize(18 bits)
-          }
-
-           // funct7=2: MAC - g = rs2[31:8]; rd = rs1 + (hidden_s * g)
-          is(2) {
-            // gains are Q16 and non-negative in the tracker mixer (<= 2.0)
-            val g = (rs2(18 downto 0) >> 8).asSInt.resize(11)
-            val prod = (hidden_s * g).resize(32)
-            val result = (sign32(rs1) + prod).resize(32)
-            rd := result.asUInt
-          }
-
-          // funct7=3: GETF - rd = zero_extend(hidden_frac)
           is(3) {
             rd := hidden_frac.resize(32 bits)
+            when(execute.input(REGFILE_WRITE_VALID)) {
+              execute.insert(REGFILE_WRITE_DATA) := rd.asBits
+            }
           }
-
-          // funct7=4: ADV - t = hidden_frac + (rs2 & 0xFFFF); 
-          //           hidden_frac = t & 0xFFFF; rd = rs1 + (rs2 >> 16) + (t >> 16)
-          is(4) {
-            val sf = rs2(15 downto 0)
-            val t = hidden_frac +^ sf
-            hidden_frac := t(15 downto 0)
-            val carry = t >> 16
-            rd := (rs1 +^ (rs2 >> 16) +^ carry).resize(32 bits)
-          }
-
-          // funct7=5: ADVB - sf = rs2 & 0xFFFF; borrow = (hidden_frac < sf);
-          //           hidden_frac = (hidden_frac - sf) & 0xFFFF; rd = rs1 - (rs2 >> 16) - borrow
-          is(5) {
-            val sf = rs2(15 downto 0)
-            val borrow = Mux(hidden_frac < sf, U(1, 32 bits), U(0, 32 bits))
-            hidden_frac := (hidden_frac - sf)(15 downto 0)
-            rd := (rs1 - (rs2 >> 16) - borrow).resize(32 bits)
-          }
-
-          // funct7=6: LERP8 - s0=sign8(rs1[7:0]), s1=sign8(rs2[7:0]);
-          //           rd = s0*256 + (((s1-s0)*hidden_frac) >> 8)
-          is(6) {
-            val s0 = sign8(rs1).resize(10)
-            val s1 = sign8(rs2).resize(10)
-            val dif = (s1 - s0).resize(11)
-            val neg = dif < 0
-            val ad = Mux(neg, (-dif).asUInt, dif.asUInt)
-            val p = ad * hidden_frac
-            val q = (p + Mux(neg, U(255, p.getWidth bits), U(0, p.getWidth bits))) >> 8
-            val frac_part = Mux(neg, -(q.asSInt), q.asSInt).resize(32)
-            val result = ((s0.resize(32) << 8) + frac_part).resize(32)
-            rd := result.asUInt
-            hidden_s := result.resize(18 bits)
-          }
-        }
-
-        when(execute.input(REGFILE_WRITE_VALID)) {
-          execute.insert(REGFILE_WRITE_DATA) := rd.asBits
         }
       }
     }
