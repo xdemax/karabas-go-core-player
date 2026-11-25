@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "../fpga.h"
 #include "../audio.h"
+#include "../s3m_fpga.h"
 
 static uint32_t hreg;
 volatile uint32_t *host_reg(uint32_t off) { (void) off; hreg = 1; return &hreg; }

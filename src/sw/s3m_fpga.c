@@ -110,8 +110,10 @@ static uint32_t read32le(const uint8_t *p, uint32_t off, uint32_t max) {
 }
 
 static int s3m_load_patterns(const uint8_t *buf, uint32_t size, s3m_module_t *m) {
+  int max_chn = 0;
+  
   for (int p = 0; p < m->npat; p++) {
-    uint32_t off = m->orders[256 + p];
+    uint32_t off = m->orders[256 + 99 + p];
     if (off == 0 || off * 16 >= size) {
       m->pat[p].data = NULL;
       m->pat[p].len = 0;
@@ -127,55 +129,84 @@ static int s3m_load_patterns(const uint8_t *buf, uint32_t size, s3m_module_t *m)
     m->pat[p].len = plen;
     m->pat[p].pos = 0;
     m->pat[p].end = 0;
+    
+    // Scan to find max channel
+    uint32_t pos = 0;
+    while (pos < plen) {
+      uint8_t what = buf[off + 2 + pos++];
+      if (what == 0) break;
+      
+      uint8_t ch = what & 0x1f;
+      if (ch + 1 > max_chn) max_chn = ch + 1;
+      
+      uint8_t mask = (pos < plen) ? buf[off + 2 + pos++] : 0;
+      if (mask & 2) pos += 2;   // note + instr
+      if (mask & 4) pos++;       // vol
+      if (mask & 8) pos += 2;    // cmd + info
+    }
   }
+  
+  m->chn = (max_chn > 32) ? 32 : max_chn;
+  if (m->chn < 1) m->chn = 1;
+  
   return 0;
 }
 
 static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, uint8_t *pcm_base, uint32_t pcm_size) {
   uint32_t pcm_off = 0;
+  
   for (int s = 0; s < m->nsmp; s++) {
-    uint32_t hoff = m->orders[256 + 99 + s];
+    uint32_t hoff = m->orders[256 + s];
     if (hoff == 0) {
       m->smp[s].data = NULL;
       m->smp[s].len = 0;
       continue;
     }
     hoff *= 16;
-    if (hoff + 80 > size) {
+    if (hoff + 32 > size) {
       s3m_error("S3M sample header truncated");
       return -1;
     }
-    s3m_samphdr_t h;
-    h.type = read8(buf, hoff, size);
-    h.vol = read8(buf, hoff + 13, size);
-    h.length = read16le(buf, hoff + 14, size);
-    h.loopbeg = read16le(buf, hoff + 16, size);
-    h.loopend = read16le(buf, hoff + 18, size);
-    h.pack = read8(buf, hoff + 20, size);
-    h.attr = read8(buf, hoff + 21, size);
     
-    if (h.type == 2) {
+    uint8_t type = read8(buf, hoff, size);
+    
+    if (type == 2) {
       s3m_error("S3M AdLib not supported");
       return -1;
     }
-    if (h.type != 1) {
+    if (type != 1) {
       m->smp[s].data = NULL;
       m->smp[s].len = 0;
       continue;
     }
     
-    uint32_t memseg = read32le(buf, hoff + 12, size);
+    // memseg at +13-15 (3 bytes, little-endian) - paragraph address
+    uint32_t memseg = read8(buf, hoff + 13, size) | 
+                      (read8(buf, hoff + 14, size) << 8) | 
+                      (read8(buf, hoff + 15, size) << 16);
     uint32_t doff = memseg * 16;
     
-    m->smp[s].len = h.length * ((h.attr & 4) ? 2 : 1);
-    m->smp[s].vol = h.vol;
-    m->smp[s].flags = (h.attr & 1) ? 1 : 0;  // loop
-    m->smp[s].flags |= (h.attr & 2) ? 4 : 0;  // 16-bit
-    m->smp[s].flags |= (h.attr & 8) ? 2 : 0;  // stereo (not typical in S3M)
+    // length at +16 u32
+    uint32_t length = read32le(buf, hoff + 16, size);
+    // loopbeg at +20 u16
+    uint16_t loopbeg = read16le(buf, hoff + 20, size);
+    // loopend at +24 u16
+    uint16_t loopend = read16le(buf, hoff + 24, size);
+    // volume at +28
+    uint8_t vol = read8(buf, hoff + 28, size);
+    // flags at +31
+    uint8_t flags = read8(buf, hoff + 31, size);
+    // pan at +29
+    uint8_t pan = read8(buf, hoff + 29, size);
+    
+    m->smp[s].len = length;
+    m->smp[s].vol = vol;
+    m->smp[s].flags = (flags & 1) ? 1 : 0;  // loop
     
     if (doff + m->smp[s].len > size) {
-      s3m_error("S3M sample data truncated");
-      return -1;
+      m->smp[s].data = NULL;
+      m->smp[s].len = 0;
+      continue;
     }
     
     if (pcm_off + m->smp[s].len > pcm_size) {
@@ -186,19 +217,20 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
     memcpy(pcm_base + pcm_off, buf + doff, m->smp[s].len);
     m->smp[s].data = pcm_base + pcm_off;
     
-    if (h.attr & 1) {
-      m->smp[s].loop_start = h.loopbeg * ((h.attr & 4) ? 2 : 1);
-      m->smp[s].loop_len = (h.loopend - h.loopbeg) * ((h.attr & 4) ? 2 : 1);
+    if (flags & 1) {
+      m->smp[s].loop_start = loopbeg;
+      m->smp[s].loop_len = loopend - loopbeg;
       if (m->smp[s].loop_start > m->smp[s].len) m->smp[s].loop_start = m->smp[s].len;
       if (m->smp[s].loop_start + m->smp[s].loop_len > m->smp[s].len)
         m->smp[s].loop_len = m->smp[s].len - m->smp[s].loop_start;
     }
     
-    uint8_t pan = read8(buf, hoff + 15, size);
     if (pan == 32) {
       m->smp[s].pan = 128;
-    } else {
+    } else if (pan & 0x80) {
       m->smp[s].pan = (pan & 0x0f) * 17;
+    } else {
+      m->smp[s].pan = 128;
     }
     
     pcm_off += m->smp[s].len;
@@ -235,39 +267,38 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   s3m_file = buf;
   s3m_file_size = size;
   
-  if (size < 0x30) { s3m_error("S3M too small"); return -1; }
+  if (size < 0x60) { s3m_error("S3M too small"); return -1; }
   if (memcmp(buf + 0x2c, "SCRM", 4)) { s3m_error("S3M invalid header"); return -1; }
   
   memcpy(s3m_mod.title, buf, 28);
   s3m_mod.title[28] = 0;
   
-  s3m_mod.chn = read8(buf, 32, size);
-  if (s3m_mod.chn > 32) s3m_mod.chn = 32;
-  s3m_mod.npat = read16le(buf, 34, size);
-  s3m_mod.nins = read16le(buf, 36, size);
-  s3m_mod.nsmp = read16le(buf, 38, size);
+  uint16_t ordnum = read16le(buf, 0x20, size);
+  uint16_t insnum = read16le(buf, 0x22, size);
+  uint16_t patnum = read16le(buf, 0x24, size);
   
-  if (s3m_mod.npat > 99 || s3m_mod.nins > 99 || s3m_mod.nsmp > 99) {
+  if (ordnum > 256 || insnum > 99 || patnum > 99) {
     s3m_error("S3M limits exceeded");
     return -1;
   }
   
-  for (int i = 0; i < 256; i++) s3m_mod.orders[i] = read8(buf, 96 + i, size);
+  s3m_mod.nins = insnum;
+  s3m_mod.npat = patnum;
+  s3m_mod.nsmp = insnum;
   
-  uint32_t ioff = 96 + 256;
-  for (int i = 0; i < s3m_mod.nins; i++) {
+  for (int i = 0; i < ordnum; i++) s3m_mod.orders[i] = read8(buf, 0x60 + i, size);
+  
+  uint32_t ioff = 0x60 + ordnum;
+  for (int i = 0; i < insnum; i++) {
     s3m_mod.orders[256 + i] = read16le(buf, ioff + i*2, size);
   }
   
-  uint32_t soff = ioff + s3m_mod.nins * 2;
-  for (int i = 0; i < s3m_mod.nsmp; i++) {
-    s3m_mod.orders[256 + 99 + i] = read16le(buf, soff + i*2, size);
+  uint32_t poff = ioff + insnum * 2;
+  for (int i = 0; i < patnum; i++) {
+    s3m_mod.orders[256 + 99 + i] = read16le(buf, poff + i*2, size);
   }
   
-  uint32_t poff = soff + s3m_mod.nsmp * 2;
-  for (int i = 0; i < s3m_mod.npat; i++) {
-    s3m_mod.orders[256 + 99 + 99 + i] = read16le(buf, poff + i*2, size);
-  }
+  s3m_mod.chn = 0;
   
   uint8_t *pcm_base = s3m_meta;
   uint32_t pcm_size = sizeof(s3m_meta);
@@ -309,28 +340,6 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   fm_set_max_mixed(32);
   
   return 0;
-}
-
-static s3m_cell_t s3m_decode_cell(const uint8_t *pat_data, uint32_t pat_len, uint32_t *pos) {
-  s3m_cell_t cell = {0, 0, 0, 0, 0};
-  if (*pos >= pat_len) return cell;
-  
-  uint8_t b = pat_data[(*pos)++];
-  if (!b) return cell;
-  
-  if (b & 0x20) {
-    if (*pos < pat_len) cell.note = pat_data[(*pos)++];
-    if (*pos < pat_len) cell.instr = pat_data[(*pos)++];
-  }
-  if (b & 0x40) {
-    if (*pos < pat_len) cell.vol = pat_data[(*pos)++];
-  }
-  if (b & 0x80) {
-    if (*pos < pat_len) cell.eff = pat_data[(*pos)++];
-    if (*pos < pat_len) cell.par = pat_data[(*pos)++];
-  }
-  
-  return cell;
 }
 
 static const uint32_t s3m_note_steps[12] = {
@@ -389,22 +398,74 @@ void s3m_fpga_service(void) {
       
       // Process next row
       if (m->row < 64) {
-        int pat_idx = m->orders[m->order];
-        if (pat_idx < 99 && m->pat[pat_idx].data) {
-          s3m_pattern_t *pat = &m->pat[pat_idx];
+        uint8_t ord_idx = m->orders[m->order];
+        if (ord_idx < 0xFF && ord_idx < m->npat && m->pat[ord_idx].data) {
+          s3m_pattern_t *pat = &m->pat[ord_idx];
           
-          for (int ch = 0; ch < m->chn; ch++) {
-            s3m_cell_t cell = s3m_decode_cell(pat->data, pat->len, &pat->pos);
+          // Reset pattern pos for new row
+          uint32_t row_pos = 0;
+          int row_count = 0;
+          uint32_t pos = 0;
+          
+          // Scan to current row
+          while (pos < pat->len && row_count <= m->row) {
+            uint32_t row_start = pos;
+            int channels_in_row = 0;
             
-            if (cell.note) s3m_note_on(m, ch, cell.note - 1, cell.instr, cell.vol);
-            if (cell.vol == 255) s3m_note_off(&m->vox[ch]);
+            while (pos < pat->len) {
+              uint8_t what = pat->data[pos++];
+              if (what == 0) break;
+              
+              uint8_t ch = what & 0x1f;
+              uint8_t mask = (pos < pat->len) ? pat->data[pos++] : 0;
+              
+              if (mask & 2) pos += 2;
+              if (mask & 4) pos++;
+              if (mask & 8) pos += 2;
+              
+              channels_in_row++;
+            }
             
-            // Handle effects: basic support
-            if (cell.eff) {
-              switch (cell.eff) {
-                case 'A': m->speed = cell.par; break;  // Axx: set speed
-                case 'T': m->bpm = cell.par; break;    // Txx: set BPM
-                case 'V': m->gvol = cell.par; break;   // Vxx: set global volume
+            if (row_count == m->row) {
+              row_pos = row_start;
+              break;
+            }
+            row_count++;
+          }
+          
+          // Decode cells at current row
+          pos = row_pos;
+          while (pos < pat->len) {
+            uint8_t what = pat->data[pos++];
+            if (what == 0) break;
+            
+            uint8_t ch = what & 0x1f;
+            uint8_t mask = (pos < pat->len) ? pat->data[pos++] : 0;
+            
+            uint8_t note = 0, instr = 0, vol = 0, eff = 0, par = 0;
+            
+            if (mask & 2) {
+              if (pos < pat->len) note = pat->data[pos++];
+              if (pos < pat->len) instr = pat->data[pos++];
+            }
+            if (mask & 4) {
+              if (pos < pat->len) vol = pat->data[pos++];
+            }
+            if (mask & 8) {
+              if (pos < pat->len) eff = pat->data[pos++];
+              if (pos < pat->len) par = pat->data[pos++];
+            }
+            
+            if (ch < m->chn) {
+              if (note) s3m_note_on(m, ch, note - 1, instr, vol);
+              if (vol == 255) s3m_note_off(&m->vox[ch]);
+              
+              if (eff) {
+                switch (eff) {
+                  case 'A': m->speed = par; break;
+                  case 'T': m->bpm = par; break;
+                  case 'V': m->gvol = par; break;
+                }
               }
             }
           }
