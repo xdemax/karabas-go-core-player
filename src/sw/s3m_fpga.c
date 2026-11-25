@@ -29,6 +29,7 @@ typedef struct {
   uint8_t memseg;
   uint16_t length, loopbeg, loopend;
   uint8_t vol, dsk, pack, attr;
+  uint8_t type;
 } s3m_samphdr_t;
 
 typedef struct {
