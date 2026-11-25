@@ -531,37 +531,159 @@ static uint32_t xm_dbg_us, xm_dbg_cycles, xm_dbg_pcycles, xm_dbg_ocycles, xm_dbg
 static int16_t fmout_resampled[512 * 2];
 static fm_voice_t fv[XM_CH];
 
+/* Gain + clamp + FIFO write for one output frame. Kept out of the sample loops as an
+ * inline function so the 48 kHz path has no per-sample branches. */
+static inline void emit_sample(int32_t l32, int32_t r32) {
+  const int32_t og = (X.chn > 8) ? (int32_t) ((X.vol * 3) >> 1) : (int32_t) X.vol;
+  int32_t l = (l32 * og) >> 6;
+  int32_t r = (r32 * og) >> 6;
+  if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
+  if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
+  int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+  if (al > X.peak_l) X.peak_l = al;
+  if (ar > X.peak_r) X.peak_r = ar;
+  X.last_l = l; X.last_r = r;
+  mixer_write((int16_t) l, (int16_t) r);
+}
+
 static void mix(int n) {
-  // The replayer still owns effects, envelopes and sample selection. The shared fastmix
-  // kernel only does the per-voice fixed-point resampling and accumulation.
+  // Channel-major: for each channel keep pos/step/gains in registers and add a block into the
+  // stereo accumulators. The accumulators are interleaved (L,R), and a block that does not reach
+  // the sample end takes the branch-free path. Above 28 active voices the quietest ones are
+  // skipped: a dense 32-channel section must not starve the 48 kHz FIFO.
   if (n > XM_MIXBUF) n = XM_MIXBUF;
-  fm_set_max_mixed(X.chn > 28 ? 28 : FM_MAX_VOICES);
-  for (int c = 0; c < X.chn; c++) {
-    xchan_t *ch = &X.ch[c];
-    fm_voice_t *v = &fv[c];
-    fm_voice_init(v);
-    if (!ch->active || (ch->lgain | ch->rgain) == 0) continue;
-    v->data = ch->data;
-    v->length = ch->len;
-    v->loop_start = ch->loop;
-    v->loop_end = ch->llen ? (ch->loop + ch->llen) : 0;
-    v->pos = ch->pos >> 16;
-    v->frac = ch->pos & 0xFFFF;
-    v->step = ch->step;
-    v->volume = ch->mix_vol;
-    v->pan = (int) ch->pan - 128;
-    int use_nearest = (X.rate < 48000) ? FM_NEAREST : 0;
-    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0) | use_nearest;
-  }
-  fm_mix(fmout, n, fv, X.chn);
-  for (int c = 0; c < X.chn; c++) {
-    xchan_t *ch = &X.ch[c];
-    if (fv[c].flags & FM_ACTIVE) {
-      ch->pos = (fv[c].pos << 16) | (fv[c].frac & 0xFFFF);
-      ch->active = 1;
-    } else if (ch->active) {
-      ch->active = 0;
+  for (int i = 0; i < n; i++) { mixbuf[2 * i] = 0; mixbuf[2 * i + 1] = 0; }
+
+  for (int c = 0; c < XM_CH; c++) mix_skip[c] = 0;
+  if (X.chn > 28) {
+    int order[XM_CH], cnt = 0;
+    for (int c = 0; c < X.chn; c++) {
+      xchan_t *p = &X.ch[c];
+      if (p->active && (p->lgain | p->rgain)) order[cnt++] = c;
     }
+    if (cnt > 28) {
+      for (int i = 1; i < cnt; i++) {
+        int v = order[i], g = X.ch[v].mix_vol, j = i - 1;
+        while (j >= 0 && X.ch[order[j]].mix_vol < g) { order[j + 1] = order[j]; j--; }
+        order[j + 1] = v;
+      }
+      for (int i = 28; i < cnt; i++) mix_skip[order[i]] = 1;
+    }
+  }
+#ifdef XM_PROFILE
+  int prof_active = 0;
+  for (int c = 0; c < X.chn; c++) {
+    xchan_t *p = &X.ch[c];
+    if (p->active && (p->lgain | p->rgain) && !mix_skip[c]) prof_active++;
+  }
+  xm_prof_chan_samples += (uint64_t) prof_active * n;
+  if ((uint32_t) prof_active > xm_prof_peak_chan) xm_prof_peak_chan = prof_active;
+  xm_prof_blocks++;
+  uint32_t sec = xm_prof_out_samples / 48000u;
+  if (sec < XM_PROF_SEC) {
+    xm_prof_sec_chan_samples[sec] += (uint64_t) prof_active * n;
+    xm_prof_sec_samples[sec] += (uint32_t) n;
+    if ((uint32_t) prof_active > xm_prof_sec_peak[sec]) xm_prof_sec_peak[sec] = prof_active;
+  }
+  xm_prof_out_samples += (uint32_t) n;
+#endif
+
+  for (int c = 0; c < X.chn; c++) {
+    xchan_t *ch = &X.ch[c];
+    int lg = ch->lgain, rg = ch->rgain;
+    if (!ch->active || (lg | rg) == 0) continue;
+    uint32_t pos = ch->pos, step = ch->step, end = ch->end, loop = ch->loop, llen = ch->llen;
+    if (mix_skip[c]) {
+      // A voice dropped by the limiter still has to keep its sample position for the next block.
+      for (int i = 0; i < n; i++) {
+        uint32_t idx = pos >> 16;
+        if (idx >= end) {
+          if (!llen) { ch->active = 0; break; }
+          uint32_t over = idx - end;
+          if (over >= llen) over %= llen;
+          pos = ((loop + over) << 16) | (pos & 0xFFFF);
+        }
+        pos += step;
+      }
+      ch->pos = pos;
+      continue;
+    }
+    const uint8_t *data = ch->data;
+    uint64_t last = (uint64_t) pos + (uint64_t) step * (uint32_t) (n - 1);
+    if ((last >> 16) < end) {
+      int i = 0;
+      if (X.interp) {
+        for (; i + 1 < n; i += 2) {
+          uint32_t idx0 = pos >> 16;
+          uint32_t fr0 = (pos >> 8) & 0xFFu;
+          int a0 = (int8_t) data[idx0];
+          int b0 = (idx0 + 1 < end) ? (int8_t) data[idx0 + 1] : a0;
+          int s = a0 + (((b0 - a0) * (int32_t) fr0) >> 8);
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+          uint32_t idx1 = pos >> 16;
+          uint32_t fr1 = (pos >> 8) & 0xFFu;
+          int a1 = (int8_t) data[idx1];
+          int b1 = (idx1 + 1 < end) ? (int8_t) data[idx1 + 1] : a1;
+          s = a1 + (((b1 - a1) * (int32_t) fr1) >> 8);
+          mixbuf[2 * i + 2] += (s * lg) >> 8;
+          mixbuf[2 * i + 3] += (s * rg) >> 8;
+          pos += step;
+        }
+        if (i < n) {
+          uint32_t idx0 = pos >> 16;
+          uint32_t fr0 = (pos >> 8) & 0xFFu;
+          int a0 = (int8_t) data[idx0];
+          int b0 = (idx0 + 1 < end) ? (int8_t) data[idx0 + 1] : a0;
+          int s = a0 + (((b0 - a0) * (int32_t) fr0) >> 8);
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+        }
+      } else {
+        for (; i + 1 < n; i += 2) {
+          int s = (int8_t) data[pos >> 16];
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+          s = (int8_t) data[pos >> 16];
+          mixbuf[2 * i + 2] += (s * lg) >> 8;
+          mixbuf[2 * i + 3] += (s * rg) >> 8;
+          pos += step;
+        }
+        if (i < n) {
+          int s = (int8_t) data[pos >> 16];
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+        }
+      }
+    } else {
+      for (int i = 0; i < n; i++) {
+        uint32_t idx = pos >> 16;
+        if (idx >= end) {
+          if (!llen) { ch->active = 0; break; }
+          uint32_t over = idx - end;
+          if (over >= llen) over %= llen;
+          pos = ((loop + over) << 16) | (pos & 0xFFFF);
+          idx = loop + over;
+        }
+        int s;
+        if (X.interp) {
+          uint32_t fr = (pos >> 8) & 0xFFu;
+          int a = (int8_t) data[idx];
+          int b = (idx + 1 < end) ? (int8_t) data[idx + 1] : a;
+          s = a + (((b - a) * (int32_t) fr) >> 8);
+        } else {
+          s = (int8_t) data[idx];
+        }
+        mixbuf[2 * i] += (s * lg) >> 8;
+        mixbuf[2 * i + 1] += (s * rg) >> 8;
+        pos += step;
+      }
+    }
+    ch->pos = pos;
   }
 }
 
@@ -579,52 +701,28 @@ void fpga_xm_service(void) {
     }
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
-    uint32_t t0 = R_CYCLES;
     mix(n);
-    xm_dbg_pcycles += (uint32_t) (R_CYCLES - t0);
-    t0 = R_CYCLES;
     
-    const int16_t *outp;
-    int out_count;
     if (X.rate == 48000 || X.rate == 0) {
-      /* No resampling: use the mix buffer directly. Calling rs_frame per sample was pure
-       * overhead (it returns its input at 48 kHz) - a call and a branch for every sample. */
-      outp = fmout;
-      out_count = n;
+      /* No resampling: the mix buffer goes straight out (calling rs_frame per sample was
+       * pure overhead at 48 kHz: a call and a branch for every sample). */
+      for (int i = 0; i < n; i++)
+        emit_sample(mixbuf[2 * i], mixbuf[2 * i + 1]);
     } else {
-      out_count = 0;
+      int out_count = 0;
       for (int i = 0; i < n && out_count < 512; i++) {
-        int16_t l = fmout[2 * i];
-        int16_t r = fmout[2 * i + 1];
+        int16_t l = (int16_t) mixbuf[2 * i];
+        int16_t r = (int16_t) mixbuf[2 * i + 1];
         int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
         out_count += nout;
       }
-      outp = fmout_resampled;
+      for (int i = 0; i < out_count; i++)
+        emit_sample(fmout_resampled[2 * i], fmout_resampled[2 * i + 1]);
     }
     
-    for (int i = 0; i < out_count; i++) {
-      // Gain calibrated against libopenmpt: doubling (the old >8ch hack) made dense
-      // modules 1.5-2x louder than the reference and clipped; x1.5 matches within ~15 %.
-      int32_t og = (X.chn > 8) ? (int32_t) ((X.vol * 3) >> 1) : (int32_t) X.vol;
-      int32_t l = ((int32_t)outp[2 * i] * og) >> 6;
-      int32_t r = ((int32_t)outp[2 * i + 1] * og) >> 6;
-      if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
-      if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
-      int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
-      if (al > X.peak_l) X.peak_l = al;
-      if (ar > X.peak_r) X.peak_r = ar;
-      X.last_l = l; X.last_r = r;
-      mixer_write((int16_t) l, (int16_t) r);
-    }
-    
-    xm_dbg_ocycles += (uint32_t) (R_CYCLES - t0);
     free -= n;
     X.tleft -= n;
-    if (X.tleft <= 0) {
-      uint32_t tt = R_CYCLES;
-      next_tick();
-      xm_dbg_tcycles += (uint32_t) (R_CYCLES - tt);
-    }
+    if (X.tleft <= 0) next_tick();
   }
 
 #ifdef IT_PROFILE
@@ -639,10 +737,6 @@ void fpga_xm_service(void) {
      * otherwise a late service call makes the number exceed 100 %. */
     if (!dt) dt = 1;
     uint32_t pct = (uint32_t) ((uint64_t) xm_dbg_cycles * 100u / ((uint64_t) dt * 75u));
-    uint32_t m = xm_dbg_cycles
-        ? (uint32_t) ((uint64_t) xm_dbg_pcycles * 100u / xm_dbg_cycles) : 0;
-    uint32_t o = xm_dbg_cycles
-        ? (uint32_t) ((uint64_t) xm_dbg_ocycles * 100u / xm_dbg_cycles) : 0;
     {
       char *q = xm_dbg;
       q = dbg_u(q, (uint32_t) voices);
@@ -650,16 +744,7 @@ void fpga_xm_service(void) {
       q = dbg_u(q, (uint32_t) X.chn);
       *q++ = 'v'; *q++ = ' ';
       q = dbg_u(q, pct);
-      *q++ = '%'; *q++ = ' ';
-      *q++ = 'm';
-      q = dbg_u(q, m);
-      *q++ = ' ';
-      *q++ = 'o';
-      q = dbg_u(q, o);
-      *q++ = ' ';
-      *q++ = 't';
-      q = dbg_u(q, xm_dbg_cycles
-          ? (uint32_t) ((uint64_t) xm_dbg_tcycles * 100u / xm_dbg_cycles) : 0);
+      *q++ = '%';
       *q = 0;
     }
     xm_dbg_cycles = 0;

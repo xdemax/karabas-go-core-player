@@ -42,7 +42,7 @@ static int osd_raw = -1;
 static char mix_msg[40];
 static int log_enabled;          /* the log is written only if L was held at start */
 static char dbg_all[48];
-static uint32_t ui_cyc, ui_us, ui_pct, ui_prev_after;
+
 static uint32_t mix_t0, mix_w0;
 
 static const int osd_vol[16] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 64 };
@@ -87,14 +87,7 @@ static void view_fill(int audio) {
     if (!d || !d[0]) d = fpga_xm_debug();
     if (d && d[0]) {
       char *q = dbg_all;
-      while (*d && q < dbg_all + (int) sizeof(dbg_all) - 8) *q++ = *d++;
-      *q++ = ' '; *q++ = 'u';
-      {
-        char t[10]; int n = 0; uint32_t v = ui_pct;
-        if (!v) t[n++] = '0';
-        while (v) { t[n++] = (char) ('0' + (v % 10u)); v /= 10u; }
-        while (n) *q++ = t[--n];
-      }
+      while (*d && q < dbg_all + (int) sizeof(dbg_all) - 1) *q++ = *d++;
       *q = 0;
       V.debug = dbg_all;
     } else V.debug = "";
@@ -418,20 +411,7 @@ void player_run(void) {
                           (uint8_t) k1, (uint8_t) (k1 >> 8), (uint8_t) (k1 >> 16) };
       for (int i = 0; i < 6; i++) if (keys[i] == K_F12) core_reset();
     }
-    {
-      /* everything outside the audio service: UI, browser, SD, key handling */
-      uint32_t now = R_CYCLES;
-      if (ui_prev_after) ui_cyc += now - ui_prev_after;
-      fmt_service();
-      ui_prev_after = R_CYCLES;
-      if ((uint32_t) (R_US - ui_us) >= 1000000u) {
-        uint32_t dt = (uint32_t) (R_US - ui_us);
-        ui_us = R_US;
-        if (!dt) dt = 1;
-        ui_pct = (uint32_t) ((uint64_t) ui_cyc * 100u / ((uint64_t) dt * 75u));
-        ui_cyc = 0;
-      }
-    }
+    fmt_service();
     if (playing && fmt_volume() != volume_setting) fmt_set_volume(volume_setting);
     raw = (int) (R_SW & 0xFF);
     if (raw != osd_raw && raw < 16) {
