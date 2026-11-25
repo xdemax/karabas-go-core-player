@@ -61,7 +61,14 @@ static int keep_on = 0, keep_x0, keep_y0, keep_x1, keep_y1;
 void gfx_keep(int x, int y, int w, int h) { keep_on = 1; keep_x0 = x; keep_y0 = y; keep_x1 = x + w; keep_y1 = y + h; }
 void gfx_keep_off(void) { keep_on = 0; }
 
+/* A clip rectangle: text is drawn only inside it (both edges), unlike gfx_keep which masks
+ * one rectangle out. */
+static int clip_on = 0, clip_x0, clip_y0, clip_x1, clip_y1;
+void gfx_clip(int x, int y, int w, int h) { clip_on = 1; clip_x0 = x; clip_y0 = y; clip_x1 = x + w; clip_y1 = y + h; }
+void gfx_clip_off(void) { clip_on = 0; }
+
 static inline void pset(int x, int y, uint8_t c) {
+  if (clip_on && (x < clip_x0 || x >= clip_x1 || y < clip_y0 || y >= clip_y1)) return;
   if (keep_on && x >= keep_x0 && x < keep_x1 && y >= keep_y0 && y < keep_y1) return;
   if ((unsigned) x < FB_W && (unsigned) y < FB_H) fb[y * FB_W + x] = c;
 }

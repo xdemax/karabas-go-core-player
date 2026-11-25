@@ -175,10 +175,11 @@ static void draw_row(const player_view_t *v, int k) {
   int off = (k == v->sel && w > avail) ? marq_off : 0;
   if (off > w - avail) off = w - avail;
   if (off > 0) {
-    // Keep the size column and the panel clean while the long name slides.
-    gfx_keep(NAME_X + avail, y - 2, FB_W - (NAME_X + avail), rh + 2);   /* protect the size column AND the right panel */
+    // The name slides inside its own viewport: clip on both edges, so it never runs into
+    // the selection border on the left or the size column / right panel on the right.
+    gfx_clip(NAME_X, y - 2, avail, rh + 4);
     gfx_text_left(lf, NAME_X - off, y + rh / 2, nm, r_text);
-    gfx_keep_off();
+    gfx_clip_off();
   } else {
     char fit[FS_NAME_MAX + 2];
     fit_px(fit, (int) sizeof(fit), nm, lf, avail);
