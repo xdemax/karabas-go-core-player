@@ -63,6 +63,9 @@ typedef struct {
   int vol, paused;
   int32_t last_l, last_r, peak_l, peak_r;
   uint8_t vu[FMT_CHANNELS];
+  uint32_t rate;
+  uint32_t rs_acc, rs_prev_l, rs_prev_r;
+  int rs_initialized;
 } xm_t;
 
 static xm_t X;
@@ -116,6 +119,10 @@ static uint32_t le32(const uint8_t *p) {
   return (uint32_t) p[0] | ((uint32_t) p[1] << 8) | ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24);
 }
 
+static uint32_t get_base_step(uint32_t rate) {
+  return (uint32_t) (((uint64_t) 11418 * 48000) / rate);
+}
+
 static void set_error(const char *s) {
   int i = 0;
   for (; s[i] && i < (int) sizeof(X.err) - 1; i++) X.err[i] = s[i];
@@ -128,7 +135,8 @@ static uint32_t note_step(int note0, int ft) {
   if (note0 > 119) note0 = 119;
   int oct = note0 / 12;
   int rem = note0 % 12;
-  uint32_t s = (uint32_t) (((uint64_t) 11418 * semi12[rem]) >> 16);
+  uint32_t base = get_base_step(X.rate);
+  uint32_t s = (uint32_t) (((uint64_t) base * semi12[rem]) >> 16);
   if (oct >= 4) s <<= (oct - 4);
   else s >>= (4 - oct);
   // 2^(ft/1536), ft = -128..127, linearly between the 1/128 semitone points
@@ -501,6 +509,7 @@ static void next_tick(void) {
 }
 
 static int16_t fmout[XM_MIXBUF * 2];
+static int16_t fmout_resampled[512 * 2];
 static fm_voice_t fv[XM_CH];
 
 static void mix(int n) {
@@ -522,7 +531,8 @@ static void mix(int n) {
     v->step = ch->step;
     v->volume = ch->mix_vol;
     v->pan = (int) ch->pan - 128;
-    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0) | (X.chn > 16 ? FM_NEAREST : 0);
+    int use_nearest = (X.rate < 48000) ? FM_NEAREST : 0;
+    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0) | use_nearest;
   }
   fm_mix(fmout, n, fv, X.chn);
   for (int c = 0; c < X.chn; c++) {
@@ -534,18 +544,6 @@ static void mix(int n) {
       ch->active = 0;
     }
   }
-  int og = X.vol << (X.chn > 8 ? 1 : 0);
-  for (int i = 0; i < n; i++) {
-    int32_t l = (fmout[2 * i] * og) >> 6;
-    int32_t r = (fmout[2 * i + 1] * og) >> 6;
-    if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
-    if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
-    int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
-    if (al > X.peak_l) X.peak_l = al;
-    if (ar > X.peak_r) X.peak_r = ar;
-    X.last_l = l; X.last_r = r;
-    mixer_write((int16_t) l, (int16_t) r);
-  }
 }
 
 void fpga_xm_service(void) {
@@ -556,6 +554,45 @@ void fpga_xm_service(void) {
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
     mix(n);
+    
+    int out_count = 0;
+    if (X.rate == 48000 || X.rate == 0) {
+      for (int i = 0; i < n && out_count < 512; i++) {
+        fmout_resampled[2 * out_count] = fmout[2 * i];
+        fmout_resampled[2 * out_count + 1] = fmout[2 * i + 1];
+        out_count++;
+      }
+    } else {
+      uint32_t step = (X.rate << 16) / 48000u;
+      for (int i = 0; i < n; i++) {
+        int32_t l = fmout[2 * i];
+        int32_t r = fmout[2 * i + 1];
+        if (!X.rs_initialized) {
+          X.rs_prev_l = l; X.rs_prev_r = r; X.rs_acc = 0; X.rs_initialized = 1;
+        }
+        while (X.rs_acc < 65536u && out_count < 512) {
+          int32_t ol = X.rs_prev_l + (int32_t)(((int64_t)(l - X.rs_prev_l) * (int32_t)X.rs_acc) >> 16);
+          int32_t or_ = X.rs_prev_r + (int32_t)(((int64_t)(r - X.rs_prev_r) * (int32_t)X.rs_acc) >> 16);
+          fmout_resampled[2 * out_count] = (int16_t)ol;
+          fmout_resampled[2 * out_count + 1] = (int16_t)or_;
+          out_count++;
+          X.rs_acc += step;
+        }
+        X.rs_acc -= 65536u;
+        X.rs_prev_l = l; X.rs_prev_r = r;
+      }
+    }
+    
+    for (int i = 0; i < out_count; i++) {
+      int32_t l = fmout_resampled[2 * i];
+      int32_t r = fmout_resampled[2 * i + 1];
+      int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+      if (al > X.peak_l) X.peak_l = al;
+      if (ar > X.peak_r) X.peak_r = ar;
+      X.last_l = l; X.last_r = r;
+      mixer_write((int16_t) l, (int16_t) r);
+    }
+    
     free -= n;
     X.tleft -= n;
     if (X.tleft <= 0) next_tick();
@@ -581,6 +618,8 @@ static int parse_xm(uint32_t size) {
   if (X.song < 1 || X.song > 256) X.song = 1;
   if (X.restart < 0 || X.restart >= X.song) X.restart = 0;
   if (X.chn < 1 || X.chn > XM_CH) X.chn = XM_CH;
+  // Per-file rate based on channel count
+  X.rate = X.chn <= 16 ? 48000 : 32000;
   // Linear interpolation is a quality win, but a dense 32-channel XM needs the nearest-sample
   // path to keep the 48 kHz FIFO alive. Keep interpolation for normal-width modules.
   X.interp = X.chn <= 16;
@@ -677,6 +716,8 @@ static int parse_xm(uint32_t size) {
   X.vol = 64;
   X.paused = 0;
   X.peak_l = X.peak_r = 0;
+  X.rs_acc = X.rs_prev_l = X.rs_prev_r = 0;
+  X.rs_initialized = 0;
   memset(X.vu, 0, sizeof(X.vu));
   parse_row();
   for (int c = 0; c < X.chn; c++) {
@@ -720,7 +761,14 @@ int fpga_xm_start(const play_src_t *src, uint32_t size, play_progress_t progress
   return parse_xm(size);
 }
 
-void fpga_xm_stop(void) { X.active = 0; X.ended = 0; X.paused = 0; }
+void fpga_xm_stop(void) {
+  X.active = 0;
+  X.ended = 0;
+  X.paused = 0;
+  X.rs_acc = 0;
+  X.rs_prev_l = X.rs_prev_r = 0;
+  X.rs_initialized = 0;
+}
 int fpga_xm_active(void) { return X.active; }
 int fpga_xm_finished(void) { return X.ended; }
 const char *fpga_xm_error(void) { return X.err; }
@@ -768,5 +816,10 @@ int fpga_xm_set_volume(int v) {
 int fpga_xm_pause(int on) {
   if (on < 0) X.paused = !X.paused;
   else X.paused = on ? 1 : 0;
+  if (X.paused) {
+    X.rs_acc = 0;
+    X.rs_prev_l = X.rs_prev_r = 0;
+    X.rs_initialized = 0;
+  }
   return X.paused;
 }
