@@ -142,6 +142,7 @@ static void update_view(void) {
 
 // While a list key repeats, only the list changes: no audio analysis, no player panel.
 static void update_list_view(void) {
+  V.font_step = font_step;          /* the list is redrawn without update_view() */
   view_fill(0);
   if (skin_current()->list) skin_current()->list(&V);
   else skin_current()->update(&V);

@@ -190,3 +190,5 @@ int main(void) {
   dump("frame");
   return 0;
 }
+
+const char *fpga_xm_debug(void) { return ""; }

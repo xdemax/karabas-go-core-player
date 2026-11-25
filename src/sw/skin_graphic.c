@@ -146,6 +146,16 @@ static void reset_marquee(void) {
 
 int ui_list_rows(void) { return (FB_H - LIST_Y - FOOT_H) / list_row_h(); }
 
+/* Fit a name into a pixel width (not a character count): with the larger list font a fixed
+ * character limit still ran past the panel edge. */
+static void fit_px(char *dst, int n, const char *src, const font_t *f, int maxw) {
+  int len = (int) strlen(src);
+  if (len > n - 1) len = n - 1;
+  memcpy(dst, src, (size_t) len);
+  dst[len] = 0;
+  while (len > 0 && gfx_text_width(f, dst) > maxw) dst[--len] = 0;
+}
+
 static void draw_row(const player_view_t *v, int k) {
   if (k < v->top || k >= v->top + ROWS) return;
   int r = k - v->top;
@@ -171,8 +181,8 @@ static void draw_row(const player_view_t *v, int k) {
     gfx_text_left(lf, NAME_X - off, y + rh / 2, nm, r_text);
     gfx_keep_off();
   } else {
-    char fit[40];
-    copy_fit(fit, nm, 34);
+    char fit[FS_NAME_MAX + 2];
+    fit_px(fit, (int) sizeof(fit), nm, lf, avail);
     gfx_text_left(lf, NAME_X, y + rh / 2, fit, r_text);
   }
   if (!e->dir) {
