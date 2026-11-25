@@ -569,7 +569,9 @@ void fpga_xm_service(void) {
     }
     
     for (int i = 0; i < out_count; i++) {
-      int32_t og = (int32_t)X.vol << (X.chn > 8 ? 1 : 0);
+      // Gain calibrated against libopenmpt: doubling (the old >8ch hack) made dense
+      // modules 1.5-2x louder than the reference and clipped; x1.5 matches within ~15 %.
+      int32_t og = (X.chn > 8) ? (int32_t) ((X.vol * 3) >> 1) : (int32_t) X.vol;
       int32_t l = ((int32_t)fmout_resampled[2 * i] * og) >> 6;
       int32_t r = ((int32_t)fmout_resampled[2 * i + 1] * og) >> 6;
       if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
