@@ -40,6 +40,7 @@ static int spectrum_on = 1;
 #ifndef LIST_FONT_DEFAULT
 #define LIST_FONT_DEFAULT 0       /* the host build overrides this to render other sizes */
 #endif
+#define LIST_FONT_STEPS 8         /* f26 f27 f28 f29 f30 f32 f34 f36 */
 static int font_step = LIST_FONT_DEFAULT;   /* Shift+= / Shift+- change the file list font */
 static int volume_setting = 64;
 static int osd_raw = -1;
@@ -317,7 +318,7 @@ static void key(key_ev_t *e) {
     }
     case K_MINUS: case K_EQUAL: {
       if (e->shift) {                       /* Shift+= / Shift+- : file list font */
-        if (e->key == K_EQUAL) { if (font_step < 4) font_step++; }
+        if (e->key == K_EQUAL) { if (font_step < LIST_FONT_STEPS - 1) font_step++; }
         else { if (font_step > 0) font_step--; }
         update_list_view();
         return;
@@ -353,6 +354,10 @@ static void key(key_ev_t *e) {
 
 /* The session log is opt-in at boot: hold L while the core starts. */
 static void detect_log_key(void) {
+#ifdef HOST
+  log_enabled = 0;              /* the host build has no clock to wait on */
+  return;
+#endif
   uint32_t t0 = R_US;
   int seen = 0;
   while ((uint32_t) (R_US - t0) < 700000u) {

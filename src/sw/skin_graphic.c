@@ -22,11 +22,12 @@
 #define LIST_Y  88
 #define ROW_H   38
 /* File list font ladder: Shift+= makes it bigger, Shift+- smaller (fonts are discrete). */
-static const font_t *const list_fonts[] = { &f26, &f27, &f28, &f29, &f30 };
-static const int list_rows_h[] = { 38, 39, 40, 41, 42 };
+#define LIST_FONT_STEPS 8
+static const font_t *const list_fonts[] = { &f26, &f27, &f28, &f29, &f30, &f32, &f34, &f36 };
+static const int list_rows_h[] = { 38, 39, 40, 41, 42, 45, 47, 50 };
 static int cur_font_step;
-static const font_t *list_font(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > 4) s = 4; return list_fonts[s]; }
-static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > 4) s = 4; return list_rows_h[s]; }
+static const font_t *list_font(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > LIST_FONT_STEPS - 1) s = LIST_FONT_STEPS - 1; return list_fonts[s]; }
+static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > LIST_FONT_STEPS - 1) s = LIST_FONT_STEPS - 1; return list_rows_h[s]; }
 
 #define PX      (RIGHT_X + 20)   // the right panel content: x = 420, width = 360
 #define PW      (RIGHT_W - 40)
