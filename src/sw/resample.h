@@ -12,7 +12,7 @@ typedef struct {
   int init;
 } rs_t;
 
-void rs_init(rs_t *r, uint32_t rate);
-int rs_frame(rs_t *r, int16_t l, int16_t r, int16_t out[2][2]);
+void rs_init(rs_t *rs, uint32_t rate);
+int rs_frame(rs_t *rs, int16_t l, int16_t r, int16_t out[2][2]);
 
 #endif

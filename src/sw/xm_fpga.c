@@ -802,9 +802,7 @@ int fpga_xm_pause(int on) {
   if (on < 0) X.paused = !X.paused;
   else X.paused = on ? 1 : 0;
   if (X.paused) {
-    X.rs_acc = 0;
-    X.rs_prev_l = X.rs_prev_r = 0;
-    X.rs_initialized = 0;
+    memset(&X.rs, 0, sizeof(X.rs));
   }
   return X.paused;
 }
