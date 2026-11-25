@@ -131,19 +131,19 @@ module VexRiscv (
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_2;
   wire                _zz_decode_LEGAL_INSTRUCTION_3;
   wire       [0:0]    _zz_decode_LEGAL_INSTRUCTION_4;
-  wire       [12:0]   _zz_decode_LEGAL_INSTRUCTION_5;
+  wire       [15:0]   _zz_decode_LEGAL_INSTRUCTION_5;
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_6;
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_7;
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_8;
   wire                _zz_decode_LEGAL_INSTRUCTION_9;
   wire       [0:0]    _zz_decode_LEGAL_INSTRUCTION_10;
-  wire       [6:0]    _zz_decode_LEGAL_INSTRUCTION_11;
+  wire       [9:0]    _zz_decode_LEGAL_INSTRUCTION_11;
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_12;
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_13;
   wire       [31:0]   _zz_decode_LEGAL_INSTRUCTION_14;
   wire                _zz_decode_LEGAL_INSTRUCTION_15;
   wire       [0:0]    _zz_decode_LEGAL_INSTRUCTION_16;
-  wire       [0:0]    _zz_decode_LEGAL_INSTRUCTION_17;
+  wire       [3:0]    _zz_decode_LEGAL_INSTRUCTION_17;
   wire       [3:0]    _zz__zz_IBusCachedPlugin_jump_pcLoad_payload_1;
   reg        [31:0]   _zz_IBusCachedPlugin_jump_pcLoad_payload_5;
   wire       [1:0]    _zz_IBusCachedPlugin_jump_pcLoad_payload_6;
@@ -206,127 +206,129 @@ module VexRiscv (
   wire                _zz__zz_decode_IS_CUSTOM_MIX_35;
   wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_36;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_37;
-  wire       [2:0]    _zz__zz_decode_IS_CUSTOM_MIX_38;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_38;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_39;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_40;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_41;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_41;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_42;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_43;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_44;
-  wire       [14:0]   _zz__zz_decode_IS_CUSTOM_MIX_45;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_46;
+  wire       [14:0]   _zz__zz_decode_IS_CUSTOM_MIX_43;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_44;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_45;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_46;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_47;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_48;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_49;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_48;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_49;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_50;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_51;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_52;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_53;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_54;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_51;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_52;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_53;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_54;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_55;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_56;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_57;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_58;
-  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_59;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_60;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_61;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_62;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_63;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_56;
+  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_57;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_58;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_59;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_60;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_61;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_62;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_63;
   wire                _zz__zz_decode_IS_CUSTOM_MIX_64;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_65;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_66;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_67;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_68;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_69;
-  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_70;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_71;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_66;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_67;
+  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_68;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_69;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_70;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_71;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_72;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_73;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_74;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_75;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_76;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_73;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_74;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_75;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_76;
   wire                _zz__zz_decode_IS_CUSTOM_MIX_77;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_78;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_79;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_80;
-  wire       [10:0]   _zz__zz_decode_IS_CUSTOM_MIX_81;
-  wire       [8:0]    _zz__zz_decode_IS_CUSTOM_MIX_82;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_83;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_84;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_85;
-  wire       [6:0]    _zz__zz_decode_IS_CUSTOM_MIX_86;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_87;
+  wire       [10:0]   _zz__zz_decode_IS_CUSTOM_MIX_79;
+  wire       [9:0]    _zz__zz_decode_IS_CUSTOM_MIX_80;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_81;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_82;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_83;
+  wire       [7:0]    _zz__zz_decode_IS_CUSTOM_MIX_84;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_85;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_86;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_87;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_88;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_89;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_90;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_91;
-  wire       [4:0]    _zz__zz_decode_IS_CUSTOM_MIX_92;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_93;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_94;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_89;
+  wire       [5:0]    _zz__zz_decode_IS_CUSTOM_MIX_90;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_91;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_92;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_93;
+  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_94;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_95;
-  wire       [2:0]    _zz__zz_decode_IS_CUSTOM_MIX_96;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_97;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_96;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_97;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_98;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_99;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_99;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_100;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_101;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_102;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_103;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_104;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_105;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_106;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_107;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_108;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_109;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_110;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_111;
-  wire       [7:0]    _zz__zz_decode_IS_CUSTOM_MIX_112;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_113;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_114;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_115;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_116;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_117;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_118;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_119;
-  wire       [5:0]    _zz__zz_decode_IS_CUSTOM_MIX_120;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_121;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_122;
-  wire       [6:0]    _zz__zz_decode_IS_CUSTOM_MIX_123;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_124;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_125;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_126;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_101;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_102;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_103;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_104;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_105;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_106;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_107;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_108;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_109;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_110;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_111;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_112;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_113;
+  wire       [7:0]    _zz__zz_decode_IS_CUSTOM_MIX_114;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_115;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_116;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_117;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_118;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_119;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_120;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_121;
+  wire       [5:0]    _zz__zz_decode_IS_CUSTOM_MIX_122;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_123;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_124;
+  wire       [6:0]    _zz__zz_decode_IS_CUSTOM_MIX_125;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_126;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_127;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_128;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_128;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_129;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_130;
-  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_131;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_132;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_133;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_134;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_130;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_131;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_132;
+  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_133;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_134;
   wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_135;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_136;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_137;
-  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_138;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_139;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_140;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_141;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_142;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_136;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_137;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_138;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_139;
+  wire       [3:0]    _zz__zz_decode_IS_CUSTOM_MIX_140;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_141;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_142;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_143;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_144;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_145;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_144;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_145;
   wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_146;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_147;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_148;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_149;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_150;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_151;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_152;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_153;
-  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_154;
-  wire                _zz__zz_decode_IS_CUSTOM_MIX_155;
-  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_156;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_157;
-  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_158;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_147;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_148;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_149;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_150;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_151;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_152;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_153;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_154;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_155;
+  wire       [1:0]    _zz__zz_decode_IS_CUSTOM_MIX_156;
+  wire                _zz__zz_decode_IS_CUSTOM_MIX_157;
+  wire       [0:0]    _zz__zz_decode_IS_CUSTOM_MIX_158;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_159;
+  wire       [31:0]   _zz__zz_decode_IS_CUSTOM_MIX_160;
   wire                _zz_RegFilePlugin_regFile_port;
   wire                _zz_decode_RegFilePlugin_rs1Data;
   wire                _zz_RegFilePlugin_regFile_port_1;
@@ -362,65 +364,49 @@ module VexRiscv (
   wire       [1:0]    _zz__zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code_1;
   wire       [1:0]    _zz__zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code_1_1;
   wire                _zz_when;
-  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16;
-  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_1;
-  wire       [15:0]   _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_2;
-  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_3;
-  wire       [15:0]   _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_4;
-  wire       [33:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp16_1;
-  wire       [18:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp16_2;
-  wire       [14:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp16_3;
-  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8;
-  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_1;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_2;
-  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_3;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_4;
-  wire       [26:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp8_1;
-  wire       [10:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp8_2;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_saved_product_mac;
-  wire       [28:0]   _zz_execute_CustomMixAluPlugin_saved_product_mac_1;
-  wire       [10:0]   _zz_execute_CustomMixAluPlugin_saved_product_mac_2;
-  wire       [10:0]   _zz_execute_CustomMixAluPlugin_saved_product_mac_3;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_hidden_s;
-  wire       [15:0]   _zz__zz_execute_CustomMixAluPlugin_rd;
-  wire       [18:0]   _zz__zz_execute_CustomMixAluPlugin_rd_1;
-  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_rd_1_1;
-  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_rd_1_2;
-  wire       [15:0]   _zz__zz_execute_CustomMixAluPlugin_rd_1_3;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_2;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_1;
-  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_2;
-  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_3;
-  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_4;
-  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_5;
+  wire       [15:0]   _zz__zz_execute_CustomMixAluPlugin_h_s0;
+  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_h_p;
+  wire       [15:0]   _zz__zz_execute_CustomMixAluPlugin_h_p_1;
+  wire       [32:0]   _zz_execute_CustomMixAluPlugin_h_p_2;
+  wire       [17:0]   _zz_execute_CustomMixAluPlugin_h_p_3;
+  wire       [14:0]   _zz_execute_CustomMixAluPlugin_h_p_4;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_1;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_2;
+  wire       [28:0]   _zz_execute_CustomMixAluPlugin_rd_3;
+  wire       [10:0]   _zz_execute_CustomMixAluPlugin_rd_4;
+  wire       [10:0]   _zz_execute_CustomMixAluPlugin_rd_5;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_6;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_7;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_8;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_9;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_10;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_11;
-  wire       [33:0]   _zz_execute_CustomMixAluPlugin_rd_12;
-  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_13;
-  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_14;
-  wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_15;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_16;
-  wire       [33:0]   _zz_execute_CustomMixAluPlugin_rd_17;
-  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_18;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_19;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_20;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_21;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_6;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_6_1;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7;
-  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8;
-  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_1;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_2;
-  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_rd_8_3;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_8_4;
-  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_5;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_6;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_7;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_8;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_9;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_10;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_12;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_13;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_14;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_15;
+  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_h_s08;
+  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_h_p8;
+  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_h_p8_1;
+  wire       [25:0]   _zz_execute_CustomMixAluPlugin_h_p8_2;
+  wire       [9:0]    _zz_execute_CustomMixAluPlugin_h_p8_3;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_h_s_4;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_h_s;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_1;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_1_1;
+  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_1_2;
+  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_1_3;
+  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_1_4;
+  wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_1_5;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_2;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3;
+  wire       [17:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3_1;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3_2;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3_3;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3_4;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3_5;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_h_s_3_6;
   wire       [19:0]   _zz__zz_execute_BranchPlugin_missAlignedTarget_2;
   wire       [11:0]   _zz__zz_execute_BranchPlugin_missAlignedTarget_4;
   wire       [31:0]   _zz__zz_execute_BranchPlugin_missAlignedTarget_6;
@@ -1109,39 +1095,27 @@ module VexRiscv (
   wire       [31:0]   execute_CustomMixAluPlugin_rs1;
   wire       [31:0]   execute_CustomMixAluPlugin_rs2;
   wire       [6:0]    execute_CustomMixAluPlugin_funct7;
+  reg        [15:0]   execute_CustomMixAluPlugin_h_frac;
+  reg        [31:0]   execute_CustomMixAluPlugin_h_p;
+  reg                 execute_CustomMixAluPlugin_h_neg;
+  reg        [17:0]   execute_CustomMixAluPlugin_h_s0;
+  reg        [31:0]   execute_CustomMixAluPlugin_h_p8;
+  reg                 execute_CustomMixAluPlugin_h_neg8;
+  reg        [9:0]    execute_CustomMixAluPlugin_h_s08;
+  reg        [17:0]   execute_CustomMixAluPlugin_h_s;
   reg        [31:0]   execute_CustomMixAluPlugin_rd;
-  reg        [15:0]   execute_CustomMixAluPlugin_hidden_frac;
-  reg        [17:0]   execute_CustomMixAluPlugin_hidden_s;
-  reg                 execute_CustomMixAluPlugin_busy;
-  reg        [31:0]   execute_CustomMixAluPlugin_saved_rs1;
-  reg        [31:0]   execute_CustomMixAluPlugin_saved_rs2;
-  reg        [6:0]    execute_CustomMixAluPlugin_saved_funct7;
-  reg        [31:0]   execute_CustomMixAluPlugin_saved_product_lerp16;
-  reg        [31:0]   execute_CustomMixAluPlugin_saved_product_lerp8;
-  reg        [31:0]   execute_CustomMixAluPlugin_saved_product_mac;
-  reg        [31:0]   execute_CustomMixAluPlugin_saved_sum_adv;
-  reg        [15:0]   execute_CustomMixAluPlugin_saved_frac;
-  reg        [0:0]    execute_CustomMixAluPlugin_saved_carry_adv;
-  wire                execute_CustomMixAluPlugin_is_lerp16;
-  wire                execute_CustomMixAluPlugin_is_mac;
-  wire                execute_CustomMixAluPlugin_is_lerp8;
-  wire                execute_CustomMixAluPlugin_is_adv;
-  wire                execute_CustomMixAluPlugin_is_advb;
-  wire                execute_CustomMixAluPlugin_is_multicycle;
-  wire                when_CustomMixAluPlugin_l101;
-  wire                when_CustomMixAluPlugin_l106;
-  wire       [18:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp16;
-  wire       [10:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp8;
-  wire       [16:0]   _zz_execute_CustomMixAluPlugin_saved_sum_adv;
-  wire       [17:0]   _zz_execute_CustomMixAluPlugin_rd;
-  wire                _zz_execute_CustomMixAluPlugin_rd_1;
-  wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_2;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_3;
-  wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_4;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_5;
-  wire                _zz_execute_CustomMixAluPlugin_rd_6;
-  wire       [23:0]   _zz_execute_CustomMixAluPlugin_rd_7;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_8;
+  wire       [17:0]   _zz_execute_CustomMixAluPlugin_h_s0;
+  wire       [17:0]   _zz_execute_CustomMixAluPlugin_h_p;
+  wire                _zz_execute_CustomMixAluPlugin_h_p_1;
+  wire       [16:0]   _zz_execute_CustomMixAluPlugin_h_frac;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_h_frac_1;
+  wire       [9:0]    _zz_execute_CustomMixAluPlugin_h_s08;
+  wire       [9:0]    _zz_execute_CustomMixAluPlugin_h_p8;
+  wire                _zz_execute_CustomMixAluPlugin_h_p8_1;
+  wire       [16:0]   _zz_execute_CustomMixAluPlugin_h_s;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_h_s_1;
+  wire       [23:0]   _zz_execute_CustomMixAluPlugin_h_s_2;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_h_s_3;
   wire                execute_BranchPlugin_eq;
   wire       [2:0]    switch_Misc_l245_2;
   reg                 _zz_execute_BRANCH_COND_RESULT;
@@ -1472,65 +1446,49 @@ module VexRiscv (
   assign _zz_memory_DivPlugin_rs2_1 = {31'd0, _zz_memory_DivPlugin_rs2_2};
   assign _zz__zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code_1 = (_zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code & (~ _zz__zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code_1_1));
   assign _zz__zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code_1_1 = (_zz_CsrPlugin_exceptionPortCtrl_exceptionContext_code - 2'b01);
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16 = ($signed(_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_1) - $signed(_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_3));
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_2 = execute_CustomMixAluPlugin_rs2[15 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_1 = {{2{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_2[15]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_2};
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_4 = execute_CustomMixAluPlugin_rs1[15 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_3 = {{2{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_4[15]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16_4};
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp16_1 = ((($signed(_zz_execute_CustomMixAluPlugin_saved_product_lerp16) < $signed(19'h0)) ? _zz_execute_CustomMixAluPlugin_saved_product_lerp16_2 : _zz_execute_CustomMixAluPlugin_saved_product_lerp16) * _zz_execute_CustomMixAluPlugin_saved_product_lerp16_3);
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp16_2 = (- _zz_execute_CustomMixAluPlugin_saved_product_lerp16);
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp16_3 = (execute_CustomMixAluPlugin_hidden_frac >>> 1'd1);
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8 = ($signed(_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_1) - $signed(_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_3));
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_2 = execute_CustomMixAluPlugin_rs2[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_1 = {{2{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_2[7]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_2};
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_4 = execute_CustomMixAluPlugin_rs1[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_3 = {{2{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_4[7]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8_4};
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp8_1 = ((($signed(_zz_execute_CustomMixAluPlugin_saved_product_lerp8) < $signed(11'h0)) ? _zz_execute_CustomMixAluPlugin_saved_product_lerp8_2 : _zz_execute_CustomMixAluPlugin_saved_product_lerp8) * execute_CustomMixAluPlugin_hidden_frac);
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp8_2 = (- _zz_execute_CustomMixAluPlugin_saved_product_lerp8);
-  assign _zz_execute_CustomMixAluPlugin_saved_product_mac_1 = ($signed(execute_CustomMixAluPlugin_hidden_s) * $signed(_zz_execute_CustomMixAluPlugin_saved_product_mac_2));
-  assign _zz_execute_CustomMixAluPlugin_saved_product_mac = {{3{_zz_execute_CustomMixAluPlugin_saved_product_mac_1[28]}}, _zz_execute_CustomMixAluPlugin_saved_product_mac_1};
-  assign _zz_execute_CustomMixAluPlugin_saved_product_mac_2 = _zz_execute_CustomMixAluPlugin_saved_product_mac_3;
-  assign _zz_execute_CustomMixAluPlugin_saved_product_mac_3 = (execute_CustomMixAluPlugin_rs2[18 : 0] >>> 4'd8);
-  assign _zz_execute_CustomMixAluPlugin_hidden_s = execute_CustomMixAluPlugin_rs1[15 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd = execute_CustomMixAluPlugin_saved_rs1[15 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_1_1 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_1_2) - $signed(_zz_execute_CustomMixAluPlugin_rd));
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_1 = {{1{_zz__zz_execute_CustomMixAluPlugin_rd_1_1[17]}}, _zz__zz_execute_CustomMixAluPlugin_rd_1_1};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_1_3 = execute_CustomMixAluPlugin_saved_rs2[15 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_1_2 = {{2{_zz__zz_execute_CustomMixAluPlugin_rd_1_3[15]}}, _zz__zz_execute_CustomMixAluPlugin_rd_1_3};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_2 = (execute_CustomMixAluPlugin_saved_product_lerp16 + (_zz_execute_CustomMixAluPlugin_rd_1 ? 32'h00007fff : 32'h0));
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_3 = {{14{_zz_execute_CustomMixAluPlugin_rd[17]}}, _zz_execute_CustomMixAluPlugin_rd};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_3_2 = (_zz_execute_CustomMixAluPlugin_rd_1 ? _zz__zz_execute_CustomMixAluPlugin_rd_3_3 : _zz__zz_execute_CustomMixAluPlugin_rd_3_5);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_3_1 = {{15{_zz__zz_execute_CustomMixAluPlugin_rd_3_2[16]}}, _zz__zz_execute_CustomMixAluPlugin_rd_3_2};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_3_3 = (- _zz__zz_execute_CustomMixAluPlugin_rd_3_4);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_3_4 = _zz_execute_CustomMixAluPlugin_rd_2;
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_3_5 = _zz_execute_CustomMixAluPlugin_rd_2;
-  assign _zz_execute_CustomMixAluPlugin_rd_9 = ($signed(_zz_execute_CustomMixAluPlugin_rd_10) + $signed(_zz_execute_CustomMixAluPlugin_rd_11));
-  assign _zz_execute_CustomMixAluPlugin_rd_10 = execute_CustomMixAluPlugin_saved_rs1;
-  assign _zz_execute_CustomMixAluPlugin_rd_11 = execute_CustomMixAluPlugin_saved_product_mac;
-  assign _zz_execute_CustomMixAluPlugin_rd_12 = ({1'b0,_zz_execute_CustomMixAluPlugin_rd_13} + _zz_execute_CustomMixAluPlugin_rd_17);
-  assign _zz_execute_CustomMixAluPlugin_rd_13 = ({1'b0,execute_CustomMixAluPlugin_saved_rs1} + _zz_execute_CustomMixAluPlugin_rd_14);
-  assign _zz_execute_CustomMixAluPlugin_rd_15 = {1'b0,_zz_execute_CustomMixAluPlugin_rd_16};
-  assign _zz_execute_CustomMixAluPlugin_rd_14 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_15};
-  assign _zz_execute_CustomMixAluPlugin_rd_16 = (execute_CustomMixAluPlugin_saved_rs2 >>> 5'd16);
-  assign _zz_execute_CustomMixAluPlugin_rd_18 = {1'b0,(_zz_execute_CustomMixAluPlugin_rd_4[16] ? 32'h00000001 : 32'h0)};
-  assign _zz_execute_CustomMixAluPlugin_rd_17 = {1'd0, _zz_execute_CustomMixAluPlugin_rd_18};
-  assign _zz_execute_CustomMixAluPlugin_rd_19 = (execute_CustomMixAluPlugin_saved_rs1 - _zz_execute_CustomMixAluPlugin_rd_20);
-  assign _zz_execute_CustomMixAluPlugin_rd_21 = (execute_CustomMixAluPlugin_saved_rs2 >>> 5'd16);
-  assign _zz_execute_CustomMixAluPlugin_rd_20 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_21};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_6 = execute_CustomMixAluPlugin_saved_rs2[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_6_1 = execute_CustomMixAluPlugin_saved_rs1[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7 = (execute_CustomMixAluPlugin_saved_product_lerp8 + (_zz_execute_CustomMixAluPlugin_rd_6 ? 32'h000000ff : 32'h0));
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_8_1) + $signed(_zz__zz_execute_CustomMixAluPlugin_rd_8_5));
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_1 = ({8'd0,_zz__zz_execute_CustomMixAluPlugin_rd_8_2} <<< 4'd8);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_3 = {{2{_zz__zz_execute_CustomMixAluPlugin_rd_8_4[7]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_4};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_2 = {{22{_zz__zz_execute_CustomMixAluPlugin_rd_8_3[9]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_3};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_4 = execute_CustomMixAluPlugin_saved_rs1[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_6 = {{8{_zz__zz_execute_CustomMixAluPlugin_rd_8_7[23]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_7};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_5 = {{8{_zz__zz_execute_CustomMixAluPlugin_rd_8_6[31]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_6};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_7 = (_zz_execute_CustomMixAluPlugin_rd_6 ? _zz__zz_execute_CustomMixAluPlugin_rd_8_8 : _zz__zz_execute_CustomMixAluPlugin_rd_8_10);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_8 = (- _zz__zz_execute_CustomMixAluPlugin_rd_8_9);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_9 = _zz_execute_CustomMixAluPlugin_rd_7;
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_10 = _zz_execute_CustomMixAluPlugin_rd_7;
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s0 = execute_CustomMixAluPlugin_rs1[15 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_h_p_1 = execute_CustomMixAluPlugin_rs2[15 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_h_p = {{2{_zz__zz_execute_CustomMixAluPlugin_h_p_1[15]}}, _zz__zz_execute_CustomMixAluPlugin_h_p_1};
+  assign _zz_execute_CustomMixAluPlugin_h_p_2 = ((_zz_execute_CustomMixAluPlugin_h_p_1 ? _zz_execute_CustomMixAluPlugin_h_p_3 : _zz_execute_CustomMixAluPlugin_h_p) * _zz_execute_CustomMixAluPlugin_h_p_4);
+  assign _zz_execute_CustomMixAluPlugin_h_p_3 = (- _zz_execute_CustomMixAluPlugin_h_p);
+  assign _zz_execute_CustomMixAluPlugin_h_p_4 = (execute_CustomMixAluPlugin_h_frac >>> 1'd1);
+  assign _zz_execute_CustomMixAluPlugin_rd = ($signed(_zz_execute_CustomMixAluPlugin_rd_1) + $signed(_zz_execute_CustomMixAluPlugin_rd_2));
+  assign _zz_execute_CustomMixAluPlugin_rd_1 = execute_CustomMixAluPlugin_rs1;
+  assign _zz_execute_CustomMixAluPlugin_rd_3 = ($signed(execute_CustomMixAluPlugin_h_s) * $signed(_zz_execute_CustomMixAluPlugin_rd_4));
+  assign _zz_execute_CustomMixAluPlugin_rd_2 = {{3{_zz_execute_CustomMixAluPlugin_rd_3[28]}}, _zz_execute_CustomMixAluPlugin_rd_3};
+  assign _zz_execute_CustomMixAluPlugin_rd_4 = _zz_execute_CustomMixAluPlugin_rd_5;
+  assign _zz_execute_CustomMixAluPlugin_rd_5 = (execute_CustomMixAluPlugin_rs2[18 : 0] >>> 4'd8);
+  assign _zz_execute_CustomMixAluPlugin_rd_6 = (execute_CustomMixAluPlugin_rs1 + _zz_execute_CustomMixAluPlugin_rd_7);
+  assign _zz_execute_CustomMixAluPlugin_rd_8 = (execute_CustomMixAluPlugin_rs2 >>> 5'd16);
+  assign _zz_execute_CustomMixAluPlugin_rd_7 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_8};
+  assign _zz_execute_CustomMixAluPlugin_rd_9 = ($signed(_zz_execute_CustomMixAluPlugin_rd_10) - $signed(_zz_execute_CustomMixAluPlugin_rd_15));
+  assign _zz_execute_CustomMixAluPlugin_rd_10 = ($signed(_zz_execute_CustomMixAluPlugin_rd_11) - $signed(_zz_execute_CustomMixAluPlugin_rd_12));
+  assign _zz_execute_CustomMixAluPlugin_rd_11 = execute_CustomMixAluPlugin_rs1;
+  assign _zz_execute_CustomMixAluPlugin_rd_13 = _zz_execute_CustomMixAluPlugin_rd_14;
+  assign _zz_execute_CustomMixAluPlugin_rd_12 = {{16{_zz_execute_CustomMixAluPlugin_rd_13[15]}}, _zz_execute_CustomMixAluPlugin_rd_13};
+  assign _zz_execute_CustomMixAluPlugin_rd_14 = (execute_CustomMixAluPlugin_rs2 >>> 5'd16);
+  assign _zz_execute_CustomMixAluPlugin_rd_15 = ((execute_CustomMixAluPlugin_h_frac < _zz_execute_CustomMixAluPlugin_h_frac_1) ? 32'h00000001 : 32'h0);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s08 = execute_CustomMixAluPlugin_rs1[7 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_h_p8_1 = execute_CustomMixAluPlugin_rs2[7 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_h_p8 = {{2{_zz__zz_execute_CustomMixAluPlugin_h_p8_1[7]}}, _zz__zz_execute_CustomMixAluPlugin_h_p8_1};
+  assign _zz_execute_CustomMixAluPlugin_h_p8_2 = ((_zz_execute_CustomMixAluPlugin_h_p8_1 ? _zz_execute_CustomMixAluPlugin_h_p8_3 : _zz_execute_CustomMixAluPlugin_h_p8) * execute_CustomMixAluPlugin_h_frac);
+  assign _zz_execute_CustomMixAluPlugin_h_p8_3 = (- _zz_execute_CustomMixAluPlugin_h_p8);
+  assign _zz_execute_CustomMixAluPlugin_h_s_4 = execute_CustomMixAluPlugin_rs1[15 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s = (execute_CustomMixAluPlugin_h_p + 32'h00007fff);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_1 = {{14{execute_CustomMixAluPlugin_h_s0[17]}}, execute_CustomMixAluPlugin_h_s0};
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_1_2 = (execute_CustomMixAluPlugin_h_neg ? _zz__zz_execute_CustomMixAluPlugin_h_s_1_3 : _zz__zz_execute_CustomMixAluPlugin_h_s_1_5);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_1_1 = {{15{_zz__zz_execute_CustomMixAluPlugin_h_s_1_2[16]}}, _zz__zz_execute_CustomMixAluPlugin_h_s_1_2};
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_1_3 = (- _zz__zz_execute_CustomMixAluPlugin_h_s_1_4);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_1_4 = _zz_execute_CustomMixAluPlugin_h_s;
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_1_5 = _zz_execute_CustomMixAluPlugin_h_s;
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_2 = (execute_CustomMixAluPlugin_h_p8 + 32'h000000ff);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3_1 = ({8'd0,execute_CustomMixAluPlugin_h_s08} <<< 4'd8);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3 = {{14{_zz__zz_execute_CustomMixAluPlugin_h_s_3_1[17]}}, _zz__zz_execute_CustomMixAluPlugin_h_s_3_1};
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3_3 = (execute_CustomMixAluPlugin_h_neg8 ? _zz__zz_execute_CustomMixAluPlugin_h_s_3_4 : _zz__zz_execute_CustomMixAluPlugin_h_s_3_6);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3_2 = {{8{_zz__zz_execute_CustomMixAluPlugin_h_s_3_3[23]}}, _zz__zz_execute_CustomMixAluPlugin_h_s_3_3};
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3_4 = (- _zz__zz_execute_CustomMixAluPlugin_h_s_3_5);
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3_5 = _zz_execute_CustomMixAluPlugin_h_s_2;
+  assign _zz__zz_execute_CustomMixAluPlugin_h_s_3_6 = _zz_execute_CustomMixAluPlugin_h_s_2;
   assign _zz__zz_execute_BranchPlugin_missAlignedTarget_2 = {{{execute_INSTRUCTION[31],execute_INSTRUCTION[19 : 12]},execute_INSTRUCTION[20]},execute_INSTRUCTION[30 : 21]};
   assign _zz__zz_execute_BranchPlugin_missAlignedTarget_4 = {{{execute_INSTRUCTION[31],execute_INSTRUCTION[7]},execute_INSTRUCTION[30 : 25]},execute_INSTRUCTION[11 : 8]};
   assign _zz__zz_execute_BranchPlugin_missAlignedTarget_6 = {_zz_execute_BranchPlugin_missAlignedTarget_1,execute_INSTRUCTION[31 : 20]};
@@ -1556,13 +1514,13 @@ module VexRiscv (
   assign _zz_decode_LEGAL_INSTRUCTION_8 = 32'h00000003;
   assign _zz_decode_LEGAL_INSTRUCTION_9 = ((decode_INSTRUCTION & 32'h0000707b) == 32'h00000063);
   assign _zz_decode_LEGAL_INSTRUCTION_10 = ((decode_INSTRUCTION & 32'h0000607f) == 32'h0000000f);
-  assign _zz_decode_LEGAL_INSTRUCTION_11 = {((decode_INSTRUCTION & 32'hfc00007f) == 32'h00000033),{((decode_INSTRUCTION & 32'hf000707f) == 32'h0000000b),{((decode_INSTRUCTION & _zz_decode_LEGAL_INSTRUCTION_12) == 32'h0000500f),{(_zz_decode_LEGAL_INSTRUCTION_13 == _zz_decode_LEGAL_INSTRUCTION_14),{_zz_decode_LEGAL_INSTRUCTION_15,{_zz_decode_LEGAL_INSTRUCTION_16,_zz_decode_LEGAL_INSTRUCTION_17}}}}}};
-  assign _zz_decode_LEGAL_INSTRUCTION_12 = 32'h01f0707f;
-  assign _zz_decode_LEGAL_INSTRUCTION_13 = (decode_INSTRUCTION & 32'hbe00705f);
-  assign _zz_decode_LEGAL_INSTRUCTION_14 = 32'h00005013;
+  assign _zz_decode_LEGAL_INSTRUCTION_11 = {((decode_INSTRUCTION & 32'hfc00007f) == 32'h00000033),{((decode_INSTRUCTION & 32'h01f0707f) == 32'h0000500f),{((decode_INSTRUCTION & _zz_decode_LEGAL_INSTRUCTION_12) == 32'h00005013),{(_zz_decode_LEGAL_INSTRUCTION_13 == _zz_decode_LEGAL_INSTRUCTION_14),{_zz_decode_LEGAL_INSTRUCTION_15,{_zz_decode_LEGAL_INSTRUCTION_16,_zz_decode_LEGAL_INSTRUCTION_17}}}}}};
+  assign _zz_decode_LEGAL_INSTRUCTION_12 = 32'hbe00705f;
+  assign _zz_decode_LEGAL_INSTRUCTION_13 = (decode_INSTRUCTION & 32'hf400707f);
+  assign _zz_decode_LEGAL_INSTRUCTION_14 = 32'h0400000b;
   assign _zz_decode_LEGAL_INSTRUCTION_15 = ((decode_INSTRUCTION & 32'hfe00305f) == 32'h00001013);
-  assign _zz_decode_LEGAL_INSTRUCTION_16 = ((decode_INSTRUCTION & 32'hbe00707f) == 32'h00000033);
-  assign _zz_decode_LEGAL_INSTRUCTION_17 = ((decode_INSTRUCTION & 32'hdfffffff) == 32'h10200073);
+  assign _zz_decode_LEGAL_INSTRUCTION_16 = ((decode_INSTRUCTION & 32'hf800707f) == 32'h0800000b);
+  assign _zz_decode_LEGAL_INSTRUCTION_17 = {((decode_INSTRUCTION & 32'hea00707f) == 32'h0000000b),{((decode_INSTRUCTION & 32'hfc00707f) == 32'h1000000b),{((decode_INSTRUCTION & 32'hbe00707f) == 32'h00000033),((decode_INSTRUCTION & 32'hdfffffff) == 32'h10200073)}}};
   assign _zz_IBusCachedPlugin_predictionJumpInterface_payload_4 = decode_INSTRUCTION[31];
   assign _zz_IBusCachedPlugin_predictionJumpInterface_payload_5 = decode_INSTRUCTION[31];
   assign _zz_IBusCachedPlugin_predictionJumpInterface_payload_6 = decode_INSTRUCTION[7];
@@ -1588,7 +1546,7 @@ module VexRiscv (
   assign _zz__zz_decode_IS_CUSTOM_MIX_19 = {((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_20) == 32'h40001010),((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_21) == 32'h00001010)};
   assign _zz__zz_decode_IS_CUSTOM_MIX_22 = (|((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_23) == 32'h00000024));
   assign _zz__zz_decode_IS_CUSTOM_MIX_24 = (|(_zz__zz_decode_IS_CUSTOM_MIX_25 == _zz__zz_decode_IS_CUSTOM_MIX_26));
-  assign _zz__zz_decode_IS_CUSTOM_MIX_27 = {(|_zz__zz_decode_IS_CUSTOM_MIX_28),{(|_zz__zz_decode_IS_CUSTOM_MIX_29),{_zz__zz_decode_IS_CUSTOM_MIX_32,{_zz__zz_decode_IS_CUSTOM_MIX_34,_zz__zz_decode_IS_CUSTOM_MIX_45}}}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_27 = {(|_zz__zz_decode_IS_CUSTOM_MIX_28),{(|_zz__zz_decode_IS_CUSTOM_MIX_29),{_zz__zz_decode_IS_CUSTOM_MIX_32,{_zz__zz_decode_IS_CUSTOM_MIX_34,_zz__zz_decode_IS_CUSTOM_MIX_43}}}};
   assign _zz__zz_decode_IS_CUSTOM_MIX_20 = 32'h40003054;
   assign _zz__zz_decode_IS_CUSTOM_MIX_21 = 32'h02007054;
   assign _zz__zz_decode_IS_CUSTOM_MIX_23 = 32'h00000064;
@@ -1598,133 +1556,135 @@ module VexRiscv (
   assign _zz__zz_decode_IS_CUSTOM_MIX_29 = {((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_30) == 32'h00002000),((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_31) == 32'h00001000)};
   assign _zz__zz_decode_IS_CUSTOM_MIX_32 = (|((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_33) == 32'h00004008));
   assign _zz__zz_decode_IS_CUSTOM_MIX_34 = (|{_zz__zz_decode_IS_CUSTOM_MIX_35,{_zz__zz_decode_IS_CUSTOM_MIX_36,_zz__zz_decode_IS_CUSTOM_MIX_38}});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_45 = {(|{_zz__zz_decode_IS_CUSTOM_MIX_46,_zz__zz_decode_IS_CUSTOM_MIX_48}),{(|_zz__zz_decode_IS_CUSTOM_MIX_51),{_zz__zz_decode_IS_CUSTOM_MIX_53,{_zz__zz_decode_IS_CUSTOM_MIX_68,_zz__zz_decode_IS_CUSTOM_MIX_81}}}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_43 = {(|{_zz__zz_decode_IS_CUSTOM_MIX_44,_zz__zz_decode_IS_CUSTOM_MIX_46}),{(|_zz__zz_decode_IS_CUSTOM_MIX_49),{_zz__zz_decode_IS_CUSTOM_MIX_51,{_zz__zz_decode_IS_CUSTOM_MIX_66,_zz__zz_decode_IS_CUSTOM_MIX_79}}}};
   assign _zz__zz_decode_IS_CUSTOM_MIX_30 = 32'h00002010;
   assign _zz__zz_decode_IS_CUSTOM_MIX_31 = 32'h00005000;
   assign _zz__zz_decode_IS_CUSTOM_MIX_33 = 32'h00004048;
   assign _zz__zz_decode_IS_CUSTOM_MIX_35 = ((decode_INSTRUCTION & 32'h00000034) == 32'h00000020);
   assign _zz__zz_decode_IS_CUSTOM_MIX_36 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_37) == 32'h00000020);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_38 = {(_zz__zz_decode_IS_CUSTOM_MIX_39 == _zz__zz_decode_IS_CUSTOM_MIX_40),{_zz__zz_decode_IS_CUSTOM_MIX_41,_zz__zz_decode_IS_CUSTOM_MIX_43}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_46 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_47) == 32'h00000040);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_48 = {_zz_decode_IS_CUSTOM_MIX_2,(_zz__zz_decode_IS_CUSTOM_MIX_49 == _zz__zz_decode_IS_CUSTOM_MIX_50)};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_51 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_52) == 32'h00000020);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_53 = (|{_zz__zz_decode_IS_CUSTOM_MIX_54,{_zz__zz_decode_IS_CUSTOM_MIX_56,_zz__zz_decode_IS_CUSTOM_MIX_59}});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_68 = (|{_zz__zz_decode_IS_CUSTOM_MIX_69,_zz__zz_decode_IS_CUSTOM_MIX_70});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_81 = {(|_zz__zz_decode_IS_CUSTOM_MIX_82),{_zz__zz_decode_IS_CUSTOM_MIX_103,{_zz__zz_decode_IS_CUSTOM_MIX_108,_zz__zz_decode_IS_CUSTOM_MIX_112}}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_38 = {(_zz__zz_decode_IS_CUSTOM_MIX_39 == _zz__zz_decode_IS_CUSTOM_MIX_40),(_zz__zz_decode_IS_CUSTOM_MIX_41 == _zz__zz_decode_IS_CUSTOM_MIX_42)};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_44 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_45) == 32'h00000040);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_46 = {_zz_decode_IS_CUSTOM_MIX_2,(_zz__zz_decode_IS_CUSTOM_MIX_47 == _zz__zz_decode_IS_CUSTOM_MIX_48)};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_49 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_50) == 32'h00000020);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_51 = (|{_zz__zz_decode_IS_CUSTOM_MIX_52,{_zz__zz_decode_IS_CUSTOM_MIX_54,_zz__zz_decode_IS_CUSTOM_MIX_57}});
+  assign _zz__zz_decode_IS_CUSTOM_MIX_66 = (|{_zz__zz_decode_IS_CUSTOM_MIX_67,_zz__zz_decode_IS_CUSTOM_MIX_68});
+  assign _zz__zz_decode_IS_CUSTOM_MIX_79 = {(|_zz__zz_decode_IS_CUSTOM_MIX_80),{_zz__zz_decode_IS_CUSTOM_MIX_105,{_zz__zz_decode_IS_CUSTOM_MIX_110,_zz__zz_decode_IS_CUSTOM_MIX_114}}};
   assign _zz__zz_decode_IS_CUSTOM_MIX_37 = 32'h00000064;
   assign _zz__zz_decode_IS_CUSTOM_MIX_39 = (decode_INSTRUCTION & 32'h0c00000c);
   assign _zz__zz_decode_IS_CUSTOM_MIX_40 = 32'h08000008;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_41 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_42) == 32'h02000008);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_43 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_44) == 32'h04000008);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_47 = 32'h00000050;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_49 = (decode_INSTRUCTION & 32'h00003040);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_50 = 32'h00000040;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_52 = 32'h00000020;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_54 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_55) == 32'h00000008);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_56 = (_zz__zz_decode_IS_CUSTOM_MIX_57 == _zz__zz_decode_IS_CUSTOM_MIX_58);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_59 = {_zz_decode_IS_CUSTOM_MIX_3,{_zz__zz_decode_IS_CUSTOM_MIX_60,_zz__zz_decode_IS_CUSTOM_MIX_63}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_69 = _zz_decode_IS_CUSTOM_MIX_3;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_70 = {_zz__zz_decode_IS_CUSTOM_MIX_71,{_zz__zz_decode_IS_CUSTOM_MIX_73,_zz__zz_decode_IS_CUSTOM_MIX_76}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_82 = {_zz_decode_IS_CUSTOM_MIX_4,{_zz__zz_decode_IS_CUSTOM_MIX_83,_zz__zz_decode_IS_CUSTOM_MIX_86}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_103 = (|{_zz__zz_decode_IS_CUSTOM_MIX_104,_zz__zz_decode_IS_CUSTOM_MIX_105});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_108 = (|_zz__zz_decode_IS_CUSTOM_MIX_109);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_112 = {_zz__zz_decode_IS_CUSTOM_MIX_113,{_zz__zz_decode_IS_CUSTOM_MIX_116,_zz__zz_decode_IS_CUSTOM_MIX_120}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_42 = 32'h0600000c;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_44 = 32'h0600000c;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_55 = 32'h00000008;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_57 = (decode_INSTRUCTION & 32'h00000040);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_58 = 32'h00000040;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_60 = (_zz__zz_decode_IS_CUSTOM_MIX_61 == _zz__zz_decode_IS_CUSTOM_MIX_62);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_63 = {_zz__zz_decode_IS_CUSTOM_MIX_64,_zz__zz_decode_IS_CUSTOM_MIX_66};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_71 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_72) == 32'h00002010);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_73 = (_zz__zz_decode_IS_CUSTOM_MIX_74 == _zz__zz_decode_IS_CUSTOM_MIX_75);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_76 = {_zz__zz_decode_IS_CUSTOM_MIX_77,_zz__zz_decode_IS_CUSTOM_MIX_79};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_83 = (_zz__zz_decode_IS_CUSTOM_MIX_84 == _zz__zz_decode_IS_CUSTOM_MIX_85);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_86 = {_zz__zz_decode_IS_CUSTOM_MIX_87,{_zz__zz_decode_IS_CUSTOM_MIX_89,_zz__zz_decode_IS_CUSTOM_MIX_92}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_104 = _zz_decode_IS_CUSTOM_MIX_3;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_105 = (_zz__zz_decode_IS_CUSTOM_MIX_106 == _zz__zz_decode_IS_CUSTOM_MIX_107);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_109 = {_zz_decode_IS_CUSTOM_MIX_3,_zz__zz_decode_IS_CUSTOM_MIX_110};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_113 = (|_zz__zz_decode_IS_CUSTOM_MIX_114);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_116 = (|_zz__zz_decode_IS_CUSTOM_MIX_117);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_120 = {_zz__zz_decode_IS_CUSTOM_MIX_121,{_zz__zz_decode_IS_CUSTOM_MIX_135,_zz__zz_decode_IS_CUSTOM_MIX_138}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_61 = (decode_INSTRUCTION & 32'h00004020);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_62 = 32'h00004020;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_64 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_65) == 32'h00000010);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_66 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_67) == 32'h00000020);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_72 = 32'h00002030;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_74 = (decode_INSTRUCTION & 32'h00001030);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_75 = 32'h00000010;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_77 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_78) == 32'h00002020);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_79 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_80) == 32'h00000020);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_84 = (decode_INSTRUCTION & 32'h00001010);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_85 = 32'h00001010;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_87 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_88) == 32'h00002010);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_89 = (_zz__zz_decode_IS_CUSTOM_MIX_90 == _zz__zz_decode_IS_CUSTOM_MIX_91);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_92 = {_zz__zz_decode_IS_CUSTOM_MIX_93,{_zz__zz_decode_IS_CUSTOM_MIX_94,_zz__zz_decode_IS_CUSTOM_MIX_96}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_106 = (decode_INSTRUCTION & 32'h00000070);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_107 = 32'h00000020;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_110 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_111) == 32'h0);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_114 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_115) == 32'h00004010);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_117 = (_zz__zz_decode_IS_CUSTOM_MIX_118 == _zz__zz_decode_IS_CUSTOM_MIX_119);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_121 = (|{_zz__zz_decode_IS_CUSTOM_MIX_122,_zz__zz_decode_IS_CUSTOM_MIX_123});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_135 = (|_zz__zz_decode_IS_CUSTOM_MIX_136);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_138 = {_zz__zz_decode_IS_CUSTOM_MIX_139,{_zz__zz_decode_IS_CUSTOM_MIX_148,_zz__zz_decode_IS_CUSTOM_MIX_153}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_65 = 32'h00000030;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_67 = 32'h02000020;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_78 = 32'h02002060;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_80 = 32'h02003020;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_88 = 32'h00002010;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_90 = (decode_INSTRUCTION & 32'h00000050);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_91 = 32'h00000010;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_93 = ((decode_INSTRUCTION & 32'h0000000c) == 32'h00000004);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_94 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_95) == 32'h0);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_96 = {(_zz__zz_decode_IS_CUSTOM_MIX_97 == _zz__zz_decode_IS_CUSTOM_MIX_98),{_zz__zz_decode_IS_CUSTOM_MIX_99,_zz__zz_decode_IS_CUSTOM_MIX_101}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_111 = 32'h00000020;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_115 = 32'h00004014;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_118 = (decode_INSTRUCTION & 32'h00006014);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_119 = 32'h00002010;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_122 = _zz_decode_IS_CUSTOM_MIX_2;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_123 = {(_zz__zz_decode_IS_CUSTOM_MIX_124 == _zz__zz_decode_IS_CUSTOM_MIX_125),{_zz__zz_decode_IS_CUSTOM_MIX_126,{_zz__zz_decode_IS_CUSTOM_MIX_128,_zz__zz_decode_IS_CUSTOM_MIX_131}}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_136 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_137) == 32'h0);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_139 = (|{_zz__zz_decode_IS_CUSTOM_MIX_140,{_zz__zz_decode_IS_CUSTOM_MIX_142,_zz__zz_decode_IS_CUSTOM_MIX_145}});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_148 = (|{_zz__zz_decode_IS_CUSTOM_MIX_149,_zz__zz_decode_IS_CUSTOM_MIX_152});
-  assign _zz__zz_decode_IS_CUSTOM_MIX_153 = {(|_zz__zz_decode_IS_CUSTOM_MIX_154),(|_zz__zz_decode_IS_CUSTOM_MIX_156)};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_95 = 32'h00000028;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_97 = (decode_INSTRUCTION & 32'h08000024);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_98 = 32'h08000000;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_99 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_100) == 32'h04000000);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_101 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_102) == 32'h02000000);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_124 = (decode_INSTRUCTION & 32'h08004004);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_125 = 32'h08000000;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_126 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_127) == 32'h00002000);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_128 = (_zz__zz_decode_IS_CUSTOM_MIX_129 == _zz__zz_decode_IS_CUSTOM_MIX_130);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_131 = {_zz__zz_decode_IS_CUSTOM_MIX_132,{_zz__zz_decode_IS_CUSTOM_MIX_133,_zz__zz_decode_IS_CUSTOM_MIX_134}};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_137 = 32'h00000058;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_140 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_141) == 32'h00000040);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_142 = (_zz__zz_decode_IS_CUSTOM_MIX_143 == _zz__zz_decode_IS_CUSTOM_MIX_144);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_145 = (_zz__zz_decode_IS_CUSTOM_MIX_146 == _zz__zz_decode_IS_CUSTOM_MIX_147);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_149 = (_zz__zz_decode_IS_CUSTOM_MIX_150 == _zz__zz_decode_IS_CUSTOM_MIX_151);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_152 = _zz_decode_IS_CUSTOM_MIX_1;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_154 = {_zz__zz_decode_IS_CUSTOM_MIX_155,_zz_decode_IS_CUSTOM_MIX_1};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_156 = (_zz__zz_decode_IS_CUSTOM_MIX_157 == _zz__zz_decode_IS_CUSTOM_MIX_158);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_100 = 32'h04000024;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_102 = 32'h02000024;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_127 = 32'h00006004;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_129 = (decode_INSTRUCTION & 32'h00005004);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_130 = 32'h00001000;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_132 = ((decode_INSTRUCTION & 32'h00004050) == 32'h00004000);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_133 = ((decode_INSTRUCTION & 32'h0000004c) == 32'h0);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_134 = {((decode_INSTRUCTION & 32'h04000044) == 32'h0),((decode_INSTRUCTION & 32'h12004004) == 32'h0)};
-  assign _zz__zz_decode_IS_CUSTOM_MIX_141 = 32'h00000044;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_143 = (decode_INSTRUCTION & 32'h00002014);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_144 = 32'h00002010;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_146 = (decode_INSTRUCTION & 32'h40000034);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_147 = 32'h40000030;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_150 = (decode_INSTRUCTION & 32'h00000014);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_151 = 32'h00000004;
-  assign _zz__zz_decode_IS_CUSTOM_MIX_155 = ((decode_INSTRUCTION & 32'h00000044) == 32'h00000004);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_157 = (decode_INSTRUCTION & 32'h00005048);
-  assign _zz__zz_decode_IS_CUSTOM_MIX_158 = 32'h00001008;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_41 = (decode_INSTRUCTION & 32'h0600000c);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_42 = 32'h04000008;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_45 = 32'h00000050;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_47 = (decode_INSTRUCTION & 32'h00003040);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_48 = 32'h00000040;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_50 = 32'h00000020;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_52 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_53) == 32'h00000008);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_54 = (_zz__zz_decode_IS_CUSTOM_MIX_55 == _zz__zz_decode_IS_CUSTOM_MIX_56);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_57 = {_zz_decode_IS_CUSTOM_MIX_3,{_zz__zz_decode_IS_CUSTOM_MIX_58,_zz__zz_decode_IS_CUSTOM_MIX_61}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_67 = _zz_decode_IS_CUSTOM_MIX_3;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_68 = {_zz__zz_decode_IS_CUSTOM_MIX_69,{_zz__zz_decode_IS_CUSTOM_MIX_71,_zz__zz_decode_IS_CUSTOM_MIX_74}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_80 = {_zz_decode_IS_CUSTOM_MIX_4,{_zz__zz_decode_IS_CUSTOM_MIX_81,_zz__zz_decode_IS_CUSTOM_MIX_84}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_105 = (|{_zz__zz_decode_IS_CUSTOM_MIX_106,_zz__zz_decode_IS_CUSTOM_MIX_107});
+  assign _zz__zz_decode_IS_CUSTOM_MIX_110 = (|_zz__zz_decode_IS_CUSTOM_MIX_111);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_114 = {_zz__zz_decode_IS_CUSTOM_MIX_115,{_zz__zz_decode_IS_CUSTOM_MIX_118,_zz__zz_decode_IS_CUSTOM_MIX_122}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_53 = 32'h00000008;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_55 = (decode_INSTRUCTION & 32'h00000040);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_56 = 32'h00000040;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_58 = (_zz__zz_decode_IS_CUSTOM_MIX_59 == _zz__zz_decode_IS_CUSTOM_MIX_60);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_61 = {_zz__zz_decode_IS_CUSTOM_MIX_62,_zz__zz_decode_IS_CUSTOM_MIX_64};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_69 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_70) == 32'h00002010);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_71 = (_zz__zz_decode_IS_CUSTOM_MIX_72 == _zz__zz_decode_IS_CUSTOM_MIX_73);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_74 = {_zz__zz_decode_IS_CUSTOM_MIX_75,_zz__zz_decode_IS_CUSTOM_MIX_77};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_81 = (_zz__zz_decode_IS_CUSTOM_MIX_82 == _zz__zz_decode_IS_CUSTOM_MIX_83);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_84 = {_zz__zz_decode_IS_CUSTOM_MIX_85,{_zz__zz_decode_IS_CUSTOM_MIX_87,_zz__zz_decode_IS_CUSTOM_MIX_90}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_106 = _zz_decode_IS_CUSTOM_MIX_3;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_107 = (_zz__zz_decode_IS_CUSTOM_MIX_108 == _zz__zz_decode_IS_CUSTOM_MIX_109);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_111 = {_zz_decode_IS_CUSTOM_MIX_3,_zz__zz_decode_IS_CUSTOM_MIX_112};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_115 = (|_zz__zz_decode_IS_CUSTOM_MIX_116);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_118 = (|_zz__zz_decode_IS_CUSTOM_MIX_119);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_122 = {_zz__zz_decode_IS_CUSTOM_MIX_123,{_zz__zz_decode_IS_CUSTOM_MIX_137,_zz__zz_decode_IS_CUSTOM_MIX_140}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_59 = (decode_INSTRUCTION & 32'h00004020);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_60 = 32'h00004020;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_62 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_63) == 32'h00000010);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_64 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_65) == 32'h00000020);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_70 = 32'h00002030;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_72 = (decode_INSTRUCTION & 32'h00001030);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_73 = 32'h00000010;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_75 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_76) == 32'h00002020);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_77 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_78) == 32'h00000020);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_82 = (decode_INSTRUCTION & 32'h00001010);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_83 = 32'h00001010;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_85 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_86) == 32'h00002010);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_87 = (_zz__zz_decode_IS_CUSTOM_MIX_88 == _zz__zz_decode_IS_CUSTOM_MIX_89);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_90 = {_zz__zz_decode_IS_CUSTOM_MIX_91,{_zz__zz_decode_IS_CUSTOM_MIX_92,_zz__zz_decode_IS_CUSTOM_MIX_94}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_108 = (decode_INSTRUCTION & 32'h00000070);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_109 = 32'h00000020;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_112 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_113) == 32'h0);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_116 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_117) == 32'h00004010);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_119 = (_zz__zz_decode_IS_CUSTOM_MIX_120 == _zz__zz_decode_IS_CUSTOM_MIX_121);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_123 = (|{_zz__zz_decode_IS_CUSTOM_MIX_124,_zz__zz_decode_IS_CUSTOM_MIX_125});
+  assign _zz__zz_decode_IS_CUSTOM_MIX_137 = (|_zz__zz_decode_IS_CUSTOM_MIX_138);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_140 = {_zz__zz_decode_IS_CUSTOM_MIX_141,{_zz__zz_decode_IS_CUSTOM_MIX_150,_zz__zz_decode_IS_CUSTOM_MIX_155}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_63 = 32'h00000030;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_65 = 32'h02000020;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_76 = 32'h02002060;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_78 = 32'h02003020;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_86 = 32'h00002010;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_88 = (decode_INSTRUCTION & 32'h00000050);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_89 = 32'h00000010;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_91 = ((decode_INSTRUCTION & 32'h0000000c) == 32'h00000004);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_92 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_93) == 32'h0);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_94 = {(_zz__zz_decode_IS_CUSTOM_MIX_95 == _zz__zz_decode_IS_CUSTOM_MIX_96),{_zz__zz_decode_IS_CUSTOM_MIX_97,{_zz__zz_decode_IS_CUSTOM_MIX_99,_zz__zz_decode_IS_CUSTOM_MIX_102}}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_113 = 32'h00000020;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_117 = 32'h00004014;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_120 = (decode_INSTRUCTION & 32'h00006014);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_121 = 32'h00002010;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_124 = _zz_decode_IS_CUSTOM_MIX_2;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_125 = {(_zz__zz_decode_IS_CUSTOM_MIX_126 == _zz__zz_decode_IS_CUSTOM_MIX_127),{_zz__zz_decode_IS_CUSTOM_MIX_128,{_zz__zz_decode_IS_CUSTOM_MIX_130,_zz__zz_decode_IS_CUSTOM_MIX_133}}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_138 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_139) == 32'h0);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_141 = (|{_zz__zz_decode_IS_CUSTOM_MIX_142,{_zz__zz_decode_IS_CUSTOM_MIX_144,_zz__zz_decode_IS_CUSTOM_MIX_147}});
+  assign _zz__zz_decode_IS_CUSTOM_MIX_150 = (|{_zz__zz_decode_IS_CUSTOM_MIX_151,_zz__zz_decode_IS_CUSTOM_MIX_154});
+  assign _zz__zz_decode_IS_CUSTOM_MIX_155 = {(|_zz__zz_decode_IS_CUSTOM_MIX_156),(|_zz__zz_decode_IS_CUSTOM_MIX_158)};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_93 = 32'h00000028;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_95 = (decode_INSTRUCTION & 32'h02000024);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_96 = 32'h02000000;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_97 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_98) == 32'h08000000);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_99 = (_zz__zz_decode_IS_CUSTOM_MIX_100 == _zz__zz_decode_IS_CUSTOM_MIX_101);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_102 = (_zz__zz_decode_IS_CUSTOM_MIX_103 == _zz__zz_decode_IS_CUSTOM_MIX_104);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_126 = (decode_INSTRUCTION & 32'h08004004);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_127 = 32'h08000000;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_128 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_129) == 32'h00002000);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_130 = (_zz__zz_decode_IS_CUSTOM_MIX_131 == _zz__zz_decode_IS_CUSTOM_MIX_132);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_133 = {_zz__zz_decode_IS_CUSTOM_MIX_134,{_zz__zz_decode_IS_CUSTOM_MIX_135,_zz__zz_decode_IS_CUSTOM_MIX_136}};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_139 = 32'h00000058;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_142 = ((decode_INSTRUCTION & _zz__zz_decode_IS_CUSTOM_MIX_143) == 32'h00000040);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_144 = (_zz__zz_decode_IS_CUSTOM_MIX_145 == _zz__zz_decode_IS_CUSTOM_MIX_146);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_147 = (_zz__zz_decode_IS_CUSTOM_MIX_148 == _zz__zz_decode_IS_CUSTOM_MIX_149);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_151 = (_zz__zz_decode_IS_CUSTOM_MIX_152 == _zz__zz_decode_IS_CUSTOM_MIX_153);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_154 = _zz_decode_IS_CUSTOM_MIX_1;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_156 = {_zz__zz_decode_IS_CUSTOM_MIX_157,_zz_decode_IS_CUSTOM_MIX_1};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_158 = (_zz__zz_decode_IS_CUSTOM_MIX_159 == _zz__zz_decode_IS_CUSTOM_MIX_160);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_98 = 32'h0c000024;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_100 = (decode_INSTRUCTION & 32'h14000024);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_101 = 32'h10000000;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_103 = (decode_INSTRUCTION & 32'h1c000024);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_104 = 32'h04000000;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_129 = 32'h00006004;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_131 = (decode_INSTRUCTION & 32'h00005004);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_132 = 32'h00001000;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_134 = ((decode_INSTRUCTION & 32'h00004050) == 32'h00004000);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_135 = ((decode_INSTRUCTION & 32'h0000004c) == 32'h0);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_136 = {((decode_INSTRUCTION & 32'h06004004) == 32'h04000000),((decode_INSTRUCTION & 32'h14000044) == 32'h0)};
+  assign _zz__zz_decode_IS_CUSTOM_MIX_143 = 32'h00000044;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_145 = (decode_INSTRUCTION & 32'h00002014);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_146 = 32'h00002010;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_148 = (decode_INSTRUCTION & 32'h40000034);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_149 = 32'h40000030;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_152 = (decode_INSTRUCTION & 32'h00000014);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_153 = 32'h00000004;
+  assign _zz__zz_decode_IS_CUSTOM_MIX_157 = ((decode_INSTRUCTION & 32'h00000044) == 32'h00000004);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_159 = (decode_INSTRUCTION & 32'h00005048);
+  assign _zz__zz_decode_IS_CUSTOM_MIX_160 = 32'h00001008;
   assign _zz_execute_BranchPlugin_branch_src2_6 = execute_INSTRUCTION[31];
   assign _zz_execute_BranchPlugin_branch_src2_7 = execute_INSTRUCTION[19 : 12];
   assign _zz_execute_BranchPlugin_branch_src2_8 = execute_INSTRUCTION[20];
@@ -2864,13 +2824,6 @@ module VexRiscv (
         execute_arbitration_haltItself = 1'b1;
       end
     end
-    if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l106) begin
-        if(execute_CustomMixAluPlugin_is_multicycle) begin
-          execute_arbitration_haltItself = 1'b1;
-        end
-      end
-    end
   end
 
   always @(*) begin
@@ -3665,27 +3618,8 @@ module VexRiscv (
   always @(*) begin
     _zz_execute_REGFILE_WRITE_DATA = _zz_execute_REGFILE_WRITE_DATA_1;
     if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l106) begin
-        if(!execute_CustomMixAluPlugin_is_multicycle) begin
-          case(execute_CustomMixAluPlugin_funct7)
-            7'h03 : begin
-              if(execute_REGFILE_WRITE_VALID) begin
-                _zz_execute_REGFILE_WRITE_DATA = execute_CustomMixAluPlugin_rd;
-              end
-            end
-            7'h07 : begin
-              if(execute_REGFILE_WRITE_VALID) begin
-                _zz_execute_REGFILE_WRITE_DATA = execute_CustomMixAluPlugin_rd;
-              end
-            end
-            default : begin
-            end
-          endcase
-        end
-      end else begin
-        if(execute_REGFILE_WRITE_VALID) begin
-          _zz_execute_REGFILE_WRITE_DATA = execute_CustomMixAluPlugin_rd;
-        end
+      if(execute_REGFILE_WRITE_VALID) begin
+        _zz_execute_REGFILE_WRITE_DATA = execute_CustomMixAluPlugin_rd;
       end
     end
   end
@@ -4240,63 +4174,46 @@ module VexRiscv (
   always @(*) begin
     execute_CustomMixAluPlugin_rd = 32'h0;
     if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l106) begin
-        if(!execute_CustomMixAluPlugin_is_multicycle) begin
-          case(execute_CustomMixAluPlugin_funct7)
-            7'h03 : begin
-              execute_CustomMixAluPlugin_rd = {16'd0, execute_CustomMixAluPlugin_hidden_frac};
-            end
-            7'h07 : begin
-              execute_CustomMixAluPlugin_rd = execute_CustomMixAluPlugin_rs1;
-            end
-            default : begin
-            end
-          endcase
+      case(execute_CustomMixAluPlugin_funct7)
+        7'h02 : begin
+          execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd;
         end
-      end else begin
-        case(execute_CustomMixAluPlugin_saved_funct7)
-          7'h01 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_3;
-          end
-          7'h02 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_9;
-          end
-          7'h04 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_12[31:0];
-          end
-          7'h05 : begin
-            execute_CustomMixAluPlugin_rd = (_zz_execute_CustomMixAluPlugin_rd_19 - ((execute_CustomMixAluPlugin_saved_frac < _zz_execute_CustomMixAluPlugin_rd_5) ? 32'h00000001 : 32'h0));
-          end
-          7'h06 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_8;
-          end
-          default : begin
-          end
-        endcase
-      end
+        7'h03 : begin
+          execute_CustomMixAluPlugin_rd = {16'd0, execute_CustomMixAluPlugin_h_frac};
+        end
+        7'h04 : begin
+          execute_CustomMixAluPlugin_rd = (_zz_execute_CustomMixAluPlugin_rd_6 + (_zz_execute_CustomMixAluPlugin_h_frac[16] ? 32'h00000001 : 32'h0));
+        end
+        7'h05 : begin
+          execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_9;
+        end
+        7'h07 : begin
+          execute_CustomMixAluPlugin_rd = execute_CustomMixAluPlugin_rs1;
+        end
+        7'h08 : begin
+          execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_h_s_1;
+        end
+        7'h09 : begin
+          execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_h_s_3;
+        end
+        default : begin
+        end
+      endcase
     end
   end
 
-  assign execute_CustomMixAluPlugin_is_lerp16 = (execute_CustomMixAluPlugin_funct7 == 7'h01);
-  assign execute_CustomMixAluPlugin_is_mac = (execute_CustomMixAluPlugin_funct7 == 7'h02);
-  assign execute_CustomMixAluPlugin_is_lerp8 = (execute_CustomMixAluPlugin_funct7 == 7'h06);
-  assign execute_CustomMixAluPlugin_is_adv = (execute_CustomMixAluPlugin_funct7 == 7'h04);
-  assign execute_CustomMixAluPlugin_is_advb = (execute_CustomMixAluPlugin_funct7 == 7'h05);
-  assign execute_CustomMixAluPlugin_is_multicycle = ((((execute_CustomMixAluPlugin_is_lerp16 || execute_CustomMixAluPlugin_is_mac) || execute_CustomMixAluPlugin_is_lerp8) || execute_CustomMixAluPlugin_is_adv) || execute_CustomMixAluPlugin_is_advb);
-  assign when_CustomMixAluPlugin_l101 = (! execute_arbitration_isValid);
-  assign when_CustomMixAluPlugin_l106 = (! execute_CustomMixAluPlugin_busy);
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp16 = {{1{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16[17]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16};
-  assign _zz_execute_CustomMixAluPlugin_saved_product_lerp8 = {{1{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8[9]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8};
-  assign _zz_execute_CustomMixAluPlugin_saved_sum_adv = ({1'b0,execute_CustomMixAluPlugin_hidden_frac} + {1'b0,execute_CustomMixAluPlugin_rs2[15 : 0]});
-  assign _zz_execute_CustomMixAluPlugin_rd = {{2{_zz__zz_execute_CustomMixAluPlugin_rd[15]}}, _zz__zz_execute_CustomMixAluPlugin_rd};
-  assign _zz_execute_CustomMixAluPlugin_rd_1 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_1) < $signed(19'h0));
-  assign _zz_execute_CustomMixAluPlugin_rd_2 = (_zz__zz_execute_CustomMixAluPlugin_rd_2 >>> 4'd15);
-  assign _zz_execute_CustomMixAluPlugin_rd_3 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_3) + $signed(_zz__zz_execute_CustomMixAluPlugin_rd_3_1));
-  assign _zz_execute_CustomMixAluPlugin_rd_4 = ({1'b0,execute_CustomMixAluPlugin_saved_frac} + {1'b0,execute_CustomMixAluPlugin_saved_rs2[15 : 0]});
-  assign _zz_execute_CustomMixAluPlugin_rd_5 = execute_CustomMixAluPlugin_saved_rs2[15 : 0];
-  assign _zz_execute_CustomMixAluPlugin_rd_6 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_6) < $signed(_zz__zz_execute_CustomMixAluPlugin_rd_6_1));
-  assign _zz_execute_CustomMixAluPlugin_rd_7 = (_zz__zz_execute_CustomMixAluPlugin_rd_7 >>> 4'd8);
-  assign _zz_execute_CustomMixAluPlugin_rd_8 = _zz__zz_execute_CustomMixAluPlugin_rd_8[31:0];
+  assign _zz_execute_CustomMixAluPlugin_h_s0 = {{2{_zz__zz_execute_CustomMixAluPlugin_h_s0[15]}}, _zz__zz_execute_CustomMixAluPlugin_h_s0};
+  assign _zz_execute_CustomMixAluPlugin_h_p = ($signed(_zz__zz_execute_CustomMixAluPlugin_h_p) - $signed(_zz_execute_CustomMixAluPlugin_h_s0));
+  assign _zz_execute_CustomMixAluPlugin_h_p_1 = ($signed(_zz_execute_CustomMixAluPlugin_h_p) < $signed(18'h0));
+  assign _zz_execute_CustomMixAluPlugin_h_frac = ({1'b0,execute_CustomMixAluPlugin_h_frac} + {1'b0,execute_CustomMixAluPlugin_rs2[15 : 0]});
+  assign _zz_execute_CustomMixAluPlugin_h_frac_1 = execute_CustomMixAluPlugin_rs2[15 : 0];
+  assign _zz_execute_CustomMixAluPlugin_h_s08 = {{2{_zz__zz_execute_CustomMixAluPlugin_h_s08[7]}}, _zz__zz_execute_CustomMixAluPlugin_h_s08};
+  assign _zz_execute_CustomMixAluPlugin_h_p8 = ($signed(_zz__zz_execute_CustomMixAluPlugin_h_p8) - $signed(_zz_execute_CustomMixAluPlugin_h_s08));
+  assign _zz_execute_CustomMixAluPlugin_h_p8_1 = ($signed(_zz_execute_CustomMixAluPlugin_h_p8) < $signed(10'h0));
+  assign _zz_execute_CustomMixAluPlugin_h_s = ((execute_CustomMixAluPlugin_h_neg ? _zz__zz_execute_CustomMixAluPlugin_h_s : execute_CustomMixAluPlugin_h_p) >>> 4'd15);
+  assign _zz_execute_CustomMixAluPlugin_h_s_1 = ($signed(_zz__zz_execute_CustomMixAluPlugin_h_s_1) + $signed(_zz__zz_execute_CustomMixAluPlugin_h_s_1_1));
+  assign _zz_execute_CustomMixAluPlugin_h_s_2 = ((execute_CustomMixAluPlugin_h_neg8 ? _zz__zz_execute_CustomMixAluPlugin_h_s_2 : execute_CustomMixAluPlugin_h_p8) >>> 4'd8);
+  assign _zz_execute_CustomMixAluPlugin_h_s_3 = ($signed(_zz__zz_execute_CustomMixAluPlugin_h_s_3) + $signed(_zz__zz_execute_CustomMixAluPlugin_h_s_3_2));
   assign execute_BranchPlugin_eq = (execute_SRC1 == execute_SRC2);
   assign switch_Misc_l245_2 = execute_INSTRUCTION[14 : 12];
   always @(*) begin
@@ -4777,9 +4694,14 @@ module VexRiscv (
       CsrPlugin_pipelineLiberator_pcValids_2 <= 1'b0;
       CsrPlugin_hadException <= 1'b0;
       execute_CsrPlugin_wfiWake <= 1'b0;
-      execute_CustomMixAluPlugin_hidden_frac <= 16'h0;
-      execute_CustomMixAluPlugin_hidden_s <= 18'h0;
-      execute_CustomMixAluPlugin_busy <= 1'b0;
+      execute_CustomMixAluPlugin_h_frac <= 16'h0;
+      execute_CustomMixAluPlugin_h_p <= 32'h0;
+      execute_CustomMixAluPlugin_h_neg <= 1'b0;
+      execute_CustomMixAluPlugin_h_s0 <= 18'h0;
+      execute_CustomMixAluPlugin_h_p8 <= 32'h0;
+      execute_CustomMixAluPlugin_h_neg8 <= 1'b0;
+      execute_CustomMixAluPlugin_h_s08 <= 10'h0;
+      execute_CustomMixAluPlugin_h_s <= 18'h0;
       execute_arbitration_isValid <= 1'b0;
       memory_arbitration_isValid <= 1'b0;
       writeBack_arbitration_isValid <= 1'b0;
@@ -4954,44 +4876,39 @@ module VexRiscv (
         endcase
       end
       execute_CsrPlugin_wfiWake <= ((|{_zz_when_CsrPlugin_l1302_2,{_zz_when_CsrPlugin_l1302_1,_zz_when_CsrPlugin_l1302}}) || CsrPlugin_thirdPartyWake);
-      if(when_CustomMixAluPlugin_l101) begin
-        execute_CustomMixAluPlugin_busy <= 1'b0;
-      end
       if(execute_IS_CUSTOM_MIX) begin
-        if(when_CustomMixAluPlugin_l106) begin
-          if(execute_CustomMixAluPlugin_is_multicycle) begin
-            execute_CustomMixAluPlugin_busy <= 1'b1;
-          end else begin
-            case(execute_CustomMixAluPlugin_funct7)
-              7'h0 : begin
-                execute_CustomMixAluPlugin_hidden_frac <= execute_CustomMixAluPlugin_rs1[15 : 0];
-              end
-              7'h07 : begin
-                execute_CustomMixAluPlugin_hidden_s <= {{2{_zz_execute_CustomMixAluPlugin_hidden_s[15]}}, _zz_execute_CustomMixAluPlugin_hidden_s};
-              end
-              default : begin
-              end
-            endcase
+        case(execute_CustomMixAluPlugin_funct7)
+          7'h0 : begin
+            execute_CustomMixAluPlugin_h_frac <= execute_CustomMixAluPlugin_rs1[15 : 0];
           end
-        end else begin
-          execute_CustomMixAluPlugin_busy <= 1'b0;
-          case(execute_CustomMixAluPlugin_saved_funct7)
-            7'h01 : begin
-              execute_CustomMixAluPlugin_hidden_s <= _zz_execute_CustomMixAluPlugin_rd_3[17:0];
-            end
-            7'h04 : begin
-              execute_CustomMixAluPlugin_hidden_frac <= _zz_execute_CustomMixAluPlugin_rd_4[15 : 0];
-            end
-            7'h05 : begin
-              execute_CustomMixAluPlugin_hidden_frac <= (execute_CustomMixAluPlugin_saved_frac - _zz_execute_CustomMixAluPlugin_rd_5);
-            end
-            7'h06 : begin
-              execute_CustomMixAluPlugin_hidden_s <= _zz_execute_CustomMixAluPlugin_rd_8[17:0];
-            end
-            default : begin
-            end
-          endcase
-        end
+          7'h0a : begin
+            execute_CustomMixAluPlugin_h_neg <= _zz_execute_CustomMixAluPlugin_h_p_1;
+            execute_CustomMixAluPlugin_h_p <= _zz_execute_CustomMixAluPlugin_h_p_2[31:0];
+            execute_CustomMixAluPlugin_h_s0 <= _zz_execute_CustomMixAluPlugin_h_s0;
+          end
+          7'h04 : begin
+            execute_CustomMixAluPlugin_h_frac <= _zz_execute_CustomMixAluPlugin_h_frac[15 : 0];
+          end
+          7'h05 : begin
+            execute_CustomMixAluPlugin_h_frac <= (execute_CustomMixAluPlugin_h_frac - _zz_execute_CustomMixAluPlugin_h_frac_1);
+          end
+          7'h06 : begin
+            execute_CustomMixAluPlugin_h_neg8 <= _zz_execute_CustomMixAluPlugin_h_p8_1;
+            execute_CustomMixAluPlugin_h_p8 <= {6'd0, _zz_execute_CustomMixAluPlugin_h_p8_2};
+            execute_CustomMixAluPlugin_h_s08 <= _zz_execute_CustomMixAluPlugin_h_s08;
+          end
+          7'h07 : begin
+            execute_CustomMixAluPlugin_h_s <= {{2{_zz_execute_CustomMixAluPlugin_h_s_4[15]}}, _zz_execute_CustomMixAluPlugin_h_s_4};
+          end
+          7'h08 : begin
+            execute_CustomMixAluPlugin_h_s <= _zz_execute_CustomMixAluPlugin_h_s_1[17:0];
+          end
+          7'h09 : begin
+            execute_CustomMixAluPlugin_h_s <= _zz_execute_CustomMixAluPlugin_h_s_3[17:0];
+          end
+          default : begin
+          end
+        endcase
       end
       if(when_Pipeline_l151) begin
         execute_arbitration_isValid <= 1'b0;
@@ -5132,29 +5049,6 @@ module VexRiscv (
           default : begin
           end
         endcase
-      end
-    end
-    if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l106) begin
-        if(execute_CustomMixAluPlugin_is_multicycle) begin
-          execute_CustomMixAluPlugin_saved_rs1 <= execute_CustomMixAluPlugin_rs1;
-          execute_CustomMixAluPlugin_saved_rs2 <= execute_CustomMixAluPlugin_rs2;
-          execute_CustomMixAluPlugin_saved_funct7 <= execute_CustomMixAluPlugin_funct7;
-          execute_CustomMixAluPlugin_saved_frac <= execute_CustomMixAluPlugin_hidden_frac;
-          if(execute_CustomMixAluPlugin_is_lerp16) begin
-            execute_CustomMixAluPlugin_saved_product_lerp16 <= _zz_execute_CustomMixAluPlugin_saved_product_lerp16_1[31:0];
-          end
-          if(execute_CustomMixAluPlugin_is_lerp8) begin
-            execute_CustomMixAluPlugin_saved_product_lerp8 <= {5'd0, _zz_execute_CustomMixAluPlugin_saved_product_lerp8_1};
-          end
-          if(execute_CustomMixAluPlugin_is_mac) begin
-            execute_CustomMixAluPlugin_saved_product_mac <= _zz_execute_CustomMixAluPlugin_saved_product_mac;
-          end
-          if(execute_CustomMixAluPlugin_is_adv) begin
-            execute_CustomMixAluPlugin_saved_sum_adv <= {15'd0, _zz_execute_CustomMixAluPlugin_saved_sum_adv};
-            execute_CustomMixAluPlugin_saved_carry_adv <= (_zz_execute_CustomMixAluPlugin_saved_sum_adv[16] ? 1'b1 : 1'b0);
-          end
-        end
       end
     end
     if(when_Pipeline_l124) begin
