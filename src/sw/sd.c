@@ -116,6 +116,34 @@ int sd_init(void) {
   return 0;
 }
 
+/* Write one 512-byte block: start token, data, dummy CRC, data response, then wait
+ * until the card releases the busy line. Returns 0 on success. */
+static int block_write(const uint8_t *buf) {
+  int i;
+  for (i = 0; i < 20000; i++) if (spi_xfer(0xFF) == 0xFF) break;   /* card ready */
+  if (i == 20000) return 20;
+  spi_xfer(0xFE);                                                  /* start token */
+  spi_send((uint8_t *) buf, 512);
+  spi_xfer(0xFF); spi_xfer(0xFF);                                  /* CRC: ignored by SD */
+  uint8_t r = spi_xfer(0xFF);
+  if ((r & 0x1Fu) != 0x05) return 21;                              /* data not accepted */
+  for (i = 0; i < 2000000; i++) if (spi_xfer(0xFF) == 0xFF) return 0;
+  return 22;                                                       /* stuck busy */
+}
+
+int sd_write(uint32_t lba, const uint8_t *buf, uint32_t count) {
+  uint32_t addr = hc ? lba : lba * 512;
+  for (uint32_t b = 0; b < count; b++) {
+    SD_CS;
+    uint8_t r = cmd(24, addr + (hc ? b : b * 512));                /* WRITE_BLOCK */
+    if (r != 0x00) { SD_RELEASE(); return 30; }
+    int rc = block_write(buf + b * 512);
+    SD_RELEASE();
+    if (rc) return rc;
+  }
+  return 0;
+}
+
 int sd_read(uint32_t lba, uint8_t *buf, uint32_t count) {
   if (!count) return 0;
   uint32_t addr = hc ? lba : lba * 512;

@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 int  plog_open(const char *path);        // 0 ok; creates/overwrites the file
+int  plog_selftest(void);                // write+read+compare a scratch file; 1 ok
 void plog_close(void);                   // flush and close
 int  plog_is_open(void);
 void plog_str(const char *s);

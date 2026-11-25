@@ -362,10 +362,12 @@ static void detect_log_key(void) {
     for (int i = 0; i < 6; i++) if (keys[i] == K_L) seen = 1;
     if (seen) break;
   }
-  log_enabled = seen;
   if (seen) {
-    /* show it: the user must know the card is being written */
-    status("logging -> /PLRLOG.TXT");
+    /* never write a log on a card that cannot take writes without corrupting itself */
+    log_enabled = plog_selftest();
+    status(log_enabled ? "logging -> /PLRLOG.TXT" : "log: card is not writable");
+  } else {
+    log_enabled = 0;
   }
 }
 

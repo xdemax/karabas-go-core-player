@@ -25,8 +25,9 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
-  (void) buff; (void) sector; (void) count;
-  return RES_WRPRT;            // the player only reads
+  (void) pdrv;
+  if (!buff || !count) return RES_PARERR;
+  return sd_write((uint32_t) sector, buff, (uint32_t) count) ? RES_ERROR : RES_OK;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
