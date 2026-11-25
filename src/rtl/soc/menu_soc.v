@@ -517,7 +517,6 @@ always @(posedge clk) begin
 		aud_drop <= 16'd0;
 		aud_under <= 16'd0;
 		ay_tap_wr <= 10'd0;
-		aud_rate <= AUD_RATE;
 	end else begin
 		if (aud_stats_clr) begin
 			aud_drop <= 16'd0;
@@ -589,7 +588,11 @@ function signed [11:0] sat_add(input signed [11:0] a, input [7:0] d);
 endfunction
 
 always @(posedge clk) begin
-	if (cpu_reset) ay_tap_rd <= 10'd0;
+	if (cpu_reset) begin
+		ay_tap_rd <= 10'd0;
+		// a state register: reset it only here, never in the per-cycle strobe defaults
+		aud_rate <= AUD_RATE;
+	end
 	io_ack <= 1'b0;
 	pal_we <= 1'b0;
 	dbg_uart_wr <= 1'b0;
@@ -689,7 +692,7 @@ always @(posedge clk) begin
 				8'h58: begin spi_div <= d_dat_o[15:0]; spi_div_wr <= 1'b1; end
 				8'h68: file_ack <= 1'b1;
 				8'h70: begin aud_wdat <= d_dat_o; aud_we <= 1'b1; end
-				8'h80: aud_rate <= d_dat_o[26:0];
+				8'h44: aud_rate <= d_dat_o[26:0];
 				8'hc0: begin
 					ay_addr <= d_dat_o[11:8];
 					ay_data <= d_dat_o[7:0];
@@ -751,7 +754,7 @@ always @(posedge clk) begin
 				8'hbc: io_dat <= { 31'd0, sdram_ready };
 				8'h78: io_dat <= { 16'd0, aud_drop };
 				8'h7c: io_dat <= { 16'd0, aud_under };
-				8'h80: io_dat <= { 5'd0, aud_rate };
+				8'h44: io_dat <= { 5'd0, aud_rate };
 				default: io_dat <= 32'd0;
 			endcase
 		end
