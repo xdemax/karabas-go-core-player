@@ -393,35 +393,33 @@ module VexRiscv (
   wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_3;
   wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_4;
   wire       [16:0]   _zz__zz_execute_CustomMixAluPlugin_rd_3_5;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_8;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_9;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_10;
-  wire       [33:0]   _zz_execute_CustomMixAluPlugin_rd_11;
-  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_12;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_11;
+  wire       [33:0]   _zz_execute_CustomMixAluPlugin_rd_12;
   wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_13;
-  wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_14;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_15;
-  wire       [33:0]   _zz_execute_CustomMixAluPlugin_rd_16;
-  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_17;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_hidden_frac;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_18;
+  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_14;
+  wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_15;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_16;
+  wire       [33:0]   _zz_execute_CustomMixAluPlugin_rd_17;
+  wire       [32:0]   _zz_execute_CustomMixAluPlugin_rd_18;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_19;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_20;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_hidden_frac_1;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_5;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_5_1;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_6;
-  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7;
-  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_1;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_2;
-  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_rd_7_3;
-  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_7_4;
-  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_5;
-  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_6;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_7;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_8;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_9;
-  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7_10;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_20;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_21;
+  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_6;
+  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_6_1;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_7;
+  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8;
+  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_1;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_2;
+  wire       [9:0]    _zz__zz_execute_CustomMixAluPlugin_rd_8_3;
+  wire       [7:0]    _zz__zz_execute_CustomMixAluPlugin_rd_8_4;
+  wire       [39:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_5;
+  wire       [31:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_6;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_7;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_8;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_9;
+  wire       [23:0]   _zz__zz_execute_CustomMixAluPlugin_rd_8_10;
   wire       [19:0]   _zz__zz_execute_BranchPlugin_missAlignedTarget_2;
   wire       [11:0]   _zz__zz_execute_BranchPlugin_missAlignedTarget_4;
   wire       [31:0]   _zz__zz_execute_BranchPlugin_missAlignedTarget_6;
@@ -1121,6 +1119,7 @@ module VexRiscv (
   reg        [31:0]   execute_CustomMixAluPlugin_saved_product_lerp8;
   reg        [31:0]   execute_CustomMixAluPlugin_saved_product_mac;
   reg        [31:0]   execute_CustomMixAluPlugin_saved_sum_adv;
+  reg        [15:0]   execute_CustomMixAluPlugin_saved_frac;
   reg        [0:0]    execute_CustomMixAluPlugin_saved_carry_adv;
   wire                execute_CustomMixAluPlugin_is_lerp16;
   wire                execute_CustomMixAluPlugin_is_mac;
@@ -1128,8 +1127,8 @@ module VexRiscv (
   wire                execute_CustomMixAluPlugin_is_adv;
   wire                execute_CustomMixAluPlugin_is_advb;
   wire                execute_CustomMixAluPlugin_is_multicycle;
-  wire                when_CustomMixAluPlugin_l95;
-  wire                when_CustomMixAluPlugin_l100;
+  wire                when_CustomMixAluPlugin_l96;
+  wire                when_CustomMixAluPlugin_l101;
   wire       [18:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp16;
   wire       [10:0]   _zz_execute_CustomMixAluPlugin_saved_product_lerp8;
   wire       [16:0]   _zz_execute_CustomMixAluPlugin_saved_sum_adv;
@@ -1137,10 +1136,11 @@ module VexRiscv (
   wire                _zz_execute_CustomMixAluPlugin_rd_1;
   wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_2;
   wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_3;
-  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_4;
-  wire                _zz_execute_CustomMixAluPlugin_rd_5;
-  wire       [23:0]   _zz_execute_CustomMixAluPlugin_rd_6;
-  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_7;
+  wire       [16:0]   _zz_execute_CustomMixAluPlugin_rd_4;
+  wire       [15:0]   _zz_execute_CustomMixAluPlugin_rd_5;
+  wire                _zz_execute_CustomMixAluPlugin_rd_6;
+  wire       [23:0]   _zz_execute_CustomMixAluPlugin_rd_7;
+  wire       [31:0]   _zz_execute_CustomMixAluPlugin_rd_8;
   wire                execute_BranchPlugin_eq;
   wire       [2:0]    switch_Misc_l245_2;
   reg                 _zz_execute_BRANCH_COND_RESULT;
@@ -1502,35 +1502,33 @@ module VexRiscv (
   assign _zz__zz_execute_CustomMixAluPlugin_rd_3_3 = (- _zz__zz_execute_CustomMixAluPlugin_rd_3_4);
   assign _zz__zz_execute_CustomMixAluPlugin_rd_3_4 = _zz_execute_CustomMixAluPlugin_rd_2;
   assign _zz__zz_execute_CustomMixAluPlugin_rd_3_5 = _zz_execute_CustomMixAluPlugin_rd_2;
-  assign _zz_execute_CustomMixAluPlugin_rd_8 = ($signed(_zz_execute_CustomMixAluPlugin_rd_9) + $signed(_zz_execute_CustomMixAluPlugin_rd_10));
-  assign _zz_execute_CustomMixAluPlugin_rd_9 = execute_CustomMixAluPlugin_saved_rs1;
-  assign _zz_execute_CustomMixAluPlugin_rd_10 = execute_CustomMixAluPlugin_saved_product_mac;
-  assign _zz_execute_CustomMixAluPlugin_rd_11 = ({1'b0,_zz_execute_CustomMixAluPlugin_rd_12} + _zz_execute_CustomMixAluPlugin_rd_16);
-  assign _zz_execute_CustomMixAluPlugin_rd_12 = ({1'b0,execute_CustomMixAluPlugin_saved_rs1} + _zz_execute_CustomMixAluPlugin_rd_13);
-  assign _zz_execute_CustomMixAluPlugin_rd_14 = {1'b0,_zz_execute_CustomMixAluPlugin_rd_15};
-  assign _zz_execute_CustomMixAluPlugin_rd_13 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_14};
-  assign _zz_execute_CustomMixAluPlugin_rd_15 = (execute_CustomMixAluPlugin_saved_rs2 >>> 5'd16);
-  assign _zz_execute_CustomMixAluPlugin_rd_17 = {1'b0,((execute_CustomMixAluPlugin_saved_carry_adv == 1'b1) ? 32'h00000001 : 32'h0)};
-  assign _zz_execute_CustomMixAluPlugin_rd_16 = {1'd0, _zz_execute_CustomMixAluPlugin_rd_17};
-  assign _zz_execute_CustomMixAluPlugin_hidden_frac = (execute_CustomMixAluPlugin_hidden_frac + execute_CustomMixAluPlugin_saved_rs2[15 : 0]);
-  assign _zz_execute_CustomMixAluPlugin_rd_18 = (execute_CustomMixAluPlugin_saved_rs1 - _zz_execute_CustomMixAluPlugin_rd_19);
-  assign _zz_execute_CustomMixAluPlugin_rd_20 = (execute_CustomMixAluPlugin_saved_rs2 >>> 5'd16);
-  assign _zz_execute_CustomMixAluPlugin_rd_19 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_20};
-  assign _zz_execute_CustomMixAluPlugin_hidden_frac_1 = (execute_CustomMixAluPlugin_hidden_frac - _zz_execute_CustomMixAluPlugin_rd_4);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_5 = execute_CustomMixAluPlugin_saved_rs2[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_5_1 = execute_CustomMixAluPlugin_saved_rs1[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_6 = (execute_CustomMixAluPlugin_saved_product_lerp8 + (_zz_execute_CustomMixAluPlugin_rd_5 ? 32'h000000ff : 32'h0));
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_7_1) + $signed(_zz__zz_execute_CustomMixAluPlugin_rd_7_5));
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_1 = ({8'd0,_zz__zz_execute_CustomMixAluPlugin_rd_7_2} <<< 4'd8);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_3 = {{2{_zz__zz_execute_CustomMixAluPlugin_rd_7_4[7]}}, _zz__zz_execute_CustomMixAluPlugin_rd_7_4};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_2 = {{22{_zz__zz_execute_CustomMixAluPlugin_rd_7_3[9]}}, _zz__zz_execute_CustomMixAluPlugin_rd_7_3};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_4 = execute_CustomMixAluPlugin_saved_rs1[7 : 0];
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_6 = {{8{_zz__zz_execute_CustomMixAluPlugin_rd_7_7[23]}}, _zz__zz_execute_CustomMixAluPlugin_rd_7_7};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_5 = {{8{_zz__zz_execute_CustomMixAluPlugin_rd_7_6[31]}}, _zz__zz_execute_CustomMixAluPlugin_rd_7_6};
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_7 = (_zz_execute_CustomMixAluPlugin_rd_5 ? _zz__zz_execute_CustomMixAluPlugin_rd_7_8 : _zz__zz_execute_CustomMixAluPlugin_rd_7_10);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_8 = (- _zz__zz_execute_CustomMixAluPlugin_rd_7_9);
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_9 = _zz_execute_CustomMixAluPlugin_rd_6;
-  assign _zz__zz_execute_CustomMixAluPlugin_rd_7_10 = _zz_execute_CustomMixAluPlugin_rd_6;
+  assign _zz_execute_CustomMixAluPlugin_rd_9 = ($signed(_zz_execute_CustomMixAluPlugin_rd_10) + $signed(_zz_execute_CustomMixAluPlugin_rd_11));
+  assign _zz_execute_CustomMixAluPlugin_rd_10 = execute_CustomMixAluPlugin_saved_rs1;
+  assign _zz_execute_CustomMixAluPlugin_rd_11 = execute_CustomMixAluPlugin_saved_product_mac;
+  assign _zz_execute_CustomMixAluPlugin_rd_12 = ({1'b0,_zz_execute_CustomMixAluPlugin_rd_13} + _zz_execute_CustomMixAluPlugin_rd_17);
+  assign _zz_execute_CustomMixAluPlugin_rd_13 = ({1'b0,execute_CustomMixAluPlugin_saved_rs1} + _zz_execute_CustomMixAluPlugin_rd_14);
+  assign _zz_execute_CustomMixAluPlugin_rd_15 = {1'b0,_zz_execute_CustomMixAluPlugin_rd_16};
+  assign _zz_execute_CustomMixAluPlugin_rd_14 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_15};
+  assign _zz_execute_CustomMixAluPlugin_rd_16 = (execute_CustomMixAluPlugin_saved_rs2 >>> 5'd16);
+  assign _zz_execute_CustomMixAluPlugin_rd_18 = {1'b0,(_zz_execute_CustomMixAluPlugin_rd_4[16] ? 32'h00000001 : 32'h0)};
+  assign _zz_execute_CustomMixAluPlugin_rd_17 = {1'd0, _zz_execute_CustomMixAluPlugin_rd_18};
+  assign _zz_execute_CustomMixAluPlugin_rd_19 = (execute_CustomMixAluPlugin_saved_rs1 - _zz_execute_CustomMixAluPlugin_rd_20);
+  assign _zz_execute_CustomMixAluPlugin_rd_21 = (execute_CustomMixAluPlugin_saved_rs2 >>> 5'd16);
+  assign _zz_execute_CustomMixAluPlugin_rd_20 = {16'd0, _zz_execute_CustomMixAluPlugin_rd_21};
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_6 = execute_CustomMixAluPlugin_saved_rs2[7 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_6_1 = execute_CustomMixAluPlugin_saved_rs1[7 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_7 = (execute_CustomMixAluPlugin_saved_product_lerp8 + (_zz_execute_CustomMixAluPlugin_rd_6 ? 32'h000000ff : 32'h0));
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_8_1) + $signed(_zz__zz_execute_CustomMixAluPlugin_rd_8_5));
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_1 = ({8'd0,_zz__zz_execute_CustomMixAluPlugin_rd_8_2} <<< 4'd8);
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_3 = {{2{_zz__zz_execute_CustomMixAluPlugin_rd_8_4[7]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_4};
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_2 = {{22{_zz__zz_execute_CustomMixAluPlugin_rd_8_3[9]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_3};
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_4 = execute_CustomMixAluPlugin_saved_rs1[7 : 0];
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_6 = {{8{_zz__zz_execute_CustomMixAluPlugin_rd_8_7[23]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_7};
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_5 = {{8{_zz__zz_execute_CustomMixAluPlugin_rd_8_6[31]}}, _zz__zz_execute_CustomMixAluPlugin_rd_8_6};
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_7 = (_zz_execute_CustomMixAluPlugin_rd_6 ? _zz__zz_execute_CustomMixAluPlugin_rd_8_8 : _zz__zz_execute_CustomMixAluPlugin_rd_8_10);
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_8 = (- _zz__zz_execute_CustomMixAluPlugin_rd_8_9);
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_9 = _zz_execute_CustomMixAluPlugin_rd_7;
+  assign _zz__zz_execute_CustomMixAluPlugin_rd_8_10 = _zz_execute_CustomMixAluPlugin_rd_7;
   assign _zz__zz_execute_BranchPlugin_missAlignedTarget_2 = {{{execute_INSTRUCTION[31],execute_INSTRUCTION[19 : 12]},execute_INSTRUCTION[20]},execute_INSTRUCTION[30 : 21]};
   assign _zz__zz_execute_BranchPlugin_missAlignedTarget_4 = {{{execute_INSTRUCTION[31],execute_INSTRUCTION[7]},execute_INSTRUCTION[30 : 25]},execute_INSTRUCTION[11 : 8]};
   assign _zz__zz_execute_BranchPlugin_missAlignedTarget_6 = {_zz_execute_BranchPlugin_missAlignedTarget_1,execute_INSTRUCTION[31 : 20]};
@@ -2865,7 +2863,7 @@ module VexRiscv (
       end
     end
     if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l100) begin
+      if(when_CustomMixAluPlugin_l101) begin
         if(execute_CustomMixAluPlugin_is_multicycle) begin
           execute_arbitration_haltItself = 1'b1;
         end
@@ -3665,7 +3663,7 @@ module VexRiscv (
   always @(*) begin
     _zz_execute_REGFILE_WRITE_DATA = _zz_execute_REGFILE_WRITE_DATA_1;
     if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l100) begin
+      if(when_CustomMixAluPlugin_l101) begin
         if(!execute_CustomMixAluPlugin_is_multicycle) begin
           case(execute_CustomMixAluPlugin_funct7)
             7'h03 : begin
@@ -4235,7 +4233,7 @@ module VexRiscv (
   always @(*) begin
     execute_CustomMixAluPlugin_rd = 32'h0;
     if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l100) begin
+      if(when_CustomMixAluPlugin_l101) begin
         if(!execute_CustomMixAluPlugin_is_multicycle) begin
           case(execute_CustomMixAluPlugin_funct7)
             7'h03 : begin
@@ -4251,16 +4249,16 @@ module VexRiscv (
             execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_3;
           end
           7'h02 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_8;
+            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_9;
           end
           7'h04 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_11[31:0];
+            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_12[31:0];
           end
           7'h05 : begin
-            execute_CustomMixAluPlugin_rd = (_zz_execute_CustomMixAluPlugin_rd_18 - ((execute_CustomMixAluPlugin_hidden_frac < _zz_execute_CustomMixAluPlugin_rd_4) ? 32'h00000001 : 32'h0));
+            execute_CustomMixAluPlugin_rd = (_zz_execute_CustomMixAluPlugin_rd_19 - ((execute_CustomMixAluPlugin_saved_frac < _zz_execute_CustomMixAluPlugin_rd_5) ? 32'h00000001 : 32'h0));
           end
           7'h06 : begin
-            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_7;
+            execute_CustomMixAluPlugin_rd = _zz_execute_CustomMixAluPlugin_rd_8;
           end
           default : begin
           end
@@ -4275,8 +4273,8 @@ module VexRiscv (
   assign execute_CustomMixAluPlugin_is_adv = (execute_CustomMixAluPlugin_funct7 == 7'h04);
   assign execute_CustomMixAluPlugin_is_advb = (execute_CustomMixAluPlugin_funct7 == 7'h05);
   assign execute_CustomMixAluPlugin_is_multicycle = ((((execute_CustomMixAluPlugin_is_lerp16 || execute_CustomMixAluPlugin_is_mac) || execute_CustomMixAluPlugin_is_lerp8) || execute_CustomMixAluPlugin_is_adv) || execute_CustomMixAluPlugin_is_advb);
-  assign when_CustomMixAluPlugin_l95 = (! execute_arbitration_isValid);
-  assign when_CustomMixAluPlugin_l100 = (! execute_CustomMixAluPlugin_busy);
+  assign when_CustomMixAluPlugin_l96 = (! execute_arbitration_isValid);
+  assign when_CustomMixAluPlugin_l101 = (! execute_CustomMixAluPlugin_busy);
   assign _zz_execute_CustomMixAluPlugin_saved_product_lerp16 = {{1{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16[17]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp16};
   assign _zz_execute_CustomMixAluPlugin_saved_product_lerp8 = {{1{_zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8[9]}}, _zz__zz_execute_CustomMixAluPlugin_saved_product_lerp8};
   assign _zz_execute_CustomMixAluPlugin_saved_sum_adv = ({1'b0,execute_CustomMixAluPlugin_hidden_frac} + {1'b0,execute_CustomMixAluPlugin_rs2[15 : 0]});
@@ -4284,10 +4282,11 @@ module VexRiscv (
   assign _zz_execute_CustomMixAluPlugin_rd_1 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_1) < $signed(19'h0));
   assign _zz_execute_CustomMixAluPlugin_rd_2 = (_zz__zz_execute_CustomMixAluPlugin_rd_2 >>> 4'd15);
   assign _zz_execute_CustomMixAluPlugin_rd_3 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_3) + $signed(_zz__zz_execute_CustomMixAluPlugin_rd_3_1));
-  assign _zz_execute_CustomMixAluPlugin_rd_4 = execute_CustomMixAluPlugin_saved_rs2[15 : 0];
-  assign _zz_execute_CustomMixAluPlugin_rd_5 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_5) < $signed(_zz__zz_execute_CustomMixAluPlugin_rd_5_1));
-  assign _zz_execute_CustomMixAluPlugin_rd_6 = (_zz__zz_execute_CustomMixAluPlugin_rd_6 >>> 4'd8);
-  assign _zz_execute_CustomMixAluPlugin_rd_7 = _zz__zz_execute_CustomMixAluPlugin_rd_7[31:0];
+  assign _zz_execute_CustomMixAluPlugin_rd_4 = ({1'b0,execute_CustomMixAluPlugin_saved_frac} + {1'b0,execute_CustomMixAluPlugin_saved_rs2[15 : 0]});
+  assign _zz_execute_CustomMixAluPlugin_rd_5 = execute_CustomMixAluPlugin_saved_rs2[15 : 0];
+  assign _zz_execute_CustomMixAluPlugin_rd_6 = ($signed(_zz__zz_execute_CustomMixAluPlugin_rd_6) < $signed(_zz__zz_execute_CustomMixAluPlugin_rd_6_1));
+  assign _zz_execute_CustomMixAluPlugin_rd_7 = (_zz__zz_execute_CustomMixAluPlugin_rd_7 >>> 4'd8);
+  assign _zz_execute_CustomMixAluPlugin_rd_8 = _zz__zz_execute_CustomMixAluPlugin_rd_8[31:0];
   assign execute_BranchPlugin_eq = (execute_SRC1 == execute_SRC2);
   assign switch_Misc_l245_2 = execute_INSTRUCTION[14 : 12];
   always @(*) begin
@@ -4945,11 +4944,11 @@ module VexRiscv (
         endcase
       end
       execute_CsrPlugin_wfiWake <= ((|{_zz_when_CsrPlugin_l1302_2,{_zz_when_CsrPlugin_l1302_1,_zz_when_CsrPlugin_l1302}}) || CsrPlugin_thirdPartyWake);
-      if(when_CustomMixAluPlugin_l95) begin
+      if(when_CustomMixAluPlugin_l96) begin
         execute_CustomMixAluPlugin_busy <= 1'b0;
       end
       if(execute_IS_CUSTOM_MIX) begin
-        if(when_CustomMixAluPlugin_l100) begin
+        if(when_CustomMixAluPlugin_l101) begin
           if(execute_CustomMixAluPlugin_is_multicycle) begin
             execute_CustomMixAluPlugin_busy <= 1'b1;
           end else begin
@@ -4968,13 +4967,13 @@ module VexRiscv (
               execute_CustomMixAluPlugin_hidden_s <= _zz_execute_CustomMixAluPlugin_rd_3[17:0];
             end
             7'h04 : begin
-              execute_CustomMixAluPlugin_hidden_frac <= _zz_execute_CustomMixAluPlugin_hidden_frac[15 : 0];
+              execute_CustomMixAluPlugin_hidden_frac <= _zz_execute_CustomMixAluPlugin_rd_4[15 : 0];
             end
             7'h05 : begin
-              execute_CustomMixAluPlugin_hidden_frac <= _zz_execute_CustomMixAluPlugin_hidden_frac_1[15 : 0];
+              execute_CustomMixAluPlugin_hidden_frac <= (execute_CustomMixAluPlugin_saved_frac - _zz_execute_CustomMixAluPlugin_rd_5);
             end
             7'h06 : begin
-              execute_CustomMixAluPlugin_hidden_s <= _zz_execute_CustomMixAluPlugin_rd_7[17:0];
+              execute_CustomMixAluPlugin_hidden_s <= _zz_execute_CustomMixAluPlugin_rd_8[17:0];
             end
             default : begin
             end
@@ -5123,11 +5122,12 @@ module VexRiscv (
       end
     end
     if(execute_IS_CUSTOM_MIX) begin
-      if(when_CustomMixAluPlugin_l100) begin
+      if(when_CustomMixAluPlugin_l101) begin
         if(execute_CustomMixAluPlugin_is_multicycle) begin
           execute_CustomMixAluPlugin_saved_rs1 <= execute_CustomMixAluPlugin_rs1;
           execute_CustomMixAluPlugin_saved_rs2 <= execute_CustomMixAluPlugin_rs2;
           execute_CustomMixAluPlugin_saved_funct7 <= execute_CustomMixAluPlugin_funct7;
+          execute_CustomMixAluPlugin_saved_frac <= execute_CustomMixAluPlugin_hidden_frac;
           if(execute_CustomMixAluPlugin_is_lerp16) begin
             execute_CustomMixAluPlugin_saved_product_lerp16 <= _zz_execute_CustomMixAluPlugin_saved_product_lerp16_1[31:0];
           end

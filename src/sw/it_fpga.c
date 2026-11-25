@@ -95,7 +95,7 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
-  uint32_t rate = it_mod.used_channels <= 16 ? 48000 : it_mod.used_channels <= 32 ? 32000 : 24000;
+  uint32_t rate = it_mod.used_channels <= 16 ? 48000 : 24000;
   it_mixrate = rate;
   cfg.mixrate = rate;
   cfg.flags = (rate < 48000) ? IT_CFG_NEAREST : 0;
@@ -171,7 +171,7 @@ void it_fpga_service(void) {
     if (ar > it_peak_r) it_peak_r = ar;
     it_last_l = l;
     it_last_r = r;
-    mixer_write((int16_t)l, (int16_t)r);
+    mixer_write_it((int16_t)l, (int16_t)r);
   }
 
   if (it_pl.finished) {

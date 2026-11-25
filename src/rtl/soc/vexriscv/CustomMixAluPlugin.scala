@@ -50,6 +50,11 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
       BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
       RS1_USE -> True, RS2_USE -> True))
+     // SETS (7): hidden_s = rs1, single-cycle write
+     decoderService.add(M"0000111----------000-----0001011", List(
+       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
+       BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
+       RS1_USE -> True, RS2_USE -> False))
   }
 
   override def build(pipeline: VexRiscv): Unit = {
@@ -76,6 +81,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
       val saved_product_lerp8 = Reg(UInt(32 bits))
       val saved_product_mac = Reg(UInt(32 bits))
       val saved_sum_adv = Reg(UInt(32 bits))
+      val saved_frac = Reg(UInt(16 bits))
       val saved_carry_adv = Reg(UInt(1 bit))
 
       // Helper functions for sign extension
@@ -103,6 +109,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
             saved_rs1 := rs1
             saved_rs2 := rs2
             saved_funct7 := funct7
+            saved_frac := hidden_frac
             busy := True
             execute.arbitration.haltItself := True
 
@@ -130,8 +137,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
               saved_product_mac := (hidden_s * g).resize(32).asUInt
             }
             when(is_adv) {
-              val sf = rs2(15 downto 0)
-              val t = hidden_frac +^ sf
+              val t = hidden_frac +^ rs2(15 downto 0)
               saved_sum_adv := t.resize(32)
               saved_carry_adv := Mux(t(16), U(1, 1 bit), U(0, 1 bit))
             }
@@ -143,6 +149,13 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
             }
             is(3) {
               rd := hidden_frac.resize(32 bits)
+              when(execute.input(REGFILE_WRITE_VALID)) {
+                execute.insert(REGFILE_WRITE_DATA) := rd.asBits
+              }
+            }
+            is(7) {
+              hidden_s := sign16(rs1)
+              rd := rs1
               when(execute.input(REGFILE_WRITE_VALID)) {
                 execute.insert(REGFILE_WRITE_DATA) := rd.asBits
               }
@@ -176,17 +189,18 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
 
             // ADV - complete carry addition
             is(4) {
-              val carry_bit = Mux(saved_carry_adv === 1, U(1, 32 bits), U(0, 32 bits))
+              val t = saved_frac +^ saved_rs2(15 downto 0)
+              val carry_bit = Mux(t(16), U(1, 32 bits), U(0, 32 bits))
               rd := (saved_rs1 +^ (saved_rs2 >> 16) +^ carry_bit).resize(32 bits)
-              hidden_frac := (hidden_frac + (saved_rs2(15 downto 0)))(15 downto 0)
+              hidden_frac := t(15 downto 0)
             }
 
             // ADVB - complete with borrow
             is(5) {
               val sf = saved_rs2(15 downto 0)
-              val borrow = Mux(hidden_frac < sf, U(1, 32 bits), U(0, 32 bits))
+              val borrow = Mux(saved_frac < sf, U(1, 32 bits), U(0, 32 bits))
               rd := (saved_rs1 - (saved_rs2 >> 16) - borrow).resize(32 bits)
-              hidden_frac := (hidden_frac - sf)(15 downto 0)
+              hidden_frac := saved_frac - sf
             }
 
             // LERP8 - complete after product is ready

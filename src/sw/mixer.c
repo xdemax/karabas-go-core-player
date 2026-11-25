@@ -35,3 +35,8 @@ void mixer_write_noana(int16_t l, int16_t r) {
   int16_t fr = lp(r, &x1r, &x2r, &y1r, &y2r);
   audio_write(fl, fr);
 }
+
+void mixer_write_it(int16_t l, int16_t r) {
+  analysis_push(l, r);
+  audio_write(l, r);
+}

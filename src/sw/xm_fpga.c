@@ -367,7 +367,8 @@ static void parse_row(void) {
         if (par) {
           if (par < 32) X.speed = par;
           else X.bpm = par;
-          int spt = 120000 / (X.bpm ? X.bpm : 125);
+          uint32_t bpm = X.bpm ? X.bpm : 125;
+          int spt = (int)(((uint64_t)120000 * X.rate) / (48000ull * bpm));
           if (spt < 1) spt = 1;
           if (spt > 4000) spt = 4000;
           X.spt = spt;
@@ -584,8 +585,11 @@ void fpga_xm_service(void) {
     }
     
     for (int i = 0; i < out_count; i++) {
-      int32_t l = fmout_resampled[2 * i];
-      int32_t r = fmout_resampled[2 * i + 1];
+      int32_t og = (int32_t)X.vol << (X.chn > 8 ? 1 : 0);
+      int32_t l = ((int32_t)fmout_resampled[2 * i] * og) >> 6;
+      int32_t r = ((int32_t)fmout_resampled[2 * i + 1] * og) >> 6;
+      if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
+      if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
       int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
       if (al > X.peak_l) X.peak_l = al;
       if (ar > X.peak_r) X.peak_r = ar;
@@ -709,7 +713,7 @@ static int parse_xm(uint32_t size) {
   X.order = 0; X.row = 0; X.tick = 0;
   if (!X.speed) X.speed = 6;
   if (!X.bpm) X.bpm = 125;
-  X.spt = 120000 / X.bpm;
+  X.spt = (int)(((uint64_t)120000 * X.rate) / (48000ull * X.bpm));
   X.tleft = X.spt;
   X.jump = -1; X.brk = 0; X.brow = 0;
   X.gvol = 64;

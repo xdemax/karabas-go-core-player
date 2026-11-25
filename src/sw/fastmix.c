@@ -75,6 +75,9 @@ static int max_mixed = 32;
 #define FM_LERP8(rd, s0, s1) \
   asm volatile (".insn r 0x0b, 0, 6, %0, %1, %2" : "=r"(rd) : "r"(s0), "r"(s1))
 
+#define FM_SETS(s) \
+  asm volatile (".insn r 0x0b, 0, 7, x0, %0, x0" : : "r"(s))
+
 #else
 
 /* C fallback: hidden state in static variables. */
@@ -119,6 +122,9 @@ static int32_t fm_hidden_s;
   (rd) = _s0 * 256 + (((_diff * (int32_t)fm_hidden_frac) >> 8)); \
   fm_hidden_s = (rd); \
 } while (0)
+
+#define FM_SETS(s) \
+  (fm_hidden_s = (s))
 
 #endif
 
@@ -185,10 +191,10 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     if (nearest) {
       if (is8) {
         int32_t b = p8[pos];
-        FM_LERP8(s, b, b);
+        FM_SETS(b);
       } else {
         int32_t b = p16[pos];
-        FM_LERP16(s, b, b);
+        FM_SETS(b);
       }
     } else {
       if (is8) {
@@ -222,10 +228,10 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     if (nearest) {
       if (is8) {
         int32_t b = p8[pos];
-        FM_LERP8(s, b, b);
+        FM_SETS(b);
       } else {
         int32_t b = p16[pos];
-        FM_LERP16(s, b, b);
+        FM_SETS(b);
       }
     } else {
       if (is8) {
@@ -262,10 +268,10 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     if (nearest) {
       if (is8) {
         int32_t b = p8[pos];
-        FM_LERP8(s, b, b);
+        FM_SETS(b);
       } else {
         int32_t b = p16[pos];
-        FM_LERP16(s, b, b);
+        FM_SETS(b);
       }
     } else {
       if (is8) {
@@ -300,10 +306,10 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     if (nearest) {
       if (is8) {
         int32_t b = p8[pos];
-        FM_LERP8(s, b, b);
+        FM_SETS(b);
       } else {
         int32_t b = p16[pos];
-        FM_LERP16(s, b, b);
+        FM_SETS(b);
       }
     } else {
       if (is8) {
