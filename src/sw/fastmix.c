@@ -71,7 +71,7 @@ FM_AI void advance_pos_bwd(uint32_t *ppos, uint32_t *pfrac, uint32_t si, uint32_
 /* ------------------------------------------------------------------ */
 /* kernels: n frames, no boundary inside                              */
 
-FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
+FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int nearest,
                 uint32_t *ppos, uint32_t *pfrac, uint32_t step, int n,
                 int32_t *pgl, int32_t *pgr, int32_t dl, int32_t dr)
 {
@@ -91,11 +91,19 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
   for (; i + 1 < n; i += 2) {
     int32_t s;
     /* Iteration 1 (forward/backward depending on bwd) */
-    if (is8) {
-      int32_t s0 = p8[pos], s1 = p8[pos + 1];
-      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    if (nearest) {
+      if (is8) {
+        s = p8[pos] * 256;
+      } else {
+        s = p16[pos];
+      }
     } else {
-      s = lerp16(p16[pos], p16[pos + 1], frac);
+      if (is8) {
+        int32_t s0 = p8[pos], s1 = p8[pos + 1];
+        s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+      } else {
+        s = lerp16(p16[pos], p16[pos + 1], frac);
+      }
     }
     if (ramping) {
       gl += dl; gr += dr;
@@ -113,11 +121,19 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
     }
 
     /* Iteration 2 (backward path) */
-    if (is8) {
-      int32_t s0 = p8[pos], s1 = p8[pos + 1];
-      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    if (nearest) {
+      if (is8) {
+        s = p8[pos] * 256;
+      } else {
+        s = p16[pos];
+      }
     } else {
-      s = lerp16(p16[pos], p16[pos + 1], frac);
+      if (is8) {
+        int32_t s0 = p8[pos], s1 = p8[pos + 1];
+        s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+      } else {
+        s = lerp16(p16[pos], p16[pos + 1], frac);
+      }
     }
     if (ramping) {
       gl += dl; gr += dr;
@@ -137,11 +153,19 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
   /* Handle remaining frame if n is odd */
   if (i < n) {
     int32_t s;
-    if (is8) {
-      int32_t s0 = p8[pos], s1 = p8[pos + 1];
-      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    if (nearest) {
+      if (is8) {
+        s = p8[pos] * 256;
+      } else {
+        s = p16[pos];
+      }
     } else {
-      s = lerp16(p16[pos], p16[pos + 1], frac);
+      if (is8) {
+        int32_t s0 = p8[pos], s1 = p8[pos + 1];
+        s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+      } else {
+        s = lerp16(p16[pos], p16[pos + 1], frac);
+      }
     }
     if (ramping) {
       gl += dl; gr += dr;
@@ -160,11 +184,19 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping,
 #else
   while (n-- > 0) {
     int32_t s;
-    if (is8) {
-      int32_t s0 = p8[pos], s1 = p8[pos + 1];
-      s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+    if (nearest) {
+      if (is8) {
+        s = p8[pos] * 256;
+      } else {
+        s = p16[pos];
+      }
     } else {
-      s = lerp16(p16[pos], p16[pos + 1], frac);
+      if (is8) {
+        int32_t s0 = p8[pos], s1 = p8[pos + 1];
+        s = s0 * 256 + (((s1 - s0) * frac) >> 8);
+      } else {
+        s = lerp16(p16[pos], p16[pos + 1], frac);
+      }
     }
 
     if (ramping) {
@@ -198,8 +230,9 @@ static void kernel(int32_t *a, const fm_voice_t *v, int ramping,
 {
   const void *d = v->data;
   uint32_t st = v->step;
+  int nearest = (v->flags & FM_NEAREST) ? 1 : 0;
   int key = ((v->flags & FM_8BIT) ? 4 : 0) | (v->dir ? 2 : 0) | (ramping ? 1 : 0);
-#define K(E, B, R) kern(a, d, E, B, R, ppos, pfrac, st, n, gl, gr, dl, dr)
+#define K(E, B, R) kern(a, d, E, B, R, nearest, ppos, pfrac, st, n, gl, gr, dl, dr)
   switch (key) {
   case 0: K(0, 0, 0); break;
   case 1: K(0, 0, 1); break;

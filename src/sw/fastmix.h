@@ -22,7 +22,8 @@ enum {
   FM_8BIT     = 1u << 0,
   FM_LOOP     = 1u << 1,
   FM_PINGPONG = 1u << 2,   /* only with FM_LOOP */
-  FM_ACTIVE   = 1u << 3
+  FM_ACTIVE   = 1u << 3,
+  FM_NEAREST  = 1u << 4    /* no interpolation; use sample at pos */
 };
 
 typedef struct {

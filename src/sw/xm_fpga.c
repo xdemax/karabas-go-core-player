@@ -522,7 +522,7 @@ static void mix(int n) {
     v->step = ch->step;
     v->volume = ch->mix_vol;
     v->pan = (int) ch->pan - 128;
-    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0);
+    v->flags = FM_ACTIVE | FM_8BIT | (ch->llen ? FM_LOOP : 0) | (X.chn > 16 ? FM_NEAREST : 0);
   }
   fm_mix(fmout, n, fv, X.chn);
   for (int c = 0; c < X.chn; c++) {

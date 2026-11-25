@@ -256,6 +256,35 @@ static void test_blocks(void)
   test_blocks_one(1);
 }
 
+/* 9. nearest-neighbor (no interpolation): step 0.5, data {0,1000,-1000,500} */
+static void test_nearest(void)
+{
+  int16_t src[4] = { 0, 1000, -1000, 500 };
+  int16_t *buf = mk16(src, 4);
+  fm_voice_t v;
+  int16_t out[16 * 2];
+  int i;
+  
+  vinit(&v, buf, 4, 0, 0.5, 256, -128);
+  fm_mix(out, 16, &v, 1);
+  
+  /* Expected: each src sample repeated twice (step 0.5 → 2 frames per sample) */
+  int expected[16] = { 0, 0, 1000, 1000, -1000, -1000, 500, 500, 0, 0, 0, 0, 0, 0, 0, 0 };
+  for (i = 0; i < 16; i++) {
+    if (i < 8) {
+      CHECK(out[2*i] == expected[i], "nearest i=%d got %d want %d", i, out[2*i], expected[i]);
+    } else {
+      CHECK(out[2*i] == 0, "nearest silence i=%d", i);
+    }
+    CHECK(out[2*i + 1] == 0, "nearest right silent i=%d", i);
+  }
+  
+  /* Position/length tracking */
+  CHECK(!(v.flags & FM_ACTIVE), "voice stopped after end");
+  
+  free(buf - GUARD);
+}
+
 int main(void)
 {
   fm_reset();
@@ -265,7 +294,8 @@ int main(void)
   test_pingpong(); fm_reset();
   test_ramp(); fm_reset();
   test_many(); fm_reset();
-  test_blocks();
+  test_blocks(); fm_reset();
+  test_nearest();
   printf("%d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }
