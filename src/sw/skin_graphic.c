@@ -176,7 +176,7 @@ static void draw_row(const player_view_t *v, int k) {
   if (off > w - avail) off = w - avail;
   if (off > 0) {
     // Keep the size column and the panel clean while the long name slides.
-    gfx_keep(NAME_X + avail, y - 2, LEFT_W - (NAME_X + avail), rh + 2);
+    gfx_keep(NAME_X + avail, y - 2, FB_W - (NAME_X + avail), rh + 2);   /* protect the size column AND the right panel */
     gfx_text_left(lf, NAME_X - off, y + rh / 2, nm, r_text);
     gfx_keep_off();
   } else {
