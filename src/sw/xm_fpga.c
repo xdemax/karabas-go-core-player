@@ -15,7 +15,7 @@
 #define XM_INS 128
 #define XM_SMP 256
 #define XM_CHUNK 256
-#define XM_MIXBUF 256
+#define XM_MIXBUF 128
 
 typedef struct {
   const uint8_t *data;
@@ -660,27 +660,70 @@ static void mix(int n) {
         }
       }
     } else {
-      for (int i = 0; i < n; i++) {
-        uint32_t idx = pos >> 16;
-        if (idx >= end) {
-          if (!llen) { ch->active = 0; break; }
-          uint32_t over = idx - end;
-          if (over >= llen) over %= llen;
-          pos = ((loop + over) << 16) | (pos & 0xFFFF);
-          idx = loop + over;
-        }
-        int s;
-        if (X.interp) {
+      if (X.interp) {
+        for (int i = 0; i < n; i += 2) {
+          uint32_t idx = pos >> 16;
+          if (idx >= end) {
+            if (!llen) { ch->active = 0; break; }
+            uint32_t over = idx - end;
+            if (over >= llen) over %= llen;
+            pos = ((loop + over) << 16) | (pos & 0xFFFF);
+            idx = loop + over;
+          }
           uint32_t fr = (pos >> 8) & 0xFFu;
           int a = (int8_t) data[idx];
           int b = (idx + 1 < end) ? (int8_t) data[idx + 1] : a;
-          s = a + (((b - a) * (int32_t) fr) >> 8);
-        } else {
-          s = (int8_t) data[idx];
+          int s = a + (((b - a) * (int32_t) fr) >> 8);
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+          if (i + 1 < n) {
+            idx = pos >> 16;
+            if (idx >= end) {
+              if (!llen) { ch->active = 0; break; }
+              over = idx - end;
+              if (over >= llen) over %= llen;
+              pos = ((loop + over) << 16) | (pos & 0xFFFF);
+              idx = loop + over;
+            }
+            fr = (pos >> 8) & 0xFFu;
+            a = (int8_t) data[idx];
+            b = (idx + 1 < end) ? (int8_t) data[idx + 1] : a;
+            s = a + (((b - a) * (int32_t) fr) >> 8);
+            mixbuf[2 * i + 2] += (s * lg) >> 8;
+            mixbuf[2 * i + 3] += (s * rg) >> 8;
+            pos += step;
+          }
         }
-        mixbuf[2 * i] += (s * lg) >> 8;
-        mixbuf[2 * i + 1] += (s * rg) >> 8;
-        pos += step;
+      } else {
+        for (int i = 0; i < n; i += 2) {
+          uint32_t idx = pos >> 16;
+          if (idx >= end) {
+            if (!llen) { ch->active = 0; break; }
+            uint32_t over = idx - end;
+            if (over >= llen) over %= llen;
+            pos = ((loop + over) << 16) | (pos & 0xFFFF);
+            idx = loop + over;
+          }
+          int s = (int8_t) data[idx];
+          mixbuf[2 * i] += (s * lg) >> 8;
+          mixbuf[2 * i + 1] += (s * rg) >> 8;
+          pos += step;
+          if (i + 1 < n) {
+            idx = pos >> 16;
+            if (idx >= end) {
+              if (!llen) { ch->active = 0; break; }
+              over = idx - end;
+              if (over >= llen) over %= llen;
+              pos = ((loop + over) << 16) | (pos & 0xFFFF);
+              idx = loop + over;
+            }
+            s = (int8_t) data[idx];
+            mixbuf[2 * i + 2] += (s * lg) >> 8;
+            mixbuf[2 * i + 3] += (s * rg) >> 8;
+            pos += step;
+          }
+        }
       }
     }
     ch->pos = pos;
@@ -701,23 +744,30 @@ void fpga_xm_service(void) {
     }
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
-    mix(n);
     
-    if (X.rate == 48000 || X.rate == 0) {
-      /* No resampling: the mix buffer goes straight out (calling rs_frame per sample was
-       * pure overhead at 48 kHz: a call and a branch for every sample). */
-      for (int i = 0; i < n; i++)
-        emit_sample(mixbuf[2 * i], mixbuf[2 * i + 1]);
-    } else {
-      int out_count = 0;
-      for (int i = 0; i < n && out_count < 512; i++) {
-        int16_t l = (int16_t) mixbuf[2 * i];
-        int16_t r = (int16_t) mixbuf[2 * i + 1];
-        int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
-        out_count += nout;
+    int remaining = n;
+    while (remaining > 0) {
+      int chunk = remaining > XM_MIXBUF ? XM_MIXBUF : remaining;
+      mix(chunk);
+      
+      if (X.rate == 48000 || X.rate == 0) {
+        /* No resampling: the mix buffer goes straight out (calling rs_frame per sample was
+         * pure overhead at 48 kHz: a call and a branch for every sample). */
+        for (int i = 0; i < chunk; i++)
+          emit_sample(mixbuf[2 * i], mixbuf[2 * i + 1]);
+      } else {
+        int out_count = 0;
+        for (int i = 0; i < chunk && out_count < 512; i++) {
+          int16_t l = (int16_t) mixbuf[2 * i];
+          int16_t r = (int16_t) mixbuf[2 * i + 1];
+          int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
+          out_count += nout;
+        }
+        for (int i = 0; i < out_count; i++)
+          emit_sample(fmout_resampled[2 * i], fmout_resampled[2 * i + 1]);
       }
-      for (int i = 0; i < out_count; i++)
-        emit_sample(fmout_resampled[2 * i], fmout_resampled[2 * i + 1]);
+      
+      remaining -= chunk;
     }
     
     free -= n;
