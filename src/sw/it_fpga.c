@@ -98,7 +98,9 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   it_mixrate = rate;
   cfg.mixrate = rate;
   cfg.flags = (rate < 48000) ? IT_CFG_NEAREST : 0;
-  cfg.out_gain = 256;            // calibrated later on target
+  // Calibrated against libopenmpt (openmpt123) on En-trance.it: RMS within 10 % of the
+  // reference and no clipping. 256 was 2.6x too hot and clipped (audible distortion).
+  cfg.out_gain = 112;
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
   fm_set_max_mixed(32);
