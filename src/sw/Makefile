@@ -1,8 +1,22 @@
 # The program of the player core (rtl/soc/menu_soc.v): player.bin is the ROM of musicplayer.kg.
 XPACK  ?= $(HOME)/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin
 CROSS  := $(XPACK)/riscv-none-elf-
-BUILD_ID := $(shell sed -n 's/.*"build"[^"]*"\([^"]*\)".*/\1/p' ../core.json)
-CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -DFM_CUSTOM_CPU=1 -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
+# Build id shown on screen: <A|N><core.json build>-<git rev>
+#   A = custom ALU instructions compiled in, N = C fallback (no ALU).
+# Override with e.g. `make ALU=1`. Never let two different binaries show the
+# same id: the whole point is to tell flashed builds apart.
+BUILD_BASE := $(shell sed -n 's/.*"build"[^"]*"\([^"]*\)".*/\1/p' ../core.json)
+GITREV     := $(shell git -C .. rev-parse --short=6 HEAD 2>/dev/null || echo nogit)
+ALU        ?= 0
+ifeq ($(ALU),1)
+FM_ALU_TAG := A
+FM_ALU_CFLAGS := -DFM_CUSTOM_CPU=1
+else
+FM_ALU_TAG := N
+FM_ALU_CFLAGS :=
+endif
+BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)
+CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS $(FM_ALU_CFLAGS) -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
 ifneq ($(IT_PROFILE),)
 CFLAGS += -DIT_PROFILE
 endif
