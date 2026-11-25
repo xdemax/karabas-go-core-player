@@ -1,6 +1,15 @@
 #include "audio.h"
 #include "mmio.h"
 
+static char *dec(char *q, uint32_t v) {
+  char t[10];
+  int n = 0;
+  if (!v) { *q++ = '0'; return q; }
+  while (v) { t[n++] = (char) ('0' + (v % 10u)); v /= 10u; }
+  while (n) *q++ = t[--n];
+  return q;
+}
+
 int audio_free(void) { return (int) (MMIO(0x74) & 0xFFFF); }
 uint16_t audio_drop(void) { return (uint16_t) (MMIO(0x78) & 0xFFFF); }
 uint16_t audio_under(void) { return (uint16_t) (MMIO(0x7c) & 0xFFFF); }
@@ -12,9 +21,31 @@ void audio_note_written(int n) { if (n > 0) nwritten += (uint32_t) n; }
 uint32_t audio_written(void) { return nwritten; }
 int audio_rate(void) { return aud_hz; }
 
-void audio_set_rate(int hz) {
-  MMIO(0x80) = (uint32_t) hz;
+// Returns the rate the hardware actually runs at. The mixer MUST use this value:
+// if the FPGA register does not take the new rate, falling back to 48 kHz keeps the
+// mixer and the FIFO in step (otherwise the pitch and the tempo drift).
+int audio_set_rate(int hz) {
+  MMIO(0x44) = (uint32_t) hz;
+  uint32_t rb = MMIO(0x44) & 0x1FFFFFFu;
+  if (rb != (uint32_t) hz) {
+    hz = 48000;
+    MMIO(0x44) = 48000u;
+  }
   aud_hz = hz;
+  return hz;
+}
+
+// Diagnostic: what the software asked for and what the FPGA register actually holds.
+static char rate_dbg[32];
+const char *audio_rate_debug(void) {
+  uint32_t hw = MMIO(0x44) & 0x7FFFFFFu;
+  char *q = rate_dbg;
+  *q++ = 'R';
+  q = dec(q, (uint32_t) aud_hz);
+  *q++ = '/';
+  q = dec(q, hw);
+  *q = 0;
+  return rate_dbg;
 }
 
 void audio_write(int16_t l, int16_t r) {

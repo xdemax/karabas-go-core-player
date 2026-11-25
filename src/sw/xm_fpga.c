@@ -598,8 +598,7 @@ static int parse_xm(uint32_t size) {
   if (X.restart < 0 || X.restart >= X.song) X.restart = 0;
   if (X.chn < 1 || X.chn > XM_CH) X.chn = XM_CH;
   // Per-file rate based on channel count
-  X.rate = X.chn <= 16 ? 48000 : 32000;
-  audio_set_rate((int) X.rate);
+  X.rate = (uint32_t) audio_set_rate(X.chn <= 16 ? 48000 : 32000);
   // Linear interpolation is a quality win, but a dense 32-channel XM needs the nearest-sample
   // path to keep the 48 kHz FIFO alive. Keep interpolation for normal-width modules.
   X.interp = X.chn <= 16;

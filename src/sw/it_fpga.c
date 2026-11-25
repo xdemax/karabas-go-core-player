@@ -94,7 +94,7 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
-  uint32_t rate = it_mod.used_channels <= 16 ? 48000 : 32000;
+  uint32_t rate = (uint32_t) audio_set_rate(it_mod.used_channels <= 16 ? 48000 : 32000);
   it_mixrate = rate;
   cfg.mixrate = rate;
   cfg.flags = 0;
@@ -102,7 +102,6 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
   fm_set_max_mixed(32);
-  audio_set_rate((int) rate);
 
   it_active = 1;
   it_ended = 0;

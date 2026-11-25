@@ -78,6 +78,7 @@ static void view_fill(int audio) {
   V.version = fmt_engine_version();
   V.build = PLAYER_BUILD;
   V.debug = it_fpga_debug();
+  if (!V.debug || !V.debug[0]) V.debug = audio_rate_debug();
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;
