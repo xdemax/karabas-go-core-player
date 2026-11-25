@@ -1,6 +1,7 @@
 // The FPGA XM (FastTracker II) player: the first version. It parses the whole file in the SRAM,
 // decodes the delta samples in place and mixes 32 channels at 48 kHz into the audio FIFO.
 // Now: linear frequency, volume/pan, volume envelope/fadeout, the common effects.
+#include <stdio.h>
 #include <string.h>
 #include "fpga.h"
 #include "audio.h"
@@ -510,6 +511,11 @@ static void next_tick(void) {
 }
 
 static int16_t fmout[XM_MIXBUF * 2];
+
+/* Live diagnostics for the footer, same shape as the IT engine:
+ * "<audible>/<channels>v <cpu>% r<mix share>" */
+static char xm_dbg[32];
+static uint32_t xm_dbg_us, xm_dbg_cycles, xm_dbg_pcycles;
 static int16_t fmout_resampled[512 * 2];
 static fm_voice_t fv[XM_CH];
 
@@ -558,7 +564,10 @@ void fpga_xm_service(void) {
     }
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
+    uint32_t c0 = R_CYCLES;
     mix(n);
+    uint32_t c1 = R_CYCLES;
+    xm_dbg_pcycles += (uint32_t) (c1 - c0);
     
     int out_count = 0;
     for (int i = 0; i < n && out_count < 512; i++) {
@@ -586,8 +595,25 @@ void fpga_xm_service(void) {
     free -= n;
     X.tleft -= n;
     if (X.tleft <= 0) next_tick();
+    xm_dbg_cycles += (uint32_t) (R_CYCLES - c0);
+  }
+
+  if ((uint32_t) (R_US - xm_dbg_us) >= 1000000u) {
+    xm_dbg_us = R_US;
+    int voices = 0;
+    for (int c = 0; c < X.chn; c++)
+      if (X.ch[c].active && (X.ch[c].lgain | X.ch[c].rgain)) voices++;
+    uint32_t pct = xm_dbg_cycles / 750000u;                 /* 75 MHz: 750k = 1 % */
+    uint32_t rpct = xm_dbg_cycles
+        ? (uint32_t) ((uint64_t) xm_dbg_pcycles * 100u / xm_dbg_cycles) : 0;
+    snprintf(xm_dbg, sizeof(xm_dbg), "%d/%dv %lu%% r%lu",
+             voices, X.chn, (unsigned long) pct, (unsigned long) rpct);
+    xm_dbg_cycles = 0;
+    xm_dbg_pcycles = 0;
   }
 }
+
+const char *fpga_xm_debug(void) { return X.active ? xm_dbg : ""; }
 
 static int parse_xm(uint32_t size) {
   if (size < 80 || memcmp(X.mod, "Extended Module: ", 17)) { set_error("XM: signature"); return -1; }
@@ -716,6 +742,8 @@ static int parse_xm(uint32_t size) {
   }
   X.active = 1;
   X.ended = 0;
+  xm_dbg[0] = 0;
+  xm_dbg_us = xm_dbg_cycles = xm_dbg_pcycles = 0;
   X.err[0] = 0;
   return 0;
 }

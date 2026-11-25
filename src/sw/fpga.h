@@ -28,6 +28,7 @@ int fpga_xm_finished(void);
 void fpga_xm_stop(void);
 const char *fpga_xm_error(void);
 const char *fpga_xm_title(void);
+const char *fpga_xm_debug(void);
 int fpga_xm_position(uint32_t *cur, uint32_t *total);
 void fpga_xm_info(fmt_info_t *o);
 void fpga_xm_audio(fmt_audio_t *o);
