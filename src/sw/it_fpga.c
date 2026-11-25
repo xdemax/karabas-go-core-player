@@ -94,7 +94,13 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
-  uint32_t rate = (uint32_t) audio_set_rate(it_mod.used_channels <= 16 ? 48000 : 32000);
+  // Ask for the per-file rate, then MEASURE what the FPGA really drains and mix at that
+  // rate. The measured value is the ground truth: it can never drift from the FIFO.
+  int want = it_mod.used_channels <= 16 ? 48000 : 32000;
+  audio_set_rate(want);
+  int measured = audio_rate_test();
+  uint32_t rate = (uint32_t) (measured > 0 ? measured : want);
+  if (measured > 0 && measured != want) audio_set_rate(measured);
   it_mixrate = rate;
   cfg.mixrate = rate;
   cfg.flags = 0;

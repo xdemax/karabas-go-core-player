@@ -37,7 +37,7 @@ static int view_ch;
 static int spectrum_on = 1;
 static int volume_setting = 64;
 static int osd_raw = -1;
-static char mix_msg[40];
+static char mix_msg[64];
 static uint32_t mix_t0, mix_w0;
 
 static const int osd_vol[16] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 64 };
@@ -378,10 +378,12 @@ void player_run(void) {
       mix_t0 = R_US;
       uint32_t wr = audio_written() - mix_w0;
       mix_w0 = audio_written();
-      char b[40], *q = str_cpy(b, "MIX ");
+      char b[64], *q = str_cpy(b, "MIX ");
       q = u2s(q, wr, 0);
       q = str_cpy(q, " U");
-      u2s(q, audio_under(), 0);
+      q = u2s(q, audio_under(), 0);
+      q = str_cpy(q, " R");
+      q = str_cpy(q, audio_rate_debug() + 1);   // "asked/fpga", drop the leading 'R'
       str_ncpy(mix_msg, b, sizeof(mix_msg));
     }
     // While a list key is held the player panel refreshes slowly (5 Hz); after the key is
