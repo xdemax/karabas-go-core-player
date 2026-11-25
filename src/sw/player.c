@@ -15,6 +15,7 @@
 #endif
 #include "fmt.h"
 #include "fpga.h"
+#include "plog.h"
 #include "src.h"
 #include "audio.h"
 #include "spi.h"
@@ -39,6 +40,7 @@ static int spectrum_on = 1;
 static int volume_setting = 64;
 static int osd_raw = -1;
 static char mix_msg[40];
+static int log_enabled;
 static char dbg_all[48];
 
 static uint32_t mix_t0, mix_w0;
@@ -90,7 +92,7 @@ static void view_fill(int audio) {
       V.debug = dbg_all;
     } else V.debug = "";
   }
-  V.logging = 0;
+  V.logging = log_enabled;
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;
@@ -155,6 +157,8 @@ static int keep(const char *name, int dir) {
 
 static void list(void) {
   int n = browser_reload(&br, keep, playing ? fmt_service : NULL);
+  { char b[32], *q = str_cpy(b, "SD2: "); q = u2s(q, (uint32_t) (n < 0 ? 0 : n), 0);
+    q = str_cpy(q, " entries"); status(b); }
   if (n < 0) {
     status(n == -3 ? "SD2: too many files (RAM)" : "SD2: no card or no FAT");
     return;
@@ -339,17 +343,14 @@ static void key(key_ev_t *e) {
 static void detect_log_key(void) {
   uint32_t t0 = R_US;
   int seen = 0;
-  while ((uint32_t) (R_US - t0) < 700000u) {      /* 0.7 s */
+  while ((uint32_t) (R_US - t0) < 700000u) {
     uint32_t k0 = R_KBD0, k1 = R_KBD1;
     uint8_t keys[6] = { (uint8_t) (k0 >> 8), (uint8_t) (k0 >> 16), (uint8_t) (k0 >> 24),
                         (uint8_t) k1, (uint8_t) (k1 >> 8), (uint8_t) (k1 >> 16) };
     for (int i = 0; i < 6; i++) if (keys[i] == K_L) seen = 1;
     if (seen) break;
   }
-  /* Card writes are disabled until the SPI write path is verified on a scratch card:
-   * one enabled session lost the SD2 root directory. */
-  (void) seen;
-
+  log_enabled = seen;
 }
 
 void player_run(void) {
@@ -359,6 +360,7 @@ void player_run(void) {
   if (skin_current()->init) skin_current()->init();
   browser_init(&br);
   fs_mount();
+  detect_log_key();
   list();
   draw_view();
   spi_div(2);
@@ -414,6 +416,16 @@ void player_run(void) {
        * underrun the FIFO is refilled in one burst, which otherwise showed 51k */
       if (!dt) dt = 1;
       wr = (uint32_t) ((uint64_t) wr * 1000000u / dt);
+      if (log_enabled && plog_is_open()) {
+        plog_num((uint32_t) ((R_US - np_start) / 1000000u));
+        plog_str("s ");
+        { const char *d = it_fpga_debug(); if (!d || !d[0]) d = fpga_xm_debug(); if (d && d[0]) { plog_str(d); plog_str(" "); } }
+        plog_str("mix="); plog_num(wr);
+        plog_str(" u=");   plog_num(audio_under());
+        plog_str(" pos="); plog_num(np_cur);
+        plog_str("\r\n");
+        plog_flush();
+      }
       char b[40], *q = str_cpy(b, "MIX ");
       q = u2s(q, wr, 0);
       q = str_cpy(q, " U");

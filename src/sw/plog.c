@@ -2,7 +2,7 @@
 #include "ff.h"
 #include <string.h>
 
-#define PLOG_BUF 2048
+#define PLOG_BUF 512
 
 static FIL  pf;
 static char pbuf[PLOG_BUF];
