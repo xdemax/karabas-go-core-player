@@ -19,42 +19,29 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
     decoderService.addDefault(IS_CUSTOM_MIX, False)
     decoderService.addDefault(FUNCT7, B(0, 7 bits))
 
-    // Pattern: funct7|rs2|rs1|000|rd|01011
-    decoderService.add(
-      key = M"-----------------000-----0001011",
-      List(
-        IS_CUSTOM_MIX            -> True,
-        REGFILE_WRITE_VALID      -> True,
-        BYPASSABLE_EXECUTE_STAGE -> True,
-        BYPASSABLE_MEMORY_STAGE  -> True,
-        RS1_USE                  -> True,
-        RS2_USE                  -> True
-      )
+    // Exact funct7 patterns (no overlapping "don't care" keys).
+    val common = List(
+      IS_CUSTOM_MIX            -> True,
+      REGFILE_WRITE_VALID      -> True,
+      BYPASSABLE_EXECUTE_STAGE -> True,
+      BYPASSABLE_MEMORY_STAGE  -> True,
+      RS1_USE                  -> True,
+      RS2_USE                  -> True
     )
-
-    // SETF (funct7=0): write=false, RS2_USE=false
-    decoderService.add(
-      key = M"0000000----------000-----0001011",
-      List(
-        IS_CUSTOM_MIX            -> True,
-        REGFILE_WRITE_VALID      -> False,
-        RS1_USE                  -> True,
-        RS2_USE                  -> False
-      )
-    )
-
-    // GETF (funct7=3): RS1_USE=false, RS2_USE=false
-    decoderService.add(
-      key = M"0000011----------000-----0001011",
-      List(
-        IS_CUSTOM_MIX            -> True,
-        REGFILE_WRITE_VALID      -> True,
-        BYPASSABLE_EXECUTE_STAGE -> True,
-        BYPASSABLE_MEMORY_STAGE  -> True,
-        RS1_USE                  -> False,
-        RS2_USE                  -> False
-      )
-    )
+    // SETF (0): hidden_frac = rs1[15:0], no write, no rs2
+    decoderService.add(M"0000000----------000-----0001011", List(
+      IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> False,
+      RS1_USE -> True, RS2_USE -> False))
+    decoderService.add(M"0000001----------000-----0001011", common) // LERP16
+    decoderService.add(M"0000010----------000-----0001011", common) // MAC
+    // GETF (3): no sources
+    decoderService.add(M"0000011----------000-----0001011", List(
+      IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
+      BYPASSABLE_EXECUTE_STAGE -> True, BYPASSABLE_MEMORY_STAGE -> True,
+      RS1_USE -> False, RS2_USE -> False))
+    decoderService.add(M"0000100----------000-----0001011", common) // ADV
+    decoderService.add(M"0000101----------000-----0001011", common) // ADVB
+    decoderService.add(M"0000110----------000-----0001011", common) // LERP8
   }
 
   override def build(pipeline: VexRiscv): Unit = {
@@ -89,13 +76,15 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
 
           // funct7=1: LERP16 - rd = s0 + ((s1 - s0) * (hidden_frac >> 1) >> 15)
           is(1) {
-            val s0 = sign16(rs1)
-            val s1 = sign16(rs2)
-            val diff = s1 - s0
-            val frac_shifted = hidden_frac >> 1
-            val prod = diff * frac_shifted.asSInt
-            val shifted = prod >> 15
-            val result = s0 + shifted.resize(32 bits)
+            val s0 = sign16(rs1).resize(18)
+            val s1 = sign16(rs2).resize(18)
+            val dif = (s1 - s0).resize(19)
+            val neg = dif < 0
+            val ad = Mux(neg, (-dif).asUInt, dif.asUInt)
+            val p = ad * (hidden_frac >> 1)
+            val q = (p + Mux(neg, U(32767, p.getWidth bits), U(0, p.getWidth bits))) >> 15
+            val shifted = Mux(neg, -(q.asSInt), q.asSInt).resize(32)
+            val result = (s0.resize(32) + shifted).resize(32)
             rd := result.asUInt
             hidden_s := result.resize(18 bits)
           }
@@ -135,19 +124,22 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
           // funct7=6: LERP8 - s0=sign8(rs1[7:0]), s1=sign8(rs2[7:0]);
           //           rd = s0*256 + (((s1-s0)*hidden_frac) >> 8)
           is(6) {
-            val s0 = sign8(rs1)
-            val s1 = sign8(rs2)
-            val diff = s1 - s0
-            val prod = diff * hidden_frac.asSInt
-            val frac_part = prod >> 8
-            val result = (s0 * 256) + frac_part.resize(32 bits)
+            val s0 = sign8(rs1).resize(10)
+            val s1 = sign8(rs2).resize(10)
+            val dif = (s1 - s0).resize(11)
+            val neg = dif < 0
+            val ad = Mux(neg, (-dif).asUInt, dif.asUInt)
+            val p = ad * hidden_frac
+            val q = (p + Mux(neg, U(255, p.getWidth bits), U(0, p.getWidth bits))) >> 8
+            val frac_part = Mux(neg, -(q.asSInt), q.asSInt).resize(32)
+            val result = ((s0.resize(32) << 8) + frac_part).resize(32)
             rd := result.asUInt
             hidden_s := result.resize(18 bits)
           }
         }
 
         when(execute.input(REGFILE_WRITE_VALID)) {
-          execute.output(REGFILE_WRITE_DATA) := rd.asBits
+          execute.insert(REGFILE_WRITE_DATA) := rd.asBits
         }
       }
     }
