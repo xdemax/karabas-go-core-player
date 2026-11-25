@@ -8,6 +8,7 @@
 #include "mmio.h"
 #include "analysis.h"
 #include "fastmix.h"
+#include "resample.h"
 
 #define XM_CH 32
 #define XM_PAT 256
@@ -64,8 +65,7 @@ typedef struct {
   int32_t last_l, last_r, peak_l, peak_r;
   uint8_t vu[FMT_CHANNELS];
   uint32_t rate;
-  uint32_t rs_acc, rs_prev_l, rs_prev_r;
-  int rs_initialized;
+  rs_t rs;
 } xm_t;
 
 static xm_t X;
@@ -550,38 +550,22 @@ static void mix(int n) {
 void fpga_xm_service(void) {
   if (!X.active || X.paused) return;
   int free = audio_free();
-  while (free > 0 && X.active) {
+  while (free > 2 && X.active) {
     int n = free > XM_CHUNK ? XM_CHUNK : free;
+    if (X.rate && X.rate < 48000) {
+      int lim = (int)(((int64_t)free * X.rate) / 48000) - 2;
+      if (n > lim) n = lim;
+    }
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
     mix(n);
     
     int out_count = 0;
-    if (X.rate == 48000 || X.rate == 0) {
-      for (int i = 0; i < n && out_count < 512; i++) {
-        fmout_resampled[2 * out_count] = fmout[2 * i];
-        fmout_resampled[2 * out_count + 1] = fmout[2 * i + 1];
-        out_count++;
-      }
-    } else {
-      uint32_t step = (X.rate << 16) / 48000u;
-      for (int i = 0; i < n; i++) {
-        int32_t l = fmout[2 * i];
-        int32_t r = fmout[2 * i + 1];
-        if (!X.rs_initialized) {
-          X.rs_prev_l = l; X.rs_prev_r = r; X.rs_acc = 0; X.rs_initialized = 1;
-        }
-        while (X.rs_acc < 65536u && out_count < 512) {
-          int32_t ol = X.rs_prev_l + (int32_t)(((int64_t)(l - X.rs_prev_l) * (int32_t)X.rs_acc) >> 16);
-          int32_t or_ = X.rs_prev_r + (int32_t)(((int64_t)(r - X.rs_prev_r) * (int32_t)X.rs_acc) >> 16);
-          fmout_resampled[2 * out_count] = (int16_t)ol;
-          fmout_resampled[2 * out_count + 1] = (int16_t)or_;
-          out_count++;
-          X.rs_acc += step;
-        }
-        X.rs_acc -= 65536u;
-        X.rs_prev_l = l; X.rs_prev_r = r;
-      }
+    for (int i = 0; i < n && out_count < 512; i++) {
+      int16_t l = fmout[2 * i];
+      int16_t r = fmout[2 * i + 1];
+      int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
+      out_count += nout;
     }
     
     for (int i = 0; i < out_count; i++) {
@@ -720,8 +704,7 @@ static int parse_xm(uint32_t size) {
   X.vol = 64;
   X.paused = 0;
   X.peak_l = X.peak_r = 0;
-  X.rs_acc = X.rs_prev_l = X.rs_prev_r = 0;
-  X.rs_initialized = 0;
+  rs_init(&X.rs, X.rate);
   memset(X.vu, 0, sizeof(X.vu));
   parse_row();
   for (int c = 0; c < X.chn; c++) {
@@ -769,9 +752,7 @@ void fpga_xm_stop(void) {
   X.active = 0;
   X.ended = 0;
   X.paused = 0;
-  X.rs_acc = 0;
-  X.rs_prev_l = X.rs_prev_r = 0;
-  X.rs_initialized = 0;
+  memset(&X.rs, 0, sizeof(X.rs));
 }
 int fpga_xm_active(void) { return X.active; }
 int fpga_xm_finished(void) { return X.ended; }

@@ -154,7 +154,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
               }
             }
             is(7) {
-              hidden_s := sign16(rs1)
+              hidden_s := sign16(rs1).resize(18)
               rd := rs1
               when(execute.input(REGFILE_WRITE_VALID)) {
                 execute.insert(REGFILE_WRITE_DATA) := rd.asBits

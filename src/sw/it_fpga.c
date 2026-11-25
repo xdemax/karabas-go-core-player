@@ -8,6 +8,7 @@
 #include "audio.h"
 #include "mixer.h"
 #include "src.h"
+#include "resample.h"
 
 #define IT_META_BYTES (64u * 1024u)
 #define IT_OUT_CHUNK  256
@@ -24,8 +25,7 @@ static char it_err[48];
 static int16_t it_out[IT_OUT_CHUNK * 2];
 static int16_t it_out_resampled[IT_OUT_MAX * 2];
 static uint32_t it_mixrate;
-static uint32_t rs_acc, rs_prev_l, rs_prev_r;
-static int rs_initialized;
+static rs_t rs;
 static int32_t it_last_l, it_last_r, it_peak_l, it_peak_r;
 static uint8_t it_vu[FMT_CHANNELS];
 static char it_dbg[32];
@@ -44,8 +44,7 @@ static void it_release(void) {
   it_file_size = it_file_used = 0;
   memset(it_vu, 0, sizeof(it_vu));
   it_last_l = it_last_r = it_peak_l = it_peak_r = 0;
-  rs_acc = rs_prev_l = rs_prev_r = 0;
-  rs_initialized = 0;
+  memset(&rs, 0, sizeof(rs));
   it_dbg[0] = 0;
   it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_cps = 0;
   it_dbg_voices = it_dbg_alloc = 0;
@@ -103,9 +102,7 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
   fm_set_max_mixed(32);
-  rs_acc = 0;
-  rs_prev_l = rs_prev_r = 0;
-  rs_initialized = 0;
+  rs_init(&rs, it_mixrate);
 
   it_active = 1;
   it_ended = 0;
@@ -117,8 +114,13 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 void it_fpga_service(void) {
   if (!it_active || it_paused) return;
   int free = audio_free();
-  if (free <= 0) return;
+  if (free <= 2) return;
   int n = free > IT_OUT_CHUNK ? IT_OUT_CHUNK : free;
+  if (it_mixrate && it_mixrate < 48000) {
+    int lim = (int)(((int64_t)free * it_mixrate) / 48000) - 2;
+    if (n > lim) n = lim;
+  }
+  if (n <= 0) return;
 #ifdef IT_PROFILE
   uint32_t c0 = R_CYCLES;
 #endif
@@ -129,37 +131,14 @@ void it_fpga_service(void) {
   int v = it_volume;
   
   int out_count = 0;
-  if (it_mixrate == 48000 || it_mixrate == 0) {
-    for (int i = 0; i < n && out_count < IT_OUT_MAX; i++) {
-      int32_t t = (int32_t)it_out[2 * i] * v;
-      int32_t l = (t + ((t >> 31) & 63)) >> 6;
-      t = (int32_t)it_out[2 * i + 1] * v;
-      int32_t r = (t + ((t >> 31) & 63)) >> 6;
-      it_out_resampled[2 * out_count] = (int16_t)l;
-      it_out_resampled[2 * out_count + 1] = (int16_t)r;
-      out_count++;
-    }
-  } else {
-    uint32_t step = (it_mixrate << 16) / 48000u;   /* input samples per output, Q16 */
-    for (int i = 0; i < n; i++) {
-      int32_t t = (int32_t)it_out[2 * i] * v;
-      int32_t l = (t + ((t >> 31) & 63)) >> 6;
-      t = (int32_t)it_out[2 * i + 1] * v;
-      int32_t r = (t + ((t >> 31) & 63)) >> 6;
-      if (!rs_initialized) {
-        rs_prev_l = l; rs_prev_r = r; rs_acc = 0; rs_initialized = 1;
-      }
-      while (rs_acc < 65536u && out_count < IT_OUT_MAX) {
-        int32_t ol = rs_prev_l + (int32_t)(((int64_t)(l - rs_prev_l) * (int32_t)rs_acc) >> 16);
-        int32_t or_ = rs_prev_r + (int32_t)(((int64_t)(r - rs_prev_r) * (int32_t)rs_acc) >> 16);
-        it_out_resampled[2 * out_count] = (int16_t)ol;
-        it_out_resampled[2 * out_count + 1] = (int16_t)or_;
-        out_count++;
-        rs_acc += step;
-      }
-      rs_acc -= 65536u;
-      rs_prev_l = l; rs_prev_r = r;
-    }
+  for (int i = 0; i < n && out_count < IT_OUT_MAX; i++) {
+    int32_t t = (int32_t)it_out[2 * i] * v;
+    int32_t l = (t + ((t >> 31) & 63)) >> 6;
+    t = (int32_t)it_out[2 * i + 1] * v;
+    int32_t r = (t + ((t >> 31) & 63)) >> 6;
+    
+    int nout = rs_frame(&rs, (int16_t)l, (int16_t)r, (int16_t(*)[2])&it_out_resampled[2 * out_count]);
+    out_count += nout;
   }
 
   for (int i = 0; i < out_count; i++) {
@@ -262,9 +241,8 @@ int it_fpga_set_volume(int v) {
 int it_fpga_pause(int on) {
   if (on < 0) it_paused = !it_paused; else it_paused = on ? 1 : 0;
   if (it_paused) {
-    rs_acc = 0;
-    rs_prev_l = rs_prev_r = 0;
-    rs_initialized = 0;
+    memset(&rs, 0, sizeof(rs));
+    rs_init(&rs, it_mixrate);
   }
   return it_paused;
 }
