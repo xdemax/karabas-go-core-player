@@ -22,6 +22,7 @@ typedef struct {
   uint8_t vol, pan;
   uint8_t flags;  // bit 0: loop enabled; bit 1: stereo; bit 2: 16-bit
   uint8_t type;   // 0: PCM, 2: AdLib (not supported)
+  uint32_t c2spd;  // base frequency in Hz (C-2)
 } s3m_sample_t;
 
 typedef struct {
@@ -141,10 +142,9 @@ static int s3m_load_patterns(const uint8_t *buf, uint32_t size, s3m_module_t *m)
       uint8_t ch = what & 0x1f;
       if (ch + 1 > max_chn) max_chn = ch + 1;
       
-      uint8_t mask = (pos < plen) ? buf[off + 2 + pos++] : 0;
-      if (mask & 2) pos += 2;   // note + instr
-      if (mask & 4) pos++;       // vol
-      if (mask & 8) pos += 2;    // cmd + info
+      if (what & 0x20) pos += 2;   // note + instr
+      if (what & 0x40) pos++;       // vol
+      if (what & 0x80) pos += 2;    // cmd + info
     }
   }
   
@@ -203,6 +203,8 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
     m->smp[s].len = length;
     m->smp[s].vol = vol;
     m->smp[s].flags = (flags & 1) ? 1 : 0;  // loop
+    m->smp[s].c2spd = read32le(buf, hoff + 32, size);
+    if (m->smp[s].c2spd < 100) m->smp[s].c2spd = 8363;
     
     if (doff + m->smp[s].len > size) {
       m->smp[s].data = NULL;
@@ -307,11 +309,11 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   if (s3m_load_samples(buf, size, &s3m_mod, pcm_base, pcm_size) < 0) return -1;
   if (s3m_load_patterns(buf, size, &s3m_mod) < 0) return -1;
   
-  s3m_mod.speed = read8(buf, 50, size);
+  s3m_mod.gvol = read8(buf, 0x30, size) & 0x7f;
+  s3m_mod.speed = read8(buf, 0x31, size);
   if (s3m_mod.speed < 1) s3m_mod.speed = 6;
-  s3m_mod.bpm = read8(buf, 51, size);
+  s3m_mod.bpm = read8(buf, 0x32, size);
   if (s3m_mod.bpm < 32) s3m_mod.bpm = 125;
-  s3m_mod.gvol = read8(buf, 48, size) & 0x7f;
   
   for (int i = 0; i < 32; i++) {
     uint8_t chpan = read8(buf, 64 + i, size);
@@ -328,10 +330,13 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   s3m_mod.tleft = s3m_mod.spt = 0;
   
   s3m_mod.sample_acc = 0;
-  s3m_mod.samples_per_tick = (2500ull * 48000) / (s3m_mod.bpm * 32);
+  s3m_mod.samples_per_tick = 120000 / s3m_mod.bpm;
   
   for (int i = 0; i < 32; i++) {
     s3m_mod.vox[i].active = 0;
+    s3m_mod.vox[i].smp = -1;
+    s3m_mod.vox[i].vol = 64;
+    s3m_mod.vox[i].pan = 128;
   }
   
   s3m_mod.active = 1;
@@ -348,17 +353,27 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   return 0;
 }
 
-static const uint32_t s3m_note_steps[12] = {
+static const uint32_t s3m_semitone_mul[12] = {
   65536, 69433, 73562, 77936, 82570, 87480, 92682, 98193, 104032, 110218, 116772, 123715
 };
 
-static uint32_t s3m_note_to_step(int note) {
-  if (note < 12 || note > 107) return 0;
-  int octave = (note - 12) / 12;
-  int semitone = (note - 12) % 12;
-  uint32_t step = s3m_note_steps[semitone];
-  for (int i = 0; i < octave; i++) step *= 2;
-  return step >> 16;
+static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
+  int octave = (note >> 4) & 0x0F;
+  int semitone = (note & 0x0F);
+  
+  if (semitone == 0) return 0;
+  semitone--;
+  
+  uint32_t step = c2spd;
+  if (octave > 5) {
+    for (int i = 0; i < octave - 5; i++) step *= 2;
+  } else if (octave < 5) {
+    for (int i = 0; i < 5 - octave; i++) step /= 2;
+  }
+  
+  step = (step * s3m_semitone_mul[semitone]) >> 16;
+  step = (step * 65536) / 48000;
+  return step;
 }
 
 static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
@@ -373,9 +388,10 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
   
   if (vol > 0 && vol <= 64) v->vol = vol;
   
-  if (note > 0 && note <= 107) {
+  if (note > 0 && note < 254) {
+    uint32_t c2spd = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
     v->pos = 0;
-    v->step = s3m_note_to_step(note);
+    v->step = s3m_note_to_step(note, c2spd);
     v->active = 1;
     v->keyoff = 0;
   }
@@ -423,11 +439,9 @@ void s3m_fpga_service(void) {
               if (what == 0) break;
               
               uint8_t ch = what & 0x1f;
-              uint8_t mask = (pos < pat->len) ? pat->data[pos++] : 0;
-              
-              if (mask & 2) pos += 2;
-              if (mask & 4) pos++;
-              if (mask & 8) pos += 2;
+              if (what & 0x20) pos += 2;
+              if (what & 0x40) pos++;
+              if (what & 0x80) pos += 2;
               
               channels_in_row++;
             }
@@ -446,31 +460,30 @@ void s3m_fpga_service(void) {
             if (what == 0) break;
             
             uint8_t ch = what & 0x1f;
-            uint8_t mask = (pos < pat->len) ? pat->data[pos++] : 0;
             
             uint8_t note = 0, instr = 0, vol = 0, eff = 0, par = 0;
             
-            if (mask & 2) {
+            if (what & 0x20) {
               if (pos < pat->len) note = pat->data[pos++];
               if (pos < pat->len) instr = pat->data[pos++];
             }
-            if (mask & 4) {
+            if (what & 0x40) {
               if (pos < pat->len) vol = pat->data[pos++];
             }
-            if (mask & 8) {
+            if (what & 0x80) {
               if (pos < pat->len) eff = pat->data[pos++];
               if (pos < pat->len) par = pat->data[pos++];
             }
             
             if (ch < m->chn) {
-              if (note) s3m_note_on(m, ch, note + 11, instr, vol);
+              if (note) s3m_note_on(m, ch, note, instr, vol);
               if (vol == 255) s3m_note_off(&m->vox[ch]);
               
               if (eff) {
                 switch (eff) {
-                  case 'A': m->speed = par; break;
-                  case 'T': m->bpm = par; m->samples_per_tick = (2500ull * 48000) / (m->bpm * 32); break;
-                  case 'V': m->gvol = par; break;
+                  case 'A': case 1: m->speed = par; break;
+                  case 'T': case 2: m->bpm = par; if (m->bpm < 32) m->bpm = 32; m->samples_per_tick = 120000 / m->bpm; break;
+                  case 'V': m->gvol = par & 0x7f; break;
                 }
               }
             }
@@ -495,19 +508,21 @@ void s3m_fpga_service(void) {
     int32_t mix_l = 0, mix_r = 0;
     for (int ch = 0; ch < m->chn; ch++) {
       s3m_voice_t *v = &m->vox[ch];
-      if (!v->active) continue;
+      if (!v->active || v->smp < 0 || v->smp >= m->nsmp) continue;
       
-      if (v->pos >= m->smp[v->smp].len) {
-        if (m->smp[v->smp].flags & 1) {
-          v->pos = m->smp[v->smp].loop_start;
+      uint32_t pos_int = v->pos >> 16;
+      if (pos_int >= m->smp[v->smp].len) {
+        if ((m->smp[v->smp].flags & 1) && m->smp[v->smp].loop_len > 0) {
+          v->pos = (m->smp[v->smp].loop_start << 16);
+          pos_int = m->smp[v->smp].loop_start;
         } else {
           v->active = 0;
           continue;
         }
       }
       
-      uint8_t smp = *(m->smp[v->smp].data + v->pos);
-      int16_t val = (int16_t)(smp << 8) - 32768;
+      uint8_t smp_byte = *(m->smp[v->smp].data + pos_int);
+      int32_t val = ((int32_t)smp_byte - 128) << 8;
       
       int vol = (v->vol * m->gvol) >> 6;
       val = (val * vol) >> 8;
@@ -519,7 +534,7 @@ void s3m_fpga_service(void) {
       mix_l += l;
       mix_r += r;
       
-      v->pos += v->step >> 16;
+      v->pos += v->step;
     }
     
     s3m_out[2 * out_count] = (int16_t)(mix_l >> 2);
