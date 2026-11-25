@@ -581,20 +581,30 @@ void fpga_xm_service(void) {
     if (n <= 0) break;
     mix(n);
     
-    int out_count = 0;
-    for (int i = 0; i < n && out_count < 512; i++) {
-      int16_t l = fmout[2 * i];
-      int16_t r = fmout[2 * i + 1];
-      int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
-      out_count += nout;
+    const int16_t *outp;
+    int out_count;
+    if (X.rate == 48000 || X.rate == 0) {
+      /* No resampling: use the mix buffer directly. Calling rs_frame per sample was pure
+       * overhead (it returns its input at 48 kHz) - a call and a branch for every sample. */
+      outp = fmout;
+      out_count = n;
+    } else {
+      out_count = 0;
+      for (int i = 0; i < n && out_count < 512; i++) {
+        int16_t l = fmout[2 * i];
+        int16_t r = fmout[2 * i + 1];
+        int nout = rs_frame(&X.rs, l, r, (int16_t(*)[2])&fmout_resampled[2 * out_count]);
+        out_count += nout;
+      }
+      outp = fmout_resampled;
     }
     
     for (int i = 0; i < out_count; i++) {
       // Gain calibrated against libopenmpt: doubling (the old >8ch hack) made dense
       // modules 1.5-2x louder than the reference and clipped; x1.5 matches within ~15 %.
       int32_t og = (X.chn > 8) ? (int32_t) ((X.vol * 3) >> 1) : (int32_t) X.vol;
-      int32_t l = ((int32_t)fmout_resampled[2 * i] * og) >> 6;
-      int32_t r = ((int32_t)fmout_resampled[2 * i + 1] * og) >> 6;
+      int32_t l = ((int32_t)outp[2 * i] * og) >> 6;
+      int32_t r = ((int32_t)outp[2 * i + 1] * og) >> 6;
       if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
       if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
       int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
