@@ -143,7 +143,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
             val t = h_frac +^ rs2(15 downto 0)
             h_frac := t(15 downto 0)
             val carry = Mux(t(16), U(1, 32 bits), U(0, 32 bits))
-            rd := (rs1.asUInt + (rs2 >> 16) + carry).resize(32)
+            rd := (rs1 + (rs2 >> 16) + carry).resize(32)
           }
           // 5: ADVB - sf=rs2[15:0], borrow=(h_frac<sf)
           //           h_frac=(h_frac-sf)[15:0], rd = rs1 - (rs2>>16) - borrow
@@ -162,7 +162,9 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
             val is_neg8 = d < 0
             val ad = Mux(is_neg8, (-d).asUInt, d.asUInt)
             h_neg8 := is_neg8
-            h_p8 := ad * h_frac
+            // Force 18x18 operands so the multiplier maps to a single DSP48A1
+            // instead of a two-DSP cascade. Product <= 2^24, resize(32) is lossless.
+            h_p8 := (ad.resize(18) * h_frac.resize(18)).resize(32)
             h_s08 := s0
           }
           // 7: SETS - h_s = sign16(rs1), rd = rs1
