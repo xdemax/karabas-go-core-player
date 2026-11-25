@@ -14,7 +14,7 @@
 #define IT_PLAYER_H
 
 #include "it_parser.h"
-#include "it_mix.h"
+#include "../fastmix.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -79,34 +79,34 @@ typedef struct {
 } it_chn_t;
 
 typedef struct it_player {
-	const it_module_t *m;
-	uint32_t mixrate, flags;
-	int32_t  out_gain;
-	uint64_t step_mul;                   /* 2^48 / mixrate */
-	/* position */
-	uint16_t ord, pat, row, rows;
-	int16_t  next_ord, next_row;         /* pending jump (-1 = none) */
-	int16_t  jump_ord, break_row, loop_row;
-	uint8_t  speed, tempo, gv, mv, sep;
-	uint8_t  patdelay, finedelay;
-	uint16_t tick, row_ticks;
-	uint8_t  finished;
-	uint32_t loops;
-	uint32_t ticks;                      /* ticks processed since init */
-	/* timing */
-	uint32_t tick_len_q16, tick_frac, left;
-	/* decoding */
-	it_patdec_t dec;
-	uint16_t    dec_next;                /* row the decoder will return next */
-	uint16_t    dec_pat;                 /* pattern the decoder is positioned in */
-	it_cell_t   cells[IT_MAX_CHANNELS];
-	uint32_t    present[2];
-	uint8_t     nch, linear, oldeff, compatg, instmode;
-	uint32_t    rng;
-	it_chn_t    chn[IT_MAX_CHANNELS];
-	it_voice_t  vox[FM_MAX_VOICES];
-	it_mix_voice_t  fm[FM_MAX_VOICES];
-	int         nv_hi;
+    const it_module_t *m;
+    uint32_t mixrate, flags;
+    int32_t  out_gain;
+    uint64_t step_mul;                   /* 2^48 / mixrate */
+    /* position */
+    uint16_t ord, pat, row, rows;
+    int16_t  next_ord, next_row;         /* pending jump (-1 = none) */
+    int16_t  jump_ord, break_row, loop_row;
+    uint8_t  speed, tempo, gv, mv, sep;
+    uint8_t  patdelay, finedelay;
+    uint16_t tick, row_ticks;
+    uint8_t  finished;
+    uint32_t loops;
+    uint32_t ticks;                      /* ticks processed since init */
+    /* timing */
+    uint32_t tick_len_q16, tick_frac, left;
+    /* decoding */
+    it_patdec_t dec;
+    uint16_t    dec_next;                /* row the decoder will return next */
+    uint16_t    dec_pat;                 /* pattern the decoder is positioned in */
+    it_cell_t   cells[IT_MAX_CHANNELS];
+    uint32_t    present[2];
+    uint8_t     nch, linear, oldeff, compatg, instmode;
+    uint32_t    rng;
+    it_chn_t    chn[IT_MAX_CHANNELS];
+    it_voice_t  vox[FM_MAX_VOICES];
+    fm_voice_t  fm[FM_MAX_VOICES];
+    int         nv_hi;
 } it_player_t;
 
 void it_player_cfg_default(it_player_cfg_t *c);
