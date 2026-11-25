@@ -15,7 +15,6 @@
 #endif
 #include "fmt.h"
 #include "fpga.h"
-#include "plog.h"
 #include "src.h"
 #include "audio.h"
 #include "spi.h"
@@ -40,7 +39,6 @@ static int spectrum_on = 1;
 static int volume_setting = 64;
 static int osd_raw = -1;
 static char mix_msg[40];
-static int log_enabled;          /* the log is written only if L was held at start */
 static char dbg_all[48];
 
 static uint32_t mix_t0, mix_w0;
@@ -92,7 +90,7 @@ static void view_fill(int audio) {
       V.debug = dbg_all;
     } else V.debug = "";
   }
-  V.logging = log_enabled;
+  V.logging = 0;
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;
@@ -240,13 +238,6 @@ static void play_selected(void) {
   if (rc == 0) {
     char lp[FS_PATH_MAX];
     { char *q = str_cpy(lp, full); (void) q; }
-    if (log_enabled && plog_is_open()) {
-      plog_str("start ");
-      plog_str(lp);
-      plog_str(" engine=");
-      plog_str(np_fmt);
-      plog_str("\r\n");
-    }
     playing = 1; audio_reset_stats();
     fmt_set_volume(volume_setting);
     mix_t0 = R_US; mix_w0 = audio_written(); mix_msg[0] = 0;
@@ -329,7 +320,7 @@ static void key(key_ev_t *e) {
     case K_F12: core_reset();
     case K_ENTER: case K_KPENTER: play_selected(); return;
     case K_ESC:
-      if (playing) { fmt_stop(); plog_flush(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
+      if (playing) { fmt_stop(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
       return;
     case K_BKSP: {
       int n = browser_up(&br, keep, playing ? fmt_service : NULL);
@@ -358,7 +349,7 @@ static void detect_log_key(void) {
   /* Card writes are disabled until the SPI write path is verified on a scratch card:
    * one enabled session lost the SD2 root directory. */
   (void) seen;
-  log_enabled = 0;
+
 }
 
 void player_run(void) {
@@ -368,8 +359,6 @@ void player_run(void) {
   if (skin_current()->init) skin_current()->init();
   browser_init(&br);
   fs_mount();
-  detect_log_key();
-  if (log_enabled) plog_open("/PLRLOG.TXT");
   list();
   draw_view();
   spi_div(2);
@@ -425,23 +414,6 @@ void player_run(void) {
        * underrun the FIFO is refilled in one burst, which otherwise showed 51k */
       if (!dt) dt = 1;
       wr = (uint32_t) ((uint64_t) wr * 1000000u / dt);
-      if (plog_is_open()) {
-        plog_num((uint32_t) ((R_US - np_start) / 1000000u));
-        plog_str("s ");
-        {
-          const char *d = it_fpga_debug();
-          if (!d || !d[0]) d = fpga_xm_debug();
-          if (d && d[0]) { plog_str(d); plog_str(" "); }
-        }
-        plog_str("mix="); plog_num(wr);
-        plog_str(" u=");   plog_num(audio_under());
-        plog_str(" d=");   plog_num(audio_drop());
-        plog_str(" pos="); plog_num(np_cur);
-        plog_str("/");     plog_num(np_total);
-        plog_str("\r\n");
-        static int flush_cnt;
-        if (++flush_cnt >= 8) { flush_cnt = 0; plog_flush(); }   /* lose at most 8 s */
-      }
       char b[40], *q = str_cpy(b, "MIX ");
       q = u2s(q, wr, 0);
       q = str_cpy(q, " U");
