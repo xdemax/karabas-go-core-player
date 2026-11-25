@@ -4,6 +4,7 @@
  */
 #include "it_player.h"
 #include "it_tables.h"
+#include "it_mix.h"
 #include <string.h>      /* init only (memset) - not used in the tick path */
 
 #define LF_MAX   9000
@@ -1202,17 +1203,17 @@ int it_player_active_voices(const it_player_t *p)
 
 void it_player_render(it_player_t *p, int16_t *dst, int frames)
 {
-    while (frames > 0) {
-        int n;
-        if (p->left == 0) {
-            it_player_tick(p);
-            p->tick_frac += p->tick_len_q16;
-            p->left = p->tick_frac >> 16;
-            p->tick_frac &= 0xFFFFu;
-            if (p->left == 0) continue;
-        }
-        n = frames < (int)p->left ? frames : (int)p->left;
-        it_fastmix(dst, n, p->fm, p->nv_hi);
-        dst += 2 * n; frames -= n; p->left -= (uint32_t)n;
-    }
+	while (frames > 0) {
+		int n;
+		if (p->left == 0) {
+			it_player_tick(p);
+			p->tick_frac += p->tick_len_q16;
+			p->left = p->tick_frac >> 16;
+			p->tick_frac &= 0xFFFFu;
+			if (p->left == 0) continue;
+		}
+		n = frames < (int)p->left ? frames : (int)p->left;
+		it_mix_block(dst, n, (it_mix_voice_t *)p->fm, p->nv_hi);
+		dst += 2 * n; frames -= n; p->left -= (uint32_t)n;
+	}
 }
