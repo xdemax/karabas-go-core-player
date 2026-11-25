@@ -26,7 +26,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
       BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
       RS1_USE -> True, RS2_USE -> False))
     // 1: LERP1 - no write, RS1/RS2
-    decoderService.add(M"0000001----------000-----0001011", List(
+    decoderService.add(M"0001010----------000-----0001011", List(
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> False,
       BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
       RS1_USE -> True, RS2_USE -> True))
@@ -107,7 +107,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
           }
           // 1: LERP1 - s0=sign16(rs1), s1=sign16(rs2), d=s1-s0
           //           h_neg=(d<0), h_p=abs(d)*(h_frac>>1), h_s0=s0
-          is(1) {
+          is(10) {
             val s0 = sign16(rs1).resize(18)
             val s1 = sign16(rs2).resize(18)
             val d = s1 - s0

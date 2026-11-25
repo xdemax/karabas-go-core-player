@@ -14,7 +14,7 @@
  *
  * Custom CPU instructions (opcode 0x0b, funct3=0):
  *  - SETF (funct7=0): hidden_frac = rs1 & 0xFFFF
- *  - LERP1 (funct7=1): setup for 16-bit LERP (s0, s1); saves hidden state
+ *  - LERP1 (funct7=10): setup for 16-bit LERP (s0, s1); saves hidden state
  *  - LERP2 (funct7=8): complete 16-bit LERP; rd = interpolated value
  *  - MAC (funct7=2): rd = rs1 + (hidden_s * (rs2 >> 8)), 32-bit wrap
  *  - GETF (funct7=3): rd = hidden_frac (zero-extend)
@@ -61,7 +61,7 @@ static int max_mixed = 32;
   asm volatile (".insn r 0x0b, 0, 0, x0, %0, x0" : : "r"(frac))
 
 #define FM_LERP1(s0, s1) \
-  asm volatile (".insn r 0x0b, 0, 1, x0, %0, %1" : : "r"(s0), "r"(s1))
+  asm volatile (".insn r 0x0b, 0, 10, x0, %0, %1" : : "r"(s0), "r"(s1))
 
 #define FM_LERP2(s) \
   asm volatile (".insn r 0x0b, 0, 8, %0, x0, x0" : "=r"(s))
