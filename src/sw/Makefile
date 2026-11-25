@@ -15,7 +15,12 @@ else
 FM_ALU_TAG := N
 FM_ALU_CFLAGS :=
 endif
-BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)
+ifneq ($(IT_PROFILE),)
+FM_PROF_TAG := p
+else
+FM_PROF_TAG :=
+endif
+BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)$(FM_PROF_TAG)
 CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS $(FM_ALU_CFLAGS) -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
 ifneq ($(IT_PROFILE),)
 CFLAGS += -DIT_PROFILE
