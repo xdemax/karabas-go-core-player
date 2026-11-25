@@ -100,12 +100,11 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
             hidden_s := result.resize(18 bits)
           }
 
-          // funct7=2: MAC - g = rs2[31:8]; w = (hidden_s * g) >> 8; rd = rs1 + w
+           // funct7=2: MAC - g = rs2[31:8]; rd = rs1 + (hidden_s * g)
           is(2) {
-            val g = (rs2 >> 8).asSInt
+            val g = rs2.asSInt >> 8
             val prod = hidden_s * g
-            val w = prod >> 8
-            val result = sign32(rs1) + w.resize(32 bits)
+             val result = sign32(rs1) + prod.resize(32 bits)
             rd := result.asUInt
           }
 
