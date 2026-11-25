@@ -22,8 +22,6 @@ static uint32_t it_file_size, it_file_used;
 static int it_active, it_ended, it_paused;
 static int it_volume = 64;
 static char it_err[48];
-static int16_t it_out[IT_OUT_CHUNK * 2];
-static int16_t it_out_resampled[IT_OUT_MAX * 2];
 static int16_t it_pend[IT_OUT_MAX * 2];     /* pending rendered frames */
 static int it_pend_pos, it_pend_n;         /* position and total in pending buffer */
 static int16_t it_res_pend[4];             /* pending resampled frames (max 2 stereo) */
