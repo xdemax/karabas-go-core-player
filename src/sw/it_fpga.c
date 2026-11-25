@@ -11,6 +11,7 @@
 
 #define IT_META_BYTES (64u * 1024u)
 #define IT_OUT_CHUNK  256
+#define IT_OUT_MAX    512
 
 static uint8_t it_meta[IT_META_BYTES];
 static it_module_t it_mod;
@@ -21,6 +22,10 @@ static int it_active, it_ended, it_paused;
 static int it_volume = 64;
 static char it_err[48];
 static int16_t it_out[IT_OUT_CHUNK * 2];
+static int16_t it_out_resampled[IT_OUT_MAX * 2];
+static uint32_t it_mixrate;
+static uint32_t rs_acc, rs_prev_l, rs_prev_r;
+static int rs_initialized;
 static int32_t it_last_l, it_last_r, it_peak_l, it_peak_r;
 static uint8_t it_vu[FMT_CHANNELS];
 static char it_dbg[32];
@@ -39,6 +44,8 @@ static void it_release(void) {
   it_file_size = it_file_used = 0;
   memset(it_vu, 0, sizeof(it_vu));
   it_last_l = it_last_r = it_peak_l = it_peak_r = 0;
+  rs_acc = rs_prev_l = rs_prev_r = 0;
+  rs_initialized = 0;
   it_dbg[0] = 0;
   it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_cps = 0;
   it_dbg_voices = it_dbg_alloc = 0;
@@ -88,12 +95,17 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
 
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
-  cfg.mixrate = 48000;
-  cfg.flags = (it_mod.used_channels > 24) ? IT_CFG_NEAREST : 0;
+  uint32_t rate = it_mod.used_channels <= 16 ? 48000 : it_mod.used_channels <= 32 ? 32000 : 24000;
+  it_mixrate = rate;
+  cfg.mixrate = rate;
+  cfg.flags = (rate < 48000) ? IT_CFG_NEAREST : 0;
   cfg.out_gain = 256;            // calibrated later on target
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
   fm_set_max_mixed(32);
+  rs_acc = 0;
+  rs_prev_l = rs_prev_r = 0;
+  rs_initialized = 0;
 
   it_active = 1;
   it_ended = 0;
@@ -115,15 +127,59 @@ void it_fpga_service(void) {
   uint32_t c1 = R_CYCLES;
 #endif
   int v = it_volume;
+  
+  int out_count = 0;
   for (int i = 0; i < n; i++) {
     int32_t t = (int32_t)it_out[2 * i] * v; int32_t l = (t + ((t >> 31) & 63)) >> 6;
     t = (int32_t)it_out[2 * i + 1] * v; int32_t r = (t + ((t >> 31) & 63)) >> 6;
-    int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+    
+    if (it_mixrate == 48000) {
+      if (out_count >= IT_OUT_MAX) break;
+      it_out_resampled[2 * out_count] = (int16_t)l;
+      it_out_resampled[2 * out_count + 1] = (int16_t)r;
+      out_count++;
+    } else {
+      rs_acc += 48000;
+      while (rs_acc >= it_mixrate) {
+        if (out_count >= IT_OUT_MAX) break;
+        rs_acc -= it_mixrate;
+        
+        int32_t out_l, out_r;
+        if (!rs_initialized || it_mixrate == 0) {
+          out_l = l;
+          out_r = r;
+        } else {
+          uint32_t phase = (rs_acc * 1000000u) / it_mixrate;
+          int32_t frac = phase / 10000;
+          if (frac > 1000) frac = 1000;
+          
+          out_l = rs_prev_l + ((l - rs_prev_l) * frac / 1000);
+          out_r = rs_prev_r + ((r - rs_prev_r) * frac / 1000);
+        }
+        
+        it_out_resampled[2 * out_count] = (int16_t)out_l;
+        it_out_resampled[2 * out_count + 1] = (int16_t)out_r;
+        out_count++;
+      }
+    }
+    
+    rs_prev_l = l;
+    rs_prev_r = r;
+    rs_initialized = 1;
+  }
+  
+  for (int i = 0; i < out_count; i++) {
+    int32_t out_l = it_out_resampled[2 * i];
+    int32_t out_r = it_out_resampled[2 * i + 1];
+    int32_t al = out_l < 0 ? -out_l : out_l;
+    int32_t ar = out_r < 0 ? -out_r : out_r;
     if (al > it_peak_l) it_peak_l = al;
     if (ar > it_peak_r) it_peak_r = ar;
-    it_last_l = l; it_last_r = r;
-    mixer_write_noana((int16_t)l, (int16_t)r);
+    it_last_l = out_l;
+    it_last_r = out_r;
+    mixer_write_noana((int16_t)out_l, (int16_t)out_r);
   }
+  
   if (it_pl.finished) {
     it_active = 0;
     it_ended = 1;
@@ -211,6 +267,11 @@ int it_fpga_set_volume(int v) {
 }
 int it_fpga_pause(int on) {
   if (on < 0) it_paused = !it_paused; else it_paused = on ? 1 : 0;
+  if (it_paused) {
+    rs_acc = 0;
+    rs_prev_l = rs_prev_r = 0;
+    rs_initialized = 0;
+  }
   return it_paused;
 }
 const char *it_fpga_debug(void) {
