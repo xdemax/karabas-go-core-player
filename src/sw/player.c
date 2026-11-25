@@ -15,6 +15,7 @@
 #endif
 #include "fmt.h"
 #include "fpga.h"
+#include "plog.h"
 #include "src.h"
 #include "audio.h"
 #include "spi.h"
@@ -39,6 +40,8 @@ static int spectrum_on = 1;
 static int volume_setting = 64;
 static int osd_raw = -1;
 static char mix_msg[40];
+static char dbg_all[48];
+static uint32_t ui_cyc, ui_us, ui_pct, ui_prev_after;
 static uint32_t mix_t0, mix_w0;
 
 static const int osd_vol[16] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 64 };
@@ -78,8 +81,23 @@ static void view_fill(int audio) {
   V.engine = fmt_engine_name();
   V.version = fmt_engine_version();
   V.build = PLAYER_BUILD;
-  V.debug = it_fpga_debug();
-  if (!V.debug || !V.debug[0]) V.debug = fpga_xm_debug();
+  {
+    const char *d = it_fpga_debug();
+    if (!d || !d[0]) d = fpga_xm_debug();
+    if (d && d[0]) {
+      char *q = dbg_all;
+      while (*d && q < dbg_all + (int) sizeof(dbg_all) - 8) *q++ = *d++;
+      *q++ = ' '; *q++ = 'u';
+      {
+        char t[10]; int n = 0; uint32_t v = ui_pct;
+        if (!v) t[n++] = '0';
+        while (v) { t[n++] = (char) ('0' + (v % 10u)); v /= 10u; }
+        while (n) *q++ = t[--n];
+      }
+      *q = 0;
+      V.debug = dbg_all;
+    } else V.debug = "";
+  }
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;
@@ -225,6 +243,15 @@ static void play_selected(void) {
   int rc = m->play(&src, file_size, progress);
   f_close(&f);
   if (rc == 0) {
+    char lp[FS_PATH_MAX];
+    { char *q = str_cpy(lp, full); (void) q; }
+    if (plog_open("/PLRLOG.TXT") == 0) {
+      plog_str("start ");
+      plog_str(lp);
+      plog_str(" engine=");
+      plog_str(np_fmt);
+      plog_str("\r\n");
+    }
     playing = 1; audio_reset_stats();
     fmt_set_volume(volume_setting);
     mix_t0 = R_US; mix_w0 = audio_written(); mix_msg[0] = 0;
@@ -307,7 +334,7 @@ static void key(key_ev_t *e) {
     case K_F12: core_reset();
     case K_ENTER: case K_KPENTER: play_selected(); return;
     case K_ESC:
-      if (playing) { fmt_stop(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
+      if (playing) { fmt_stop(); plog_close(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
       return;
     case K_BKSP: {
       int n = browser_up(&br, keep, playing ? fmt_service : NULL);
@@ -367,7 +394,20 @@ void player_run(void) {
                           (uint8_t) k1, (uint8_t) (k1 >> 8), (uint8_t) (k1 >> 16) };
       for (int i = 0; i < 6; i++) if (keys[i] == K_F12) core_reset();
     }
-    fmt_service();
+    {
+      /* everything outside the audio service: UI, browser, SD, key handling */
+      uint32_t now = R_CYCLES;
+      if (ui_prev_after) ui_cyc += now - ui_prev_after;
+      fmt_service();
+      ui_prev_after = R_CYCLES;
+      if ((uint32_t) (R_US - ui_us) >= 1000000u) {
+        uint32_t dt = (uint32_t) (R_US - ui_us);
+        ui_us = R_US;
+        if (!dt) dt = 1;
+        ui_pct = (uint32_t) ((uint64_t) ui_cyc * 100u / ((uint64_t) dt * 75u));
+        ui_cyc = 0;
+      }
+    }
     if (playing && fmt_volume() != volume_setting) fmt_set_volume(volume_setting);
     raw = (int) (R_SW & 0xFF);
     if (raw != osd_raw && raw < 16) {
@@ -379,6 +419,23 @@ void player_run(void) {
       mix_t0 = R_US;
       uint32_t wr = audio_written() - mix_w0;
       mix_w0 = audio_written();
+      if (plog_is_open()) {
+        plog_num((uint32_t) ((R_US - np_start) / 1000000u));
+        plog_str("s ");
+        {
+          const char *d = it_fpga_debug();
+          if (!d || !d[0]) d = fpga_xm_debug();
+          if (d && d[0]) { plog_str(d); plog_str(" "); }
+        }
+        plog_str("mix="); plog_num(wr);
+        plog_str(" u=");   plog_num(audio_under());
+        plog_str(" d=");   plog_num(audio_drop());
+        plog_str(" pos="); plog_num(np_cur);
+        plog_str("/");     plog_num(np_total);
+        plog_str("\r\n");
+        static int flush_cnt;
+        if (++flush_cnt >= 8) { flush_cnt = 0; plog_flush(); }   /* lose at most 8 s */
+      }
       char b[40], *q = str_cpy(b, "MIX ");
       q = u2s(q, wr, 0);
       q = str_cpy(q, " U");

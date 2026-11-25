@@ -527,7 +527,7 @@ static int16_t fmout[XM_MIXBUF * 2];
 /* Live diagnostics for the footer, same shape as the IT engine:
  * "<audible>/<channels>v <cpu>% r<mix share>" */
 static char xm_dbg[32];
-static uint32_t xm_dbg_us, xm_dbg_cycles, xm_dbg_pcycles, xm_dbg_ocycles;
+static uint32_t xm_dbg_us, xm_dbg_cycles, xm_dbg_pcycles, xm_dbg_ocycles, xm_dbg_tcycles;
 static int16_t fmout_resampled[512 * 2];
 static fm_voice_t fv[XM_CH];
 
@@ -620,7 +620,11 @@ void fpga_xm_service(void) {
     xm_dbg_ocycles += (uint32_t) (R_CYCLES - t0);
     free -= n;
     X.tleft -= n;
-    if (X.tleft <= 0) next_tick();
+    if (X.tleft <= 0) {
+      uint32_t tt = R_CYCLES;
+      next_tick();
+      xm_dbg_tcycles += (uint32_t) (R_CYCLES - tt);
+    }
   }
 
 #ifdef IT_PROFILE
@@ -652,11 +656,16 @@ void fpga_xm_service(void) {
       *q++ = ' ';
       *q++ = 'o';
       q = dbg_u(q, o);
+      *q++ = ' ';
+      *q++ = 't';
+      q = dbg_u(q, xm_dbg_cycles
+          ? (uint32_t) ((uint64_t) xm_dbg_tcycles * 100u / xm_dbg_cycles) : 0);
       *q = 0;
     }
     xm_dbg_cycles = 0;
     xm_dbg_pcycles = 0;
     xm_dbg_ocycles = 0;
+    xm_dbg_tcycles = 0;
   }
 #endif
 }
@@ -797,7 +806,7 @@ static int parse_xm(uint32_t size) {
   X.active = 1;
   X.ended = 0;
   xm_dbg[0] = 0;
-  xm_dbg_us = xm_dbg_cycles = xm_dbg_pcycles = xm_dbg_ocycles = 0;
+  xm_dbg_us = xm_dbg_cycles = xm_dbg_pcycles = xm_dbg_ocycles = xm_dbg_tcycles = 0;
   X.err[0] = 0;
   return 0;
 }
