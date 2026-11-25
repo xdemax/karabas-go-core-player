@@ -66,6 +66,8 @@ typedef struct {
   int vol;
   int32_t last_l, last_r, peak_l, peak_r;
   uint8_t vu[FMT_CHANNELS];
+  uint32_t sample_acc;
+  uint32_t samples_per_tick;
 } s3m_module_t;
 
 static uint8_t s3m_meta[S3M_META_BYTES];
@@ -327,6 +329,9 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   s3m_mod.tleft = s3m_mod.spt = 0;
   s3m_mod.gvol = 64;
   
+  s3m_mod.sample_acc = 0;
+  s3m_mod.samples_per_tick = (2500ull * 48000) / (s3m_mod.bpm * 32);
+  
   for (int i = 0; i < 32; i++) {
     s3m_mod.vox[i].active = 0;
   }
@@ -335,6 +340,9 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   s3m_mod.ended = 0;
   s3m_mod.paused = 0;
   s3m_error("");
+  
+  s3m_active = 1;
+  s3m_ended = 0;
   
   fm_reset();
   fm_set_max_mixed(32);
@@ -391,10 +399,10 @@ void s3m_fpga_service(void) {
   for (int sample = 0; sample < n; sample++) {
     s3m_module_t *m = &s3m_mod;
     
-    // Tick management
-    m->tick++;
-    if (m->tick >= m->speed) {
-      m->tick = 0;
+    // Tick management with accumulator
+    m->sample_acc++;
+    if (m->sample_acc >= m->samples_per_tick) {
+      m->sample_acc = 0;
       
       // Process next row
       if (m->row < 64) {
@@ -463,7 +471,7 @@ void s3m_fpga_service(void) {
               if (eff) {
                 switch (eff) {
                   case 'A': m->speed = par; break;
-                  case 'T': m->bpm = par; break;
+                  case 'T': m->bpm = par; m->samples_per_tick = (2500ull * 48000) / (m->bpm * 32); break;
                   case 'V': m->gvol = par; break;
                 }
               }
