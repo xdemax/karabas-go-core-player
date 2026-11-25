@@ -25,9 +25,10 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
-  (void) pdrv;
-  if (!buff || !count) return RES_PARERR;
-  return sd_write((uint32_t) sector, buff, (uint32_t) count) ? RES_ERROR : RES_OK;
+  /* DISABLED: the SPI block-write path is not trustworthy yet - it corrupted the SD2
+   * root directory once. Until it is verified on a scratch card, the player is read-only. */
+  (void) pdrv; (void) buff; (void) sector; (void) count;
+  return RES_WRPRT;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {

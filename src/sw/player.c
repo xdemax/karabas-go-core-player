@@ -355,13 +355,10 @@ static void detect_log_key(void) {
     for (int i = 0; i < 6; i++) if (keys[i] == K_L) seen = 1;
     if (seen) break;
   }
-  if (seen) {
-    /* never write a log on a card that cannot take writes without corrupting itself */
-    log_enabled = plog_selftest();
-    status(log_enabled ? "logging -> /PLRLOG.TXT" : "log: card is not writable");
-  } else {
-    log_enabled = 0;
-  }
+  /* Card writes are disabled until the SPI write path is verified on a scratch card:
+   * one enabled session lost the SD2 root directory. */
+  (void) seen;
+  log_enabled = 0;
 }
 
 void player_run(void) {
