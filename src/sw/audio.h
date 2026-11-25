@@ -13,6 +13,7 @@ uint32_t audio_written(void);             // samples written since the start (fo
 int audio_rate(void);
 const char *audio_rate_debug(void);   // "R<asked>/<fpga>" for the footer                     // the measured or configured rate (Hz)
 int audio_set_rate(int hz);               // set the FPGA mixer rate, returns the effective one
+void audio_unlock_rate(void);             // allow the drain-rate test again (only when idle)
 uint16_t audio_drop(void);                // writes attempted while the FIFO was full
 uint16_t audio_under(void);               // audio ticks with an empty FIFO
 void audio_reset_stats(void);

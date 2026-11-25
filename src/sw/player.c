@@ -382,6 +382,8 @@ void player_run(void) {
       q = u2s(q, wr, 0);
       q = str_cpy(q, " U");
       q = u2s(q, audio_under(), 0);
+      q = str_cpy(q, " D");
+      q = u2s(q, audio_drop(), 0);
       q = str_cpy(q, " R");
       q = str_cpy(q, audio_rate_debug() + 1);   // "asked/fpga", drop the leading 'R'
       str_ncpy(mix_msg, b, sizeof(mix_msg));

@@ -17,16 +17,23 @@ void audio_reset_stats(void) { MMIO(0x78) = 1; }
 
 static uint32_t nwritten;
 static int aud_hz = 48000;
+static int aud_locked = 0;   // the player has chosen the rate: never measure into a live FIFO
+void audio_unlock_rate(void) { aud_locked = 0; }
 void audio_note_written(int n) { if (n > 0) nwritten += (uint32_t) n; }
 uint32_t audio_written(void) { return nwritten; }
 int audio_rate(void) { return aud_hz; }
 
-// The write may not be observable by an immediate read (the store can still be in
-// flight), so this only sets the request. The real rate is whatever audio_rate_test()
-// measures afterwards, and the mixer must use that measured value.
+// Writes the FPGA rate register and reads it back; the mixer must use the returned
+// value, so a rejected write can never make the mixer and the FIFO drift apart.
 int audio_set_rate(int hz) {
   MMIO(0x44) = (uint32_t) hz;
+  uint32_t rb = MMIO(0x44) & 0x3FFFFu;
+  if (rb != (uint32_t) hz) {
+    hz = 48000;
+    MMIO(0x44) = 48000u;
+  }
   aud_hz = hz;
+  aud_locked = 1;
   return hz;
 }
 
@@ -51,6 +58,7 @@ void audio_write(int16_t l, int16_t r) {
 // Fill the FIFO with silence and measure how long the audio side takes to pop it. The result is
 // the real hardware sample rate (48000 when the clock/tick are right); -1 if it does not drain.
 int audio_rate_test(void) {
+  if (aud_locked) return aud_hz;   // measuring writes 8191 silent samples: only allowed when idle
   for (int i = 0; i < AUDIO_CAP - 1; i++) audio_write(0, 0);
   int f1 = audio_free();                 // the index takes ~ms: the FIFO already drained some
   uint32_t t1 = R_US;

@@ -90,6 +90,7 @@ void fmt_stop(void) {
   // Back to the default output rate: only IT/XM may switch the whole chain to 32 kHz,
   // every other engine (MOD/S3M/MP3/AY) always runs at 48 kHz.
   audio_set_rate(48000);
+  audio_unlock_rate();
   mixer_reset();
   for (unsigned i = 0; i < NENG; i++)
     if (engines[i]->stop) engines[i]->stop();
