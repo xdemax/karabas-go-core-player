@@ -13,10 +13,10 @@
 
 static int32_t mixbuf[IT_MIXBUF * 2];
 
-/* Gain + clamp for one output frame (output goes to accumulator, not FIFO). */
-static inline void clamp_sample(int16_t *dst, int32_t l32, int32_t r32, int32_t og) {
-  int32_t l = (l32 * og) >> 6;
-  int32_t r = (r32 * og) >> 6;
+/* Clamp and write one output frame. */
+static inline void clamp_sample(int16_t *dst, int32_t l32, int32_t r32) {
+  int32_t l = l32 >> 8;
+  int32_t r = r32 >> 8;
   if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
   if (r > 32767) r = 32767; else if (r < -32768) r = -32768;
   *dst++ = (int16_t)l;
@@ -108,8 +108,8 @@ void it_mix(int16_t *dst, int frames, fm_voice_t *voices, int nvoices) {
           }
           
           int32_t gl8 = gl >> 8, gr8 = gr >> 8;
-          mixbuf[2 * i] += (s * gl8) >> 8;
-          mixbuf[2 * i + 1] += (s * gr8) >> 8;
+          mixbuf[2 * i] += s * gl8;
+          mixbuf[2 * i + 1] += s * gr8;
           
           if (!is_backward) {
             uint32_t carry = (frac + (step & 0xFFFF)) >> 16;
@@ -169,8 +169,8 @@ void it_mix(int16_t *dst, int frames, fm_voice_t *voices, int nvoices) {
           }
           
           int32_t gl8 = gl >> 8, gr8 = gr >> 8;
-          mixbuf[2 * i] += (s * gl8) >> 8;
-          mixbuf[2 * i + 1] += (s * gr8) >> 8;
+          mixbuf[2 * i] += s * gl8;
+          mixbuf[2 * i + 1] += s * gr8;
           
           if (!is_backward) {
             uint32_t carry = (frac + (step & 0xFFFF)) >> 16;
@@ -193,10 +193,10 @@ void it_mix(int16_t *dst, int frames, fm_voice_t *voices, int nvoices) {
       }
     }
     
-    /* Output: gain, clamp and write to dst (unity gain for now) */
-    int32_t og = 256;
+    /* Output: clamp and write to dst */
+    int16_t *out = dst;
     for (int i = 0; i < chunk; i++) {
-      clamp_sample(out, mixbuf[2 * i], mixbuf[2 * i + 1], og);
+      clamp_sample(out, mixbuf[2 * i], mixbuf[2 * i + 1]);
       out += 2;
     }
     
