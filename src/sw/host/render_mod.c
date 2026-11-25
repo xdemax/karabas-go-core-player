@@ -68,6 +68,14 @@ int main(int argc, char **argv) {
   fseek(out, 4, SEEK_SET);  uint32_t riff = (uint32_t) (36 + data); fwrite(&riff, 4, 1, out);
   fseek(out, 40, SEEK_SET); uint32_t ds = (uint32_t) data; fwrite(&ds, 4, 1, out);
   fclose(out);
+  {
+    fmt_info_t fi; memset(&fi, 0, sizeof fi);
+    fpga_mod_info(&fi);
+    fprintf(stderr, "info: channels=%u samples=%u song_len=%u order=%u pattern=%u row=%u speed=%u bpm=%u\n",
+            fi.channels, fi.samples, fi.song_len, fi.order, fi.pattern, fi.row, fi.speed, fi.bpm);
+    uint32_t cur = 0, tot = 0;
+    if (fpga_mod_position(&cur, &tot)) fprintf(stderr, "position %u/%u s\n", cur, tot);
+  }
   fprintf(stderr, "rendered %u samples, '%s'\n", written, fpga_mod_title());
   return 0;
 }

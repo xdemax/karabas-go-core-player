@@ -315,6 +315,36 @@ static void next_tick(void) {
 }
 
 static int16_t fmout[MIX_CHUNK * 2];
+
+/* Real song length: run the tick engine once without mixing, then put the state back.
+ * The progress bar used to be "order*64+row / orders*64", which jumps on Bxx/Dxx. */
+static uint32_t mod_total_ms, mod_elapsed_ms, mod_elapsed_rem;
+
+static uint32_t mod_probe_duration(void)
+{
+  mod_t save;
+  uint8_t seen[16];
+  uint64_t frames = 0;
+  int guard = 0, last = -1;
+
+  memcpy(&save, &M, sizeof(M));
+  memset(seen, 0, sizeof(seen));
+  while (M.active && guard++ < 1000000) {
+    if (M.order != last) {
+      int o = M.order;
+      if (o >= 0 && o < 128) {
+        uint8_t bit = (uint8_t) (1u << (o & 7));
+        if (seen[o >> 3] & bit) break;          /* back to a played order: loop */
+        seen[o >> 3] |= bit;
+      }
+      last = M.order;
+    }
+    next_tick();
+    frames += (uint64_t) M.samples_per_tick;
+  }
+  memcpy(&M, &save, sizeof(M));
+  return (uint32_t) (frames * 1000ull / 48000ull);
+}
 static fm_voice_t fv[MOD_MAX_CH];
 
 static void mix(int n) {
@@ -376,6 +406,11 @@ void fpga_mod_service(void) {
     mix(n);
     free -= n;
     M.tick_left -= n;
+    {
+      uint32_t rem = mod_elapsed_rem + (uint32_t) n * 1000u;
+      mod_elapsed_ms += rem / 48000u;
+      mod_elapsed_rem = rem % 48000u;
+    }
     if (M.tick_left <= 0) next_tick();
   }
 }
@@ -492,6 +527,9 @@ static int parse_mod(uint32_t size) {
   parse_row();
   apply_tick();
   M.active = 1;
+  mod_total_ms = mod_probe_duration();
+  mod_elapsed_ms = 0;
+  mod_elapsed_rem = 0;
   M.ended = 0;
   return 0;
 }
@@ -535,8 +573,9 @@ const char *fpga_mod_error(void) { return M.err; }
 const char *fpga_mod_title(void) { return M.title; }
 int fpga_mod_position(uint32_t *cur, uint32_t *total) {
   if (!M.active) return 0;
-  *cur = (uint32_t) M.order * 64u + M.row;
-  *total = (uint32_t) M.song_len * 64u;
+  *cur = mod_elapsed_ms / 1000u;         /* seconds: monotonic even with Bxx/Dxx jumps */
+  *total = mod_total_ms / 1000u;
+  if (!*total) *total = 1;
   return 1;
 }
 
