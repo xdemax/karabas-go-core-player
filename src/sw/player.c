@@ -37,7 +37,10 @@ static uint32_t np_start, np_cur, np_total, np_us;
 static uint32_t nav_t;
 static int view_ch;
 static int spectrum_on = 1;
-static int font_step;            /* Shift+= / Shift+- change the file list font */
+#ifndef LIST_FONT_DEFAULT
+#define LIST_FONT_DEFAULT 0       /* the host build overrides this to render other sizes */
+#endif
+static int font_step = LIST_FONT_DEFAULT;   /* Shift+= / Shift+- change the file list font */
 static int volume_setting = 64;
 static int osd_raw = -1;
 static char mix_msg[40];

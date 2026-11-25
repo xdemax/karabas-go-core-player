@@ -27,7 +27,6 @@ static const int list_rows_h[] = { 38, 39, 40, 41, 42 };
 static int cur_font_step;
 static const font_t *list_font(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > 4) s = 4; return list_fonts[s]; }
 static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (s > 4) s = 4; return list_rows_h[s]; }
-#define ROWS    ((FB_H - LIST_Y - FOOT_H) / ROW_H)
 
 #define PX      (RIGHT_X + 20)   // the right panel content: x = 420, width = 360
 #define PW      (RIGHT_W - 40)
@@ -51,7 +50,7 @@ static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (
 static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_spec, c_grid, c_yellow, c_red;
 static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent;
 
-static int last_sel = -1, last_top = -1, last_now = -1, last_paused = -1;
+static int last_sel = -1, last_top = -1, last_now = -1, last_paused = -1, last_font_step = -1;
 static char last_path[FS_PATH_MAX];
 static int marq_off, marq_dir = 1;
 static uint32_t marq_t;
@@ -157,7 +156,7 @@ static void fit_px(char *dst, int n, const char *src, const font_t *f, int maxw)
 }
 
 static void draw_row(const player_view_t *v, int k) {
-  if (k < v->top || k >= v->top + ROWS) return;
+  if (k < v->top || k >= v->top + ui_list_rows()) return;
   int r = k - v->top;
   const int rh = list_row_h();
   const font_t *lf = list_font();
@@ -214,7 +213,8 @@ static void draw_list_area(const player_view_t *v) {
     gfx_text_center(&f20, LEFT_W / 2, 300, "no mod / xm / s3m / it files here", r_dim);
     return;
   }
-  for (int i = 0; i < ROWS; i++) {
+  const int rows = ui_list_rows();
+  for (int i = 0; i < rows; i++) {
     int k = v->top + i;
     if (k >= v->nent) break;
     draw_row(v, k);
@@ -640,6 +640,17 @@ static void update_list(const player_view_t *v) {
   col_init();
   int changed = strcmp(v->path ? v->path : "", last_path) != 0 ||
                 v->top != last_top || v->sel != last_sel;
+  if (v->font_step != last_font_step) {           /* Shift+= / Shift+-: repaint now */
+    last_font_step = v->font_step;
+    cur_font_step = v->font_step;
+    changed = 1;
+    draw_left_base(v);
+    draw_list_area(v);
+    last_top = v->top;
+    last_sel = v->sel;
+    update_footer(v);
+    return;
+  }
   if (changed) reset_marquee();
   if (strcmp(v->path ? v->path : "", last_path)) {
     draw_left_base(v);
