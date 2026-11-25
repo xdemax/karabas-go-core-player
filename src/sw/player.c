@@ -440,9 +440,14 @@ void player_run(void) {
       if (playing) fmt_set_volume(volume_setting);
     }
     if ((uint32_t) (R_US - mix_t0) >= 1000000u) {
+      uint32_t dt = (uint32_t) (R_US - mix_t0);
       mix_t0 = R_US;
       uint32_t wr = audio_written() - mix_w0;
       mix_w0 = audio_written();
+      /* samples per second over the REAL window: the check fires at >=1 s, and after an
+       * underrun the FIFO is refilled in one burst, which otherwise showed 51k */
+      if (!dt) dt = 1;
+      wr = (uint32_t) ((uint64_t) wr * 1000000u / dt);
       if (plog_is_open()) {
         plog_num((uint32_t) ((R_US - np_start) / 1000000u));
         plog_str("s ");
