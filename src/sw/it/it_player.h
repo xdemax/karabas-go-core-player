@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 #define IT_PL_LOOP     0x01      /* restart at end of song (default for players) */
+#define IT_CFG_NEAREST (1u << 0)
 
 #define IT_VS_FREE     0
 #define IT_VS_MASTER   1         /* voice currently owned by a channel           */

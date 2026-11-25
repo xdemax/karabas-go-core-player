@@ -188,7 +188,7 @@ static int voice_start(it_player_t *p, unsigned ci, const it_sample_t *s, unsign
     for (k = 0; k < sizeof *v; k++) ((uint8_t *)v)[k] = 0;
     fm_voice_init(f);
     f->data = s->pcm; f->length = s->length;
-    f->flags = (uint8_t)(FM_ACTIVE | (s->bits == 8 ? FM_8BIT : 0));
+    f->flags = (uint8_t)(FM_ACTIVE | (s->bits == 8 ? FM_8BIT : 0) | ((p->flags & IT_CFG_NEAREST) ? FM_NEAREST : 0));
     f->pos = offset;
     v->state = IT_VS_MASTER; v->host = (uint8_t)ci;
     v->note = (uint8_t)note_tr; v->orig_note = (uint8_t)note_raw;

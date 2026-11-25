@@ -84,24 +84,12 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   int rc = it_load(buf, size, &meta, &pcm, IT_LOAD_NOZEROCOPY, &diag, &it_mod);
   if (rc != IT_OK) { it_error(it_err_str(rc)); return -1; }
 
-  // The new engine keeps NNA voices and is heavier than MikMod. Dense files are
-  // left to the old proven engine until the voice path is optimized. The profile
-  // build raises the limit so the channel/voice threshold can be measured.
-#ifdef IT_PROFILE
-#define IT_CH_LIMIT 32
-#else
-#define IT_CH_LIMIT 16
-#endif
-  if (it_mod.used_channels > IT_CH_LIMIT) {
-    it_error("IT: too many channels, MikMod fallback");
-    it_release();
-    return -2;
-  }
+  #define IT_CH_LIMIT 64
 
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
   cfg.mixrate = 48000;
-  cfg.flags = 0;                 // stop at the end of the song
+  cfg.flags = (it_mod.used_channels > 24) ? IT_CFG_NEAREST : 0;
   cfg.out_gain = 256;            // calibrated later on target
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
