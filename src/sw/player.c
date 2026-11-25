@@ -21,7 +21,7 @@
 #include "spi.h"
 
 #define ROWS ui_list_rows()
-#define HEAVY_CHANNELS 24       // the analyzer gives up above this; keep the mixer fed instead
+#define HEAVY_CHANNELS 20       // the analyzer gives up at/above this; keep the mixer fed instead
 
 static browser_t br;
 static char msg[64] = "ready";
@@ -435,7 +435,7 @@ void player_run(void) {
     // While a list key is held the player panel refreshes slowly (5 Hz); after the key is
     // released it goes back to 30 Hz, or 20 Hz for a dense 24+ channel module. The spectrum
     // analyzer is the expensive part of the UI and the mixer must keep the audio FIFO fed.
-    uint32_t panel_us = view_ch >= 24 ? 100000u : 33000u;
+    uint32_t panel_us = view_ch >= 20 ? 100000u : 33000u;
     if (np_on && (uint32_t) (R_US - np_us) >= panel_us &&
         ((uint32_t) (R_US - nav_t) >= 150000u || (uint32_t) (R_US - np_us) >= 200000u)) {
       np_us = R_US;
