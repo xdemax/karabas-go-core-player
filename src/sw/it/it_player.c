@@ -833,6 +833,177 @@ void it_player_tick(it_player_t *p)
 }
 
 /* ======================================================================= */
+/* fast mixing (specialized inner loops, branch-free in fast path)         */
+/* ======================================================================= */
+#define IT_MIXBUF 128
+
+static int32_t it_mixbuf[IT_MIXBUF * 2];
+
+static inline int32_t it_rd_16(const fm_voice_t *v, uint32_t i)
+{
+    return ((const int16_t *)v->data)[i];
+}
+
+static inline int32_t it_rd_8(const fm_voice_t *v, uint32_t i)
+{
+    return (int32_t)((const int8_t *)v->data)[i] * 256;
+}
+
+static inline int32_t it_lerp_16(int32_t s0, int32_t s1, uint32_t frac)
+{
+    return s0 + (((s1 - s0) * (int32_t)(frac >> 1)) >> 15);
+}
+
+static inline int32_t it_lerp_8(int32_t s0, int32_t s1, uint32_t frac)
+{
+    return (s0 << 8) + (((s1 - s0) * (int32_t)frac) >> 8);
+}
+
+/* Mix one block into it_mixbuf. Voice gains are ramped if ramp > 0. */
+static void it_mix_block(fm_voice_t *v, int n, int32_t gl_start, int32_t gr_start,
+                         int32_t dl, int32_t dr, int ramping)
+{
+    uint32_t pos = v->pos, frac = v->frac;
+    uint32_t step = v->step, loop_start = v->loop_start, loop_end = v->loop_end;
+    int flags = v->flags;
+    int is8 = (flags & FM_8BIT) != 0;
+    int has_loop = (flags & FM_LOOP) != 0;
+    int pingpong = (flags & FM_PINGPONG) != 0;
+    int is_bwd = v->dir != 0;
+    int nearest = (flags & FM_NEAREST) != 0;
+    int32_t gl = gl_start, gr = gr_start;
+    const uint8_t *data = (const uint8_t *)v->data;
+    uint32_t len = v->length;
+
+    int i = 0;
+#define IT_MIX_SAMPLE(ai, si) do { \
+    int32_t s; \
+    if (nearest) { \
+        s = is8 ? it_rd_8(v, pos) : it_rd_16(v, pos); \
+    } else { \
+        uint32_t i1 = pos + 1; \
+        if (i1 >= loop_end && has_loop) i1 = loop_start; \
+        int32_t s0 = is8 ? it_rd_8(v, pos) : it_rd_16(v, pos); \
+        int32_t s1 = is8 ? it_rd_8(v, i1) : it_rd_16(v, i1); \
+        s = is8 ? it_lerp_8(s0, s1, frac) : it_lerp_16(s0, s1, frac); \
+    } \
+    if (ramping) { gl += dl; gr += dr; } \
+    it_mixbuf[si] += (s * (gl >> 8)) >> 8; \
+    it_mixbuf[si + 1] += (s * (gr >> 8)) >> 8; \
+    if (!is_bwd) { \
+        uint32_t carry = (frac + (step & 0xFFFFu)) >> 16; \
+        frac = (frac + (step & 0xFFFFu)) & 0xFFFFu; \
+        pos += (step >> 16) + carry; \
+    } else { \
+        uint32_t sf = step & 0xFFFFu; \
+        uint32_t borrow = (frac < sf) ? 1u : 0u; \
+        frac = (frac - sf) & 0xFFFFu; \
+        pos -= (step >> 16) + borrow; \
+    } \
+    if (has_loop) { \
+        if (!is_bwd) { \
+            if (pos >= loop_end) pos = loop_start + (pos - loop_end); \
+        } else { \
+            if ((int32_t)pos < (int32_t)loop_start) pos = loop_end - (loop_start - pos); \
+        } \
+    } \
+} while (0)
+
+    for (; i + 1 < n; i += 2) {
+        IT_MIX_SAMPLE(0, 2*i);
+        IT_MIX_SAMPLE(1, 2*i+2);
+    }
+    if (i < n) {
+        IT_MIX_SAMPLE(0, 2*i);
+    }
+#undef IT_MIX_SAMPLE
+
+    v->pos = pos;
+    v->frac = frac;
+}
+
+/* Advance voice position without mixing (for dropped or silent voices). */
+static void it_advance_voice(fm_voice_t *v, int n)
+{
+    uint32_t pos = v->pos, frac = v->frac;
+    uint32_t step = v->step, loop_start = v->loop_start, loop_end = v->loop_end;
+    int has_loop = (v->flags & FM_LOOP) != 0;
+    int is_bwd = v->dir != 0;
+
+    for (int i = 0; i < n; i++) {
+        if (!is_bwd) {
+            uint32_t carry = (frac + (step & 0xFFFFu)) >> 16;
+            frac = (frac + (step & 0xFFFFu)) & 0xFFFFu;
+            pos += (step >> 16) + carry;
+            if (has_loop && pos >= loop_end) pos = loop_start + (pos - loop_end);
+        } else {
+            uint32_t sf = step & 0xFFFFu;
+            uint32_t borrow = (frac < sf) ? 1u : 0u;
+            frac = (frac - sf) & 0xFFFFu;
+            pos -= (step >> 16) + borrow;
+            if (has_loop && (int32_t)pos < (int32_t)loop_start) pos = loop_end - (loop_start - pos);
+        }
+    }
+
+    v->pos = pos;
+    v->frac = frac;
+}
+
+static void it_fastmix(int16_t *dst, int frames, fm_voice_t *voices, int nvoices)
+{
+    while (frames > 0) {
+        int n = frames < IT_MIXBUF ? frames : IT_MIXBUF;
+        int i, cnt = n * 2;
+
+        for (i = 0; i < cnt; i++) it_mixbuf[i] = 0;
+
+        for (i = 0; i < nvoices; i++) {
+            fm_voice_t *v = &voices[i];
+            if (!(v->flags & FM_ACTIVE)) continue;
+
+            int32_t vol = v->volume, pan = v->pan;
+            if (vol < 0) vol = 0; else if (vol > 256) vol = 256;
+            if (pan < -128) pan = -128; else if (pan > 127) pan = 127;
+
+            int32_t tl = ((vol * (127 - pan) * 257 + 32768) >> 16) << 8;
+            int32_t tr = ((vol * (pan + 128) * 257 + 32768) >> 16) << 8;
+
+            if (v->ramp == 0) { v->cur_l = tl; v->cur_r = tr; }
+
+            if (tl == 0 && tr == 0 && v->cur_l == 0 && v->cur_r == 0 && v->ramp == 0) {
+                it_advance_voice(v, n);
+                continue;
+            }
+
+            int32_t gl = v->cur_l, gr = v->cur_r;
+
+            if (v->ramp) {
+                int rs = v->ramp < n ? v->ramp : n;
+                int32_t dl = (tl - gl) / (int32_t)v->ramp;
+                int32_t dr = (tr - gr) / (int32_t)v->ramp;
+                it_mix_block(v, rs, gl, gr, dl, dr, 1);
+                v->ramp = (uint16_t)(v->ramp - rs);
+                if (v->ramp == 0) { gl = tl; gr = tr; }
+                if (rs < n) it_mix_block(v, n - rs, tl, tr, 0, 0, 0);
+            } else {
+                it_mix_block(v, n, gl, gr, 0, 0, 0);
+            }
+
+            v->cur_l = gl; v->cur_r = gr;
+        }
+
+        for (i = 0; i < cnt; i++) {
+            int32_t x = it_mixbuf[i] >> 8;
+            if (x > 32767) x = 32767; else if (x < -32768) x = -32768;
+            dst[i] = (int16_t)x;
+        }
+
+        dst += cnt;
+        frames -= n;
+    }
+}
+
+/* ======================================================================= */
 /* init / render                                                           */
 /* ======================================================================= */
 void it_player_cfg_default(it_player_cfg_t *c)
@@ -897,7 +1068,7 @@ void it_player_render(it_player_t *p, int16_t *dst, int frames)
             if (p->left == 0) continue;
         }
         n = frames < (int)p->left ? frames : (int)p->left;
-        fm_mix(dst, n, p->fm, p->nv_hi);
+        it_fastmix(dst, n, p->fm, p->nv_hi);
         dst += 2 * n; frames -= n; p->left -= (uint32_t)n;
     }
 }
