@@ -7,6 +7,7 @@
 #include "mmio.h"
 #include "audio.h"
 #include "mixer.h"
+#include "analysis.h"
 #include "src.h"
 #include "resample.h"
 
@@ -353,6 +354,7 @@ void it_fpga_audio(fmt_audio_t *o) {
   o->peak_l = it_peak_l;
   o->peak_r = it_peak_r;
   memcpy(o->vu, it_vu, sizeof(o->vu));
+  analysis_bands(o->bands, FMT_BANDS);   // IT never asked for the bands: the spectrum stayed flat
   o->volume = it_volume;
   o->paused = it_paused;
   it_peak_l = it_peak_r = 0;

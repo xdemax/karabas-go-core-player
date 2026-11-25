@@ -21,7 +21,7 @@
 #include "spi.h"
 
 #define ROWS ui_list_rows()
-#define HEAVY_CHANNELS 20       // the analyzer gives up at/above this; keep the mixer fed instead
+#define HEAVY_CHANNELS 16       // up to 16 channels the meters run; above they are switched off
 
 static browser_t br;
 static char msg[64] = "ready";
@@ -59,7 +59,7 @@ static void view_fill(int audio) {
   fmt_audio_t fa;
   if (audio) {
     fmt_info(&fi);
-    spectrum_on = fi.channels < HEAVY_CHANNELS;
+    spectrum_on = fi.channels <= HEAVY_CHANNELS;
     fmt_set_analysis(spectrum_on);
     fmt_audio(&fa);
   }

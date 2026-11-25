@@ -369,6 +369,20 @@ static void mix(int n) {
     v->flags = FM_ACTIVE | FM_8BIT | ((ch->loop_len > 2) ? FM_LOOP : 0);
   }
   fm_mix(fmout, n, fv, M.chn);
+  /* Per-channel meters: the MOD engine never filled them, so the CHANNELS panel was dead. */
+  for (int c = 0; c < M.chn && c < FMT_CHANNELS; c++) {
+    int lvl = 0;
+    if (fv[c].flags & FM_ACTIVE) {
+      const int8_t *d = (const int8_t *) fv[c].data;
+      uint32_t idx = fv[c].pos;
+      if (idx >= fv[c].length) idx = fv[c].loop_start < fv[c].length ? fv[c].loop_start : 0;
+      int a = d ? d[idx] : 0;
+      if (a < 0) a = -a;
+      lvl = (a * (int) fv[c].volume) >> 5;   /* volume 0..64 */
+      if (lvl > 255) lvl = 255;
+    }
+    s_vu[c] = (uint8_t) lvl;
+  }
   for (int c = 0; c < M.chn; c++) {
     mod_chan_t *ch = &M.ch[c];
     if (fv[c].flags & FM_ACTIVE) {
