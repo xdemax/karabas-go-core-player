@@ -14,7 +14,7 @@
 #define XM_PAT 256
 #define XM_INS 128
 #define XM_SMP 256
-#define XM_CHUNK 256
+#define XM_CHUNK 64
 #define XM_MIXBUF 128
 
 typedef struct {

@@ -11,7 +11,7 @@
 #include "resample.h"
 
 #define IT_META_BYTES (64u * 1024u)
-#define IT_OUT_CHUNK  256
+#define IT_OUT_CHUNK  64
 #define IT_OUT_MAX    512
 
 static uint8_t it_meta[IT_META_BYTES];
