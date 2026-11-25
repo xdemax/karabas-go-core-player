@@ -162,6 +162,18 @@ void it_fpga_service(void) {
     }
   }
 
+  for (int i = 0; i < out_count; i++) {
+    int32_t l = it_out_resampled[2 * i];
+    int32_t r = it_out_resampled[2 * i + 1];
+    int32_t al = l < 0 ? -l : l;
+    int32_t ar = r < 0 ? -r : r;
+    if (al > it_peak_l) it_peak_l = al;
+    if (ar > it_peak_r) it_peak_r = ar;
+    it_last_l = l;
+    it_last_r = r;
+    mixer_write_noana((int16_t)l, (int16_t)r);
+  }
+
   if (it_pl.finished) {
     it_active = 0;
     it_ended = 1;
