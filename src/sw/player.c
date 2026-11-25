@@ -209,32 +209,31 @@ static void progress(uint32_t done, uint32_t total) {
   }
 }
 
-static void play_selected(void) {
+static int play_selected(void) {
   const fs_entry_t *e = browser_selected(&br);
-  if (!e) return;
+  if (!e) return 0;
   if (e->dir || playlist_supported(e->name)) {
     int n = browser_enter(&br, keep, playing ? fmt_service : NULL);
     if (n < 0) {
       status(n == -3 ? "SD2: too many files (RAM)" : "SD2: can't open the directory/playlist");
       draw_view();
-      return;
+      return 0;
     }
     if (n == BROWSER_ENTER_PLAYLIST) {
-      if (br.nent == 0) { status("empty playlist"); draw_view(); return; }
+      if (br.nent == 0) { status("empty playlist"); draw_view(); return 0; }
       play_ctx = PLAY_CTX_PLAYLIST;
-      play_selected();                 // the playlist starts with its first track
-      return;
+      return play_selected();          // the playlist starts with its first track
     }
     if (n == BROWSER_ENTER_DIR) update_list_view();
-    return;
+    return 1;
   }
 
   char full[FS_PATH_MAX + FS_NAME_MAX + 2];
-  if (browser_selected_path(&br, full, sizeof(full)) != 0) { status("SD2: path too long"); draw_view(); return; }
+  if (browser_selected_path(&br, full, sizeof(full)) != 0) { status("SD2: path too long"); draw_view(); return 0; }
   const fmt_module_t *m = fmt_by_ext(e->name);
-  if (!m) { status("no player for this format"); draw_view(); return; }
+  if (!m) { status("no player for this format"); draw_view(); return 0; }
   FIL f;
-  if (fs_open(full, &f) != 0) { status("can't open the file"); draw_view(); return; }
+  if (fs_open(full, &f) != 0) { status("can't open the file"); draw_view(); return 0; }
   uint32_t file_size = e->size ? e->size : (uint32_t) f_size(&f);
   play_ctx = br.playlist ? PLAY_CTX_PLAYLIST : PLAY_CTX_DIR;
   fmt_stop();
@@ -258,19 +257,30 @@ static void play_selected(void) {
     status(m->error ? m->error() : fmt_error());
   }
   update_view();
+  return rc == 0;
 }
 
-// the next playable file of the SD2 list (the current directory). It does not wrap: after the last
-// file the player stops.
+// A short press must not be missed while the skip loop is busy starting engines.
+static int esc_down(void) {
+  uint32_t k0 = R_KBD0, k1 = R_KBD1;
+  uint8_t keys[6] = { (uint8_t) (k0 >> 8), (uint8_t) (k0 >> 16), (uint8_t) (k0 >> 24),
+                      (uint8_t) k1, (uint8_t) (k1 >> 8), (uint8_t) (k1 >> 16) };
+  for (int i = 0; i < 6; i++) if (keys[i] == K_ESC) return 1;
+  return 0;
+}
+
+// The next file of the SD2 list (the current directory) that actually plays. Files that the
+// registry does not know and files whose engine refuses to start are skipped, one after another;
+// Esc interrupts the search and the end of the list stops it. It does not wrap.
 static int next_track(void) {
   if (playing_sd1) return 0;
   for (int i = br.sel + 1; i < br.nent; i++) {
     if (br.ent[i].dir || !fmt_supported(br.ent[i].name)) continue;
+    if (esc_down()) return -1;   /* the user cancelled the search */
     br.sel = i;
     if (br.sel < br.top) br.top = br.sel;
     if (br.sel >= br.top + ROWS) br.top = br.sel - ROWS + 1;
-    play_selected();
-    return 1;
+    if (play_selected()) return 1;
   }
   return 0;
 }
@@ -335,7 +345,14 @@ static void key(key_ev_t *e) {
       return;
     }
     case K_F12: core_reset();
-    case K_ENTER: case K_KPENTER: play_selected(); return;
+    case K_ENTER: case K_KPENTER:
+      if (!play_selected()) {
+        int r = next_track();
+        if (r < 0) status("stopped");
+        else if (!r) status("no playable file");
+        draw_view();
+      }
+      return;
     case K_ESC:
       if (playing) { fmt_stop(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
       return;
@@ -468,12 +485,14 @@ void player_run(void) {
       int ended = fmt_finished();
       int stop_after_playlist = play_ctx == PLAY_CTX_PLAYLIST && !br.playlist;
       playing = 0;
-      if (ended && !stop_after_playlist && next_track()) {
+      int nx = (ended && !stop_after_playlist) ? next_track() : 0;
+      if (nx > 0) {
         // play_selected() started the next file and drew the new state
       } else {
         playing_sd1 = 0;
         np_on = 0;
-        status(ended ? (play_ctx == PLAY_CTX_PLAYLIST ? "end of playlist" : "end of list") : "stopped");
+        status(nx < 0 ? "stopped" :
+               ended ? (play_ctx == PLAY_CTX_PLAYLIST ? "end of playlist" : "end of list") : "stopped");
         draw_view();
       }
     }
