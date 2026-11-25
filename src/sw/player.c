@@ -99,6 +99,7 @@ static void view_fill(int audio) {
       V.debug = dbg_all;
     } else V.debug = "";
   }
+  V.logging = log_enabled;
   V.aud_rate = (uint32_t) audio_rate();
   V.size = (br.sel >= 0 && br.sel < br.nent) ? br.ent[br.sel].size : 0;
   V.loading = (np_on && !playing) ? 1 : 0;

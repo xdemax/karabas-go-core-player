@@ -23,6 +23,7 @@ typedef struct {
   const char *version;
   const char *build;
   const char *debug;
+  int logging;                   // 1 when the session log is being written
   const char *skin;
   const char *format;
   const char *title;

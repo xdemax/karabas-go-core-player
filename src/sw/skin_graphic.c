@@ -559,6 +559,8 @@ static void draw_footer_static(const player_view_t *v) {
   gfx_fill(0, FB_H - FOOT_H, FB_W, FOOT_H, c_head);
   gfx_fill(0, FB_H - FOOT_H, FB_W, 1, c_line);
   gfx_text_left(&f20, 20, FB_H - FOOT_H / 2, "Up/Dn L/R Enter Esc BkSp | Space +/- Tab F12", r_dim);
+  gfx_text_left(&f20, 20, FB_H - FOOT_H / 2 + 12, v->logging ? "LOG:ON" : "LOG:OFF",
+                v->logging ? r_accent : r_dim);
   char meta[48];
   footer_meta(v, meta, sizeof(meta));
   gfx_text_left(&f20, 400, FB_H - FOOT_H / 2, meta, r_dim);
