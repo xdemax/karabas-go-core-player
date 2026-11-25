@@ -190,7 +190,7 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     /* Iteration 1 */
     if (nearest) {
       if (is8) {
-        int32_t b = p8[pos];
+        int32_t b = p8[pos] * 256;
         FM_SETS(b);
       } else {
         int32_t b = p16[pos];
@@ -227,7 +227,7 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     /* Iteration 2 */
     if (nearest) {
       if (is8) {
-        int32_t b = p8[pos];
+        int32_t b = p8[pos] * 256;
         FM_SETS(b);
       } else {
         int32_t b = p16[pos];
@@ -267,7 +267,7 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     int32_t s;
     if (nearest) {
       if (is8) {
-        int32_t b = p8[pos];
+        int32_t b = p8[pos] * 256;
         FM_SETS(b);
       } else {
         int32_t b = p16[pos];
@@ -305,7 +305,7 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
     int32_t s;
     if (nearest) {
       if (is8) {
-        int32_t b = p8[pos];
+        int32_t b = p8[pos] * 256;
         FM_SETS(b);
       } else {
         int32_t b = p16[pos];
