@@ -527,7 +527,7 @@ static int16_t fmout[XM_MIXBUF * 2];
 /* Live diagnostics for the footer, same shape as the IT engine:
  * "<audible>/<channels>v <cpu>% r<mix share>" */
 static char xm_dbg[32];
-static uint32_t xm_dbg_us, xm_dbg_cycles, xm_dbg_pcycles;
+static uint32_t xm_dbg_us, xm_dbg_cycles, xm_dbg_pcycles, xm_dbg_ocycles;
 static int16_t fmout_resampled[512 * 2];
 static fm_voice_t fv[XM_CH];
 
@@ -579,7 +579,10 @@ void fpga_xm_service(void) {
     }
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
+    uint32_t t0 = R_CYCLES;
     mix(n);
+    xm_dbg_pcycles += (uint32_t) (R_CYCLES - t0);
+    t0 = R_CYCLES;
     
     const int16_t *outp;
     int out_count;
@@ -614,6 +617,7 @@ void fpga_xm_service(void) {
       mixer_write((int16_t) l, (int16_t) r);
     }
     
+    xm_dbg_ocycles += (uint32_t) (R_CYCLES - t0);
     free -= n;
     X.tleft -= n;
     if (X.tleft <= 0) next_tick();
@@ -631,8 +635,10 @@ void fpga_xm_service(void) {
      * otherwise a late service call makes the number exceed 100 %. */
     if (!dt) dt = 1;
     uint32_t pct = (uint32_t) ((uint64_t) xm_dbg_cycles * 100u / ((uint64_t) dt * 75u));
-    uint32_t rpct = xm_dbg_cycles
+    uint32_t m = xm_dbg_cycles
         ? (uint32_t) ((uint64_t) xm_dbg_pcycles * 100u / xm_dbg_cycles) : 0;
+    uint32_t o = xm_dbg_cycles
+        ? (uint32_t) ((uint64_t) xm_dbg_ocycles * 100u / xm_dbg_cycles) : 0;
     {
       char *q = xm_dbg;
       q = dbg_u(q, (uint32_t) voices);
@@ -640,11 +646,17 @@ void fpga_xm_service(void) {
       q = dbg_u(q, (uint32_t) X.chn);
       *q++ = 'v'; *q++ = ' ';
       q = dbg_u(q, pct);
-      *q++ = '%';
+      *q++ = '%'; *q++ = ' ';
+      *q++ = 'm';
+      q = dbg_u(q, m);
+      *q++ = ' ';
+      *q++ = 'o';
+      q = dbg_u(q, o);
       *q = 0;
     }
     xm_dbg_cycles = 0;
     xm_dbg_pcycles = 0;
+    xm_dbg_ocycles = 0;
   }
 #endif
 }
@@ -785,7 +797,7 @@ static int parse_xm(uint32_t size) {
   X.active = 1;
   X.ended = 0;
   xm_dbg[0] = 0;
-  xm_dbg_us = xm_dbg_cycles = xm_dbg_pcycles = 0;
+  xm_dbg_us = xm_dbg_cycles = xm_dbg_pcycles = xm_dbg_ocycles = 0;
   X.err[0] = 0;
   return 0;
 }
