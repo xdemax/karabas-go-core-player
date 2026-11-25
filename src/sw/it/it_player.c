@@ -12,7 +12,7 @@
 #define PER_MAX  0x7FFFFF
 #define DECLICK_FRAMES 96
 #define START_RAMP     64
-#define MAX_VOICES     32  /* hard limit to match IT voice stealing */
+#define MAX_VOICES     20  /* hard limit to match IT voice stealing */
 
 static const it_pattern_t g_empty_pat = { NULL, 0, 64, 64 };
 static const uint16_t s3m_tab[12] = { 1712,1616,1524,1440,1356,1280,1208,1140,1076,1016,960,907 };

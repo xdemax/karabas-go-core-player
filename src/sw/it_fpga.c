@@ -45,7 +45,7 @@ static char *dbg_u(char *q, uint32_t v)
 }
 
 static char it_dbg[32];
-static uint32_t it_dbg_us, it_dbg_cycles, it_dbg_pcycles, it_dbg_cps;
+static uint32_t it_dbg_us, it_dbg_cycles, it_dbg_pcycles, it_dbg_ocycles, it_dbg_cps;
 static int it_dbg_voices, it_dbg_alloc;
 
 static void it_error(const char *s) {
@@ -62,7 +62,7 @@ static void it_release(void) {
   it_last_l = it_last_r = it_peak_l = it_peak_r = 0;
   memset(&rs, 0, sizeof(rs));
   it_dbg[0] = 0;
-  it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_cps = 0;
+  it_dbg_us = it_dbg_cycles = it_dbg_pcycles = it_dbg_ocycles = it_dbg_cps = 0;
   it_dbg_voices = it_dbg_alloc = 0;
 }
 
@@ -181,6 +181,10 @@ void it_fpga_service(void) {
 #endif
   int v = it_volume;
   
+#ifdef IT_PROFILE
+  uint32_t c_mix_end = R_CYCLES;
+  it_dbg_pcycles += (uint32_t)(c_mix_end - c0);
+#endif
   int out_count = 0;
   for (int i = 0; i < n && out_count < IT_OUT_MAX; i++) {
     int32_t t = (int32_t)it_out[2 * i] * v;
@@ -209,6 +213,9 @@ void it_fpga_service(void) {
     it_elapsed_rem = rem % (it_mixrate ? it_mixrate : 48000u);
   }
 
+#ifdef IT_PROFILE
+  it_dbg_ocycles += (uint32_t)(R_CYCLES - c_mix_end);
+#endif
   if (it_pl.finished) {
     it_active = 0;
     it_ended = 1;
@@ -233,8 +240,10 @@ void it_fpga_service(void) {
     /* Percent of the CPU over the real window (see the XM engine for the reasoning). */
     if (!dt) dt = 1;
     uint32_t pct = (uint32_t) ((uint64_t) it_dbg_cps * 100u / ((uint64_t) dt * 75u));
-    uint32_t rpct = it_dbg_cps ?
+    uint32_t mpct = it_dbg_cps ?
         (uint32_t)((uint64_t)it_dbg_pcycles * 100u / it_dbg_cps) : 0;
+    uint32_t opct = it_dbg_cps ?
+        (uint32_t)((uint64_t)it_dbg_ocycles * 100u / it_dbg_cps) : 0;
     it_dbg_voices = it_player_active_voices(&it_pl);
     it_dbg_alloc = it_pl.nv_hi;
     {
@@ -244,12 +253,17 @@ void it_fpga_service(void) {
       q = dbg_u(q, (uint32_t) it_dbg_alloc);
       *q++ = 'v'; *q++ = ' ';
       q = dbg_u(q, pct);
-      *q++ = '%'; *q++ = ' '; *q++ = 'r';
-      q = dbg_u(q, rpct);
+      *q++ = '%'; *q++ = ' ';
+      *q++ = 'm';
+      q = dbg_u(q, mpct);
+      *q++ = ' ';
+      *q++ = 'o';
+      q = dbg_u(q, opct);
       *q = 0;
     }
     it_dbg_cycles = 0;
     it_dbg_pcycles = 0;
+    it_dbg_ocycles = 0;
   }
 #endif
 }
