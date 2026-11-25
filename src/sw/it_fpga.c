@@ -89,11 +89,11 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   it_player_cfg_t cfg;
   it_player_cfg_default(&cfg);
   cfg.mixrate = 48000;
-  cfg.flags = (it_mod.used_channels > 24) ? IT_CFG_NEAREST : 0;
+  cfg.flags = (it_mod.used_channels > 16) ? IT_CFG_NEAREST : 0;
   cfg.out_gain = 256;            // calibrated later on target
   it_player_init(&it_pl, &it_mod, &cfg);
   fm_reset();
-  fm_set_max_mixed(32);
+  fm_set_max_mixed(it_mod.used_channels > 16 ? 16 : 32);
 
   it_active = 1;
   it_ended = 0;
