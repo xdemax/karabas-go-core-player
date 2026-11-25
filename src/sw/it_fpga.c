@@ -182,7 +182,13 @@ void it_fpga_service(void) {
   }
   if (n <= 0) return;
 
+#ifdef IT_PROFILE
+  uint32_t c0 = R_CYCLES;
+#endif
   it_player_render(&it_pl, it_out, n);
+#ifdef IT_PROFILE
+  uint32_t c1 = R_CYCLES;
+#endif
   int v = it_volume;
   int frames_fed_to_rs = 0;
   
@@ -252,6 +258,38 @@ void it_fpga_service(void) {
     it_elapsed_rem = rem % (it_mixrate ? it_mixrate : 48000u);
   }
 
+#ifdef IT_PROFILE
+  {
+    uint32_t c2 = R_CYCLES;
+    it_dbg_pcycles += c1 - c0;
+    it_dbg_cycles += c2 - c0;
+    if ((uint32_t) (R_US - it_dbg_us) >= 1000000u) {
+      uint32_t dt = (uint32_t) (R_US - it_dbg_us);
+      it_dbg_us = R_US;
+      it_dbg_cps = it_dbg_cycles;
+      if (!dt) dt = 1;
+      uint32_t pct = (uint32_t) ((uint64_t) it_dbg_cps * 100u / ((uint64_t) dt * 75u));
+      uint32_t mpct = it_dbg_cps
+          ? (uint32_t) ((uint64_t) it_dbg_pcycles * 100u / it_dbg_cps) : 0;
+      it_dbg_voices = it_player_active_voices(&it_pl);
+      it_dbg_alloc = it_pl.nv_hi;
+      {
+        char *q = it_dbg;
+        q = dbg_u(q, (uint32_t) it_dbg_voices);
+        *q++ = '/';
+        q = dbg_u(q, (uint32_t) it_dbg_alloc);
+        *q++ = 'v'; *q++ = ' ';
+        q = dbg_u(q, pct);
+        *q++ = '%'; *q++ = ' ';
+        *q++ = 'm';
+        q = dbg_u(q, mpct);
+        *q = 0;
+      }
+      it_dbg_cycles = 0;
+      it_dbg_pcycles = 0;
+    }
+  }
+#endif
   if (!it_pl.finished && it_total_ms && it_elapsed_ms > it_total_ms + 1500u) {
     it_active = 0;
     it_ended = 1;
