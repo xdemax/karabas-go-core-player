@@ -11,7 +11,8 @@ static int  popen;
 int plog_open(const char *path) {
   plog_close();
   pn = 0;
-  if (f_open(&pf, path, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return -1;
+  if (f_open(&pf, path, FA_WRITE | FA_OPEN_ALWAYS) != FR_OK) return -1;
+  f_lseek(&pf, f_size(&pf));          /* append: one log per boot, all tracks */
   popen = 1;
   return 0;
 }

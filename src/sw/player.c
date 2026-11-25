@@ -40,6 +40,7 @@ static int spectrum_on = 1;
 static int volume_setting = 64;
 static int osd_raw = -1;
 static char mix_msg[40];
+static int log_enabled;          /* the log is written only if L was held at start */
 static char dbg_all[48];
 static uint32_t ui_cyc, ui_us, ui_pct, ui_prev_after;
 static uint32_t mix_t0, mix_w0;
@@ -245,7 +246,7 @@ static void play_selected(void) {
   if (rc == 0) {
     char lp[FS_PATH_MAX];
     { char *q = str_cpy(lp, full); (void) q; }
-    if (plog_open("/PLRLOG.TXT") == 0) {
+    if (log_enabled && plog_is_open()) {
       plog_str("start ");
       plog_str(lp);
       plog_str(" engine=");
@@ -334,7 +335,7 @@ static void key(key_ev_t *e) {
     case K_F12: core_reset();
     case K_ENTER: case K_KPENTER: play_selected(); return;
     case K_ESC:
-      if (playing) { fmt_stop(); plog_close(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
+      if (playing) { fmt_stop(); plog_flush(); playing = 0; playing_sd1 = 0; np_on = 0; status("stopped"); draw_view(); }
       return;
     case K_BKSP: {
       int n = browser_up(&br, keep, playing ? fmt_service : NULL);
@@ -349,6 +350,24 @@ static void key(key_ev_t *e) {
   if (nav) { nav_t = R_US; update_list_view(); } else draw_view();
 }
 
+/* The session log is opt-in at boot: hold L while the core starts. */
+static void detect_log_key(void) {
+  uint32_t t0 = R_US;
+  int seen = 0;
+  while ((uint32_t) (R_US - t0) < 700000u) {      /* 0.7 s */
+    uint32_t k0 = R_KBD0, k1 = R_KBD1;
+    uint8_t keys[6] = { (uint8_t) (k0 >> 8), (uint8_t) (k0 >> 16), (uint8_t) (k0 >> 24),
+                        (uint8_t) k1, (uint8_t) (k1 >> 8), (uint8_t) (k1 >> 16) };
+    for (int i = 0; i < 6; i++) if (keys[i] == K_L) seen = 1;
+    if (seen) break;
+  }
+  log_enabled = seen;
+  if (seen) {
+    /* show it: the user must know the card is being written */
+    status("logging -> /PLRLOG.TXT");
+  }
+}
+
 void player_run(void) {
   spi_div(2);
   spi_cs(0xF);
@@ -356,6 +375,8 @@ void player_run(void) {
   if (skin_current()->init) skin_current()->init();
   browser_init(&br);
   fs_mount();
+  detect_log_key();
+  if (log_enabled) plog_open("/PLRLOG.TXT");
   list();
   draw_view();
   spi_div(2);
