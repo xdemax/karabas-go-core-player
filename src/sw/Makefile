@@ -51,7 +51,7 @@ $(B)/ay/ay_engine.o: ay/ay_engine.cpp $(wildcard ay/players/*.h) | $(B)
 $(B)/%.o: %.S | $(B)
 	$(CROSS)gcc $(CFLAGS) -c $< -o $@
 SRCS   := main.c player.c ui_skin.c skin_graphic.c ui.c fonts.c gfx.c fpga.c xm_fpga.c ay_fpga.c analysis.c sound.c rpc.c settings.c spi.c sd.c diskio.c fs.c browser.c playlist.c syscalls.c \
-          it/it_parser.c it/it_player.c src.c fmt.c audio.c mixer.c fastmix.c mod_fpga.c plog.c mikmod_fpga.c it_fpga.c s3m_fpga.c mp3_fpga.c resample.c formats/mod.c formats/xm.c formats/s3m.c formats/it.c formats/pt3.c formats/pt2.c formats/stc.c formats/ay_more.c formats/mp3.c \
+          it/it_parser.c it/it_player.c it/it_mix.c src.c fmt.c audio.c mixer.c fastmix.c mod_fpga.c plog.c mikmod_fpga.c it_fpga.c s3m_fpga.c mp3_fpga.c resample.c formats/mod.c formats/xm.c formats/s3m.c formats/it.c formats/pt3.c formats/pt2.c formats/stc.c formats/ay_more.c formats/mp3.c \
           fatfs/ff.c fatfs/ffunicode.c
 MIKMOD_SRCS := mikmod/mmio/mmalloc.c mikmod/mmio/mmerror.c mikmod/mmio/mmio.c \
                mikmod/playercode/mdriver.c mikmod/playercode/mdulaw.c mikmod/playercode/mloader.c \
