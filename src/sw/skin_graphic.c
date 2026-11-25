@@ -127,7 +127,7 @@ static int name_width(const player_view_t *v, int k) {
   copy_fit(nm, e->name, sizeof(nm));
   int j = (int) strlen(nm);
   if (e->dir && j < (int) sizeof(nm) - 1) { nm[j++] = '/'; nm[j] = 0; }
-  return gfx_text_width(&f20, nm);
+  return gfx_text_width(list_font(), nm);
 }
 
 static int name_avail(const fs_entry_t *e) {
