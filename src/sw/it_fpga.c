@@ -69,8 +69,7 @@ static void it_release(void) {
 /* Walk the song once without mixing: run ticks until the end or until an order repeats
  * (a real loop). This gives the true length in ms instead of "orders / total orders",
  * which made the progress bar jump when the song uses order jumps. */
-static it_player_t it_sim;
-static uint32_t it_probe_duration(const it_player_t *src, uint32_t rate)
+static uint32_t it_probe_duration(it_player_t *p, uint32_t rate)
 {
   uint8_t seen[32];
   uint64_t frames = 0;
@@ -78,9 +77,10 @@ static uint32_t it_probe_duration(const it_player_t *src, uint32_t rate)
 
   if (!rate) rate = 48000;
   memset(seen, 0, sizeof(seen));
-  memcpy(&it_sim, src, sizeof(it_sim));
-  while (!it_sim.finished && guard++ < 60000) {
-    int o = it_sim.ord;
+  /* Runs on the player state itself; the caller re-initialises it afterwards.
+   * A separate copy cost 13 KB of bss and shifted the hot data in the D-cache. */
+  while (!p->finished && guard++ < 60000) {
+    int o = p->ord;
     if (o != last) {                       /* an order spans many ticks */
       if (o >= 0 && o < 256) {
         uint8_t bit = (uint8_t) (1u << (o & 7));
@@ -89,8 +89,8 @@ static uint32_t it_probe_duration(const it_player_t *src, uint32_t rate)
       }
       last = o;
     }
-    it_player_tick(&it_sim);
-    frames += it_player_tick_frames(&it_sim);
+    it_player_tick(p);
+    frames += it_player_tick_frames(p);
   }
   return (uint32_t) (frames * 1000ull / rate);
 }
@@ -148,6 +148,7 @@ int it_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress
   cfg.out_gain = 112;
   it_player_init(&it_pl, &it_mod, &cfg);
   it_total_ms = it_probe_duration(&it_pl, it_mixrate);
+  it_player_init(&it_pl, &it_mod, &cfg);   /* undo the probe */
   it_elapsed_ms = 0;
   it_elapsed_rem = 0;
   fm_reset();
