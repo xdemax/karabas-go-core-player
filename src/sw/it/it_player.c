@@ -835,7 +835,7 @@ void it_player_tick(it_player_t *p)
 /* ======================================================================= */
 /* fast mixing (specialized inner loops, branch-free in fast path)         */
 /* ======================================================================= */
-#define IT_MIXBUF 128
+#define IT_MIXBUF 256
 
 static int32_t it_mixbuf[IT_MIXBUF * 2];
 
@@ -859,67 +859,211 @@ static inline int32_t it_lerp_8(int32_t s0, int32_t s1, uint32_t frac)
     return (s0 << 8) + (((s1 - s0) * (int32_t)frac) >> 8);
 }
 
-/* Mix one block into it_mixbuf. Voice gains are ramped if ramp > 0. */
+/* Specialized mixing kernel: no branches in loop body for given flags.
+ * Generated for all 32 combinations: {8/16bit} × {loop/no-loop} × {interp/nearest} × {fwd/bwd} × {ramp/no-ramp} */
+#define IT_MIX_KERN(IS8, HAS_LOOP, NEAREST, BWD, RAMPING) \
+static void it_mix_kern_##IS8##_##HAS_LOOP##_##NEAREST##_##BWD##_##RAMPING( \
+    int32_t *buf, uint32_t *ppos, uint32_t *pfrac, uint32_t step, \
+    uint32_t loop_start, uint32_t loop_end, uint32_t len, \
+    const void *data, int n, int32_t *pgl, int32_t *pgr, int32_t dl, int32_t dr) \
+{ \
+    uint32_t pos = *ppos, frac = *pfrac; \
+    int32_t gl = *pgl, gr = *pgr; \
+    const int32_t gl8 = gl >> 8, gr8 = gr >> 8; \
+    int i = 0; \
+    \
+    for (; i + 1 < n; i += 2) { \
+        int32_t s; \
+        if (NEAREST) { \
+            s = (IS8) ? (int32_t)((const int8_t *)data)[pos] * 256 : ((const int16_t *)data)[pos]; \
+        } else { \
+            uint32_t i1 = pos + 1; \
+            if (HAS_LOOP && i1 >= loop_end) i1 = loop_start; \
+            int32_t s0 = (IS8) ? (int32_t)((const int8_t *)data)[pos] * 256 : ((const int16_t *)data)[pos]; \
+            int32_t s1 = (IS8) ? (int32_t)((const int8_t *)data)[i1] * 256 : ((const int16_t *)data)[i1]; \
+            s = (IS8) ? it_lerp_8(s0, s1, frac) : it_lerp_16(s0, s1, frac); \
+        } \
+        if (RAMPING) { gl += dl; gr += dr; } \
+        int32_t tmp_gl = (RAMPING) ? (gl >> 8) : gl8; \
+        int32_t tmp_gr = (RAMPING) ? (gr >> 8) : gr8; \
+        buf[2*i] += (s * tmp_gl) >> 8; \
+        buf[2*i+1] += (s * tmp_gr) >> 8; \
+        \
+        if (!BWD) { \
+            uint32_t carry = (frac + (step & 0xFFFFu)) >> 16; \
+            frac = (frac + (step & 0xFFFFu)) & 0xFFFFu; \
+            pos += (step >> 16) + carry; \
+            if (HAS_LOOP && pos >= loop_end) pos = loop_start + (pos - loop_end); \
+        } else { \
+            uint32_t sf = step & 0xFFFFu; \
+            uint32_t borrow = (frac < sf) ? 1u : 0u; \
+            frac = (frac - sf) & 0xFFFFu; \
+            pos -= (step >> 16) + borrow; \
+            if (HAS_LOOP && (int32_t)pos < (int32_t)loop_start) pos = loop_end - (loop_start - pos); \
+        } \
+        \
+        if (NEAREST) { \
+            s = (IS8) ? (int32_t)((const int8_t *)data)[pos] * 256 : ((const int16_t *)data)[pos]; \
+        } else { \
+            uint32_t i1 = pos + 1; \
+            if (HAS_LOOP && i1 >= loop_end) i1 = loop_start; \
+            int32_t s0 = (IS8) ? (int32_t)((const int8_t *)data)[pos] * 256 : ((const int16_t *)data)[pos]; \
+            int32_t s1 = (IS8) ? (int32_t)((const int8_t *)data)[i1] * 256 : ((const int16_t *)data)[i1]; \
+            s = (IS8) ? it_lerp_8(s0, s1, frac) : it_lerp_16(s0, s1, frac); \
+        } \
+        if (RAMPING) { gl += dl; gr += dr; } \
+        tmp_gl = (RAMPING) ? (gl >> 8) : gl8; \
+        tmp_gr = (RAMPING) ? (gr >> 8) : gr8; \
+        buf[2*i+2] += (s * tmp_gl) >> 8; \
+        buf[2*i+3] += (s * tmp_gr) >> 8; \
+        \
+        if (!BWD) { \
+            uint32_t carry = (frac + (step & 0xFFFFu)) >> 16; \
+            frac = (frac + (step & 0xFFFFu)) & 0xFFFFu; \
+            pos += (step >> 16) + carry; \
+            if (HAS_LOOP && pos >= loop_end) pos = loop_start + (pos - loop_end); \
+        } else { \
+            uint32_t sf = step & 0xFFFFu; \
+            uint32_t borrow = (frac < sf) ? 1u : 0u; \
+            frac = (frac - sf) & 0xFFFFu; \
+            pos -= (step >> 16) + borrow; \
+            if (HAS_LOOP && (int32_t)pos < (int32_t)loop_start) pos = loop_end - (loop_start - pos); \
+        } \
+    } \
+    \
+    if (i < n) { \
+        int32_t s; \
+        if (NEAREST) { \
+            s = (IS8) ? (int32_t)((const int8_t *)data)[pos] * 256 : ((const int16_t *)data)[pos]; \
+        } else { \
+            uint32_t i1 = pos + 1; \
+            if (HAS_LOOP && i1 >= loop_end) i1 = loop_start; \
+            int32_t s0 = (IS8) ? (int32_t)((const int8_t *)data)[pos] * 256 : ((const int16_t *)data)[pos]; \
+            int32_t s1 = (IS8) ? (int32_t)((const int8_t *)data)[i1] * 256 : ((const int16_t *)data)[i1]; \
+            s = (IS8) ? it_lerp_8(s0, s1, frac) : it_lerp_16(s0, s1, frac); \
+        } \
+        if (RAMPING) { gl += dl; gr += dr; } \
+        int32_t tmp_gl = (RAMPING) ? (gl >> 8) : gl8; \
+        int32_t tmp_gr = (RAMPING) ? (gr >> 8) : gr8; \
+        buf[2*i] += (s * tmp_gl) >> 8; \
+        buf[2*i+1] += (s * tmp_gr) >> 8; \
+        \
+        if (!BWD) { \
+            uint32_t carry = (frac + (step & 0xFFFFu)) >> 16; \
+            frac = (frac + (step & 0xFFFFu)) & 0xFFFFu; \
+            pos += (step >> 16) + carry; \
+        } else { \
+            uint32_t sf = step & 0xFFFFu; \
+            uint32_t borrow = (frac < sf) ? 1u : 0u; \
+            frac = (frac - sf) & 0xFFFFu; \
+            pos -= (step >> 16) + borrow; \
+        } \
+    } \
+    \
+    *ppos = pos; *pfrac = frac; *pgl = gl; *pgr = gr; \
+}
+
+/* Generate all 32 specialized kernels (16 flag combos × 2 ramping modes) */
+IT_MIX_KERN(0, 0, 0, 0, 0)  /* 16bit, no-loop, interp, fwd, no-ramp */
+IT_MIX_KERN(0, 0, 0, 0, 1)  /* 16bit, no-loop, interp, fwd, ramp */
+IT_MIX_KERN(0, 0, 0, 1, 0)  /* 16bit, no-loop, interp, bwd, no-ramp */
+IT_MIX_KERN(0, 0, 0, 1, 1)  /* 16bit, no-loop, interp, bwd, ramp */
+IT_MIX_KERN(0, 0, 1, 0, 0)  /* 16bit, no-loop, nearest, fwd, no-ramp */
+IT_MIX_KERN(0, 0, 1, 0, 1)  /* 16bit, no-loop, nearest, fwd, ramp */
+IT_MIX_KERN(0, 0, 1, 1, 0)  /* 16bit, no-loop, nearest, bwd, no-ramp */
+IT_MIX_KERN(0, 0, 1, 1, 1)  /* 16bit, no-loop, nearest, bwd, ramp */
+IT_MIX_KERN(1, 0, 0, 0, 0)  /* 8bit, no-loop, interp, fwd, no-ramp */
+IT_MIX_KERN(1, 0, 0, 0, 1)  /* 8bit, no-loop, interp, fwd, ramp */
+IT_MIX_KERN(1, 0, 0, 1, 0)  /* 8bit, no-loop, interp, bwd, no-ramp */
+IT_MIX_KERN(1, 0, 0, 1, 1)  /* 8bit, no-loop, interp, bwd, ramp */
+IT_MIX_KERN(1, 0, 1, 0, 0)  /* 8bit, no-loop, nearest, fwd, no-ramp */
+IT_MIX_KERN(1, 0, 1, 0, 1)  /* 8bit, no-loop, nearest, fwd, ramp */
+IT_MIX_KERN(1, 0, 1, 1, 0)  /* 8bit, no-loop, nearest, bwd, no-ramp */
+IT_MIX_KERN(1, 0, 1, 1, 1)  /* 8bit, no-loop, nearest, bwd, ramp */
+IT_MIX_KERN(0, 1, 0, 0, 0)  /* 16bit, loop, interp, fwd, no-ramp */
+IT_MIX_KERN(0, 1, 0, 0, 1)  /* 16bit, loop, interp, fwd, ramp */
+IT_MIX_KERN(0, 1, 0, 1, 0)  /* 16bit, loop, interp, bwd, no-ramp */
+IT_MIX_KERN(0, 1, 0, 1, 1)  /* 16bit, loop, interp, bwd, ramp */
+IT_MIX_KERN(0, 1, 1, 0, 0)  /* 16bit, loop, nearest, fwd, no-ramp */
+IT_MIX_KERN(0, 1, 1, 0, 1)  /* 16bit, loop, nearest, fwd, ramp */
+IT_MIX_KERN(0, 1, 1, 1, 0)  /* 16bit, loop, nearest, bwd, no-ramp */
+IT_MIX_KERN(0, 1, 1, 1, 1)  /* 16bit, loop, nearest, bwd, ramp */
+IT_MIX_KERN(1, 1, 0, 0, 0)  /* 8bit, loop, interp, fwd, no-ramp */
+IT_MIX_KERN(1, 1, 0, 0, 1)  /* 8bit, loop, interp, fwd, ramp */
+IT_MIX_KERN(1, 1, 0, 1, 0)  /* 8bit, loop, interp, bwd, no-ramp */
+IT_MIX_KERN(1, 1, 0, 1, 1)  /* 8bit, loop, interp, bwd, ramp */
+IT_MIX_KERN(1, 1, 1, 0, 0)  /* 8bit, loop, nearest, fwd, no-ramp */
+IT_MIX_KERN(1, 1, 1, 0, 1)  /* 8bit, loop, nearest, fwd, ramp */
+IT_MIX_KERN(1, 1, 1, 1, 0)  /* 8bit, loop, nearest, bwd, no-ramp */
+IT_MIX_KERN(1, 1, 1, 1, 1)  /* 8bit, loop, nearest, bwd, ramp */
+
+/* Dispatch to appropriate specialized kernel */
 static void it_mix_block(fm_voice_t *v, int n, int32_t gl_start, int32_t gr_start,
                          int32_t dl, int32_t dr, int ramping)
 {
-    uint32_t pos = v->pos, frac = v->frac;
-    uint32_t step = v->step, loop_start = v->loop_start, loop_end = v->loop_end;
-    int flags = v->flags;
-    int is8 = (flags & FM_8BIT) != 0;
-    int has_loop = (flags & FM_LOOP) != 0;
-    int pingpong = (flags & FM_PINGPONG) != 0;
+    int is8 = (v->flags & FM_8BIT) != 0;
+    int has_loop = (v->flags & FM_LOOP) != 0;
     int is_bwd = v->dir != 0;
-    int nearest = (flags & FM_NEAREST) != 0;
-    int32_t gl = gl_start, gr = gr_start;
-    const uint8_t *data = (const uint8_t *)v->data;
-    uint32_t len = v->length;
+    int nearest = (v->flags & FM_NEAREST) != 0;
+    
+    /* Select kernel based on flags (computed once per block) */
+#define CALL_KERN_0(IS8, HAS_LOOP, NEAREST, BWD) \
+    it_mix_kern_##IS8##_##HAS_LOOP##_##NEAREST##_##BWD##_0( \
+        it_mixbuf, &v->pos, &v->frac, v->step, \
+        v->loop_start, v->loop_end, v->length, v->data, n, \
+        &gl_start, &gr_start, dl, dr)
 
-    int i = 0;
-#define IT_MIX_SAMPLE(ai, si) do { \
-    int32_t s; \
-    if (nearest) { \
-        s = is8 ? it_rd_8(v, pos) : it_rd_16(v, pos); \
-    } else { \
-        uint32_t i1 = pos + 1; \
-        if (i1 >= loop_end && has_loop) i1 = loop_start; \
-        int32_t s0 = is8 ? it_rd_8(v, pos) : it_rd_16(v, pos); \
-        int32_t s1 = is8 ? it_rd_8(v, i1) : it_rd_16(v, i1); \
-        s = is8 ? it_lerp_8(s0, s1, frac) : it_lerp_16(s0, s1, frac); \
-    } \
-    if (ramping) { gl += dl; gr += dr; } \
-    it_mixbuf[si] += (s * (gl >> 8)) >> 8; \
-    it_mixbuf[si + 1] += (s * (gr >> 8)) >> 8; \
-    if (!is_bwd) { \
-        uint32_t carry = (frac + (step & 0xFFFFu)) >> 16; \
-        frac = (frac + (step & 0xFFFFu)) & 0xFFFFu; \
-        pos += (step >> 16) + carry; \
-    } else { \
-        uint32_t sf = step & 0xFFFFu; \
-        uint32_t borrow = (frac < sf) ? 1u : 0u; \
-        frac = (frac - sf) & 0xFFFFu; \
-        pos -= (step >> 16) + borrow; \
-    } \
-    if (has_loop) { \
-        if (!is_bwd) { \
-            if (pos >= loop_end) pos = loop_start + (pos - loop_end); \
-        } else { \
-            if ((int32_t)pos < (int32_t)loop_start) pos = loop_end - (loop_start - pos); \
-        } \
-    } \
+#define CALL_KERN_1(IS8, HAS_LOOP, NEAREST, BWD) \
+    it_mix_kern_##IS8##_##HAS_LOOP##_##NEAREST##_##BWD##_1( \
+        it_mixbuf, &v->pos, &v->frac, v->step, \
+        v->loop_start, v->loop_end, v->length, v->data, n, \
+        &gl_start, &gr_start, dl, dr)
+
+#define DISPATCH(IS8, HAS_LOOP, NEAREST, BWD) do { \
+    if (ramping) CALL_KERN_1(IS8, HAS_LOOP, NEAREST, BWD); \
+    else         CALL_KERN_0(IS8, HAS_LOOP, NEAREST, BWD); \
 } while (0)
-
-    for (; i + 1 < n; i += 2) {
-        IT_MIX_SAMPLE(0, 2*i);
-        IT_MIX_SAMPLE(1, 2*i+2);
+    
+    if (is8) {
+        if (has_loop) {
+            if (nearest) {
+                if (is_bwd) DISPATCH(1, 1, 1, 1);
+                else       DISPATCH(1, 1, 1, 0);
+            } else {
+                if (is_bwd) DISPATCH(1, 1, 0, 1);
+                else       DISPATCH(1, 1, 0, 0);
+            }
+        } else {
+            if (nearest) {
+                if (is_bwd) DISPATCH(1, 0, 1, 1);
+                else       DISPATCH(1, 0, 1, 0);
+            } else {
+                if (is_bwd) DISPATCH(1, 0, 0, 1);
+                else       DISPATCH(1, 0, 0, 0);
+            }
+        }
+    } else {
+        if (has_loop) {
+            if (nearest) {
+                if (is_bwd) DISPATCH(0, 1, 1, 1);
+                else       DISPATCH(0, 1, 1, 0);
+            } else {
+                if (is_bwd) DISPATCH(0, 1, 0, 1);
+                else       DISPATCH(0, 1, 0, 0);
+            }
+        } else {
+            if (nearest) {
+                if (is_bwd) DISPATCH(0, 0, 1, 1);
+                else       DISPATCH(0, 0, 1, 0);
+            } else {
+                if (is_bwd) DISPATCH(0, 0, 0, 1);
+                else       DISPATCH(0, 0, 0, 0);
+            }
+        }
     }
-    if (i < n) {
-        IT_MIX_SAMPLE(0, 2*i);
-    }
-#undef IT_MIX_SAMPLE
-
-    v->pos = pos;
-    v->frac = frac;
+#undef DISPATCH
+#undef CALL_KERN_0
+#undef CALL_KERN_1
 }
 
 /* Advance voice position without mixing (for dropped or silent voices). */
