@@ -533,8 +533,7 @@ static fm_voice_t fv[XM_CH];
 
 /* Gain + clamp + FIFO write for one output frame. Kept out of the sample loops as an
  * inline function so the 48 kHz path has no per-sample branches. */
-static inline void emit_sample(int32_t l32, int32_t r32) {
-  const int32_t og = (X.chn > 8) ? (int32_t) ((X.vol * 3) >> 1) : (int32_t) X.vol;
+static inline void emit_sample(int32_t l32, int32_t r32, int32_t og) {
   int32_t l = (l32 * og) >> 6;
   int32_t r = (r32 * og) >> 6;
   if (l > 32767) l = 32767; else if (l < -32768) l = -32768;
@@ -596,10 +595,11 @@ static void mix(int n) {
     if (mix_skip[c]) {
       // A voice dropped by the limiter still has to keep its sample position for the next block.
       for (int i = 0; i < n; i++) {
+        uint32_t over;
         uint32_t idx = pos >> 16;
         if (idx >= end) {
           if (!llen) { ch->active = 0; break; }
-          uint32_t over = idx - end;
+          over = idx - end;
           if (over >= llen) over %= llen;
           pos = ((loop + over) << 16) | (pos & 0xFFFF);
         }
@@ -662,10 +662,11 @@ static void mix(int n) {
     } else {
       if (X.interp) {
         for (int i = 0; i < n; i += 2) {
+          uint32_t over;
           uint32_t idx = pos >> 16;
           if (idx >= end) {
             if (!llen) { ch->active = 0; break; }
-            uint32_t over = idx - end;
+            over = idx - end;
             if (over >= llen) over %= llen;
             pos = ((loop + over) << 16) | (pos & 0xFFFF);
             idx = loop + over;
@@ -697,10 +698,11 @@ static void mix(int n) {
         }
       } else {
         for (int i = 0; i < n; i += 2) {
+          uint32_t over;
           uint32_t idx = pos >> 16;
           if (idx >= end) {
             if (!llen) { ch->active = 0; break; }
-            uint32_t over = idx - end;
+            over = idx - end;
             if (over >= llen) over %= llen;
             pos = ((loop + over) << 16) | (pos & 0xFFFF);
             idx = loop + over;
@@ -750,11 +752,12 @@ void fpga_xm_service(void) {
       int chunk = remaining > XM_MIXBUF ? XM_MIXBUF : remaining;
       mix(chunk);
       
-      if (X.rate == 48000 || X.rate == 0) {
+      const int32_t og = (X.chn > 8) ? (int32_t) ((X.vol * 3) >> 1) : (int32_t) X.vol;
+    if (X.rate == 48000 || X.rate == 0) {
         /* No resampling: the mix buffer goes straight out (calling rs_frame per sample was
          * pure overhead at 48 kHz: a call and a branch for every sample). */
         for (int i = 0; i < chunk; i++)
-          emit_sample(mixbuf[2 * i], mixbuf[2 * i + 1]);
+          emit_sample(mixbuf[2 * i], mixbuf[2 * i + 1], og);
       } else {
         int out_count = 0;
         for (int i = 0; i < chunk && out_count < 512; i++) {
@@ -764,7 +767,7 @@ void fpga_xm_service(void) {
           out_count += nout;
         }
         for (int i = 0; i < out_count; i++)
-          emit_sample(fmout_resampled[2 * i], fmout_resampled[2 * i + 1]);
+          emit_sample(fmout_resampled[2 * i], fmout_resampled[2 * i + 1], og);
       }
       
       remaining -= chunk;

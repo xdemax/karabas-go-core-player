@@ -14,14 +14,14 @@
 #define LEFT_W  400
 #define NAME_X  20
 #define NAME_PAD 16
-#define NAME_SIZE_W 78
+#define NAME_SIZE_W 96
 #define MARQ_MS 50
 #define MARQ_STEP 2
 #define RIGHT_X LEFT_W
 #define RIGHT_W (FB_W - LEFT_W)
 #define LIST_Y  88
-#define ROW_H   32
-#define ROWS    14
+#define ROW_H   38
+#define ROWS    ((FB_H - LIST_Y - FOOT_H) / ROW_H)
 
 #define PX      (RIGHT_X + 20)   // the right panel content: x = 420, width = 360
 #define PW      (RIGHT_W - 40)
@@ -152,24 +152,24 @@ static void draw_row(const player_view_t *v, int k) {
   int j = (int) strlen(nm);
   if (e->dir && j < (int) sizeof(nm) - 1) { nm[j++] = '/'; nm[j] = 0; }
   int avail = name_avail(e);
-  int w = gfx_text_width(&f20, nm);
+  int w = gfx_text_width(&f26, nm);
   int off = (k == v->sel && w > avail) ? marq_off : 0;
   if (off > w - avail) off = w - avail;
   if (off > 0) {
     // Keep the size column and the panel clean while the long name slides.
     gfx_keep(NAME_X + avail, y - 2, LEFT_W - (NAME_X + avail), ROW_H + 2);
-    gfx_text_left(&f20, NAME_X - off, y + ROW_H / 2, nm, r_text);
+    gfx_text_left(&f26, NAME_X - off, y + ROW_H / 2, nm, r_text);
     gfx_keep_off();
   } else {
     char fit[40];
     copy_fit(fit, nm, 34);
-    gfx_text_left(&f20, NAME_X, y + ROW_H / 2, fit, r_text);
+    gfx_text_left(&f26, NAME_X, y + ROW_H / 2, fit, r_text);
   }
   if (!e->dir) {
     char b[16], *z = b;
     z = u2s(z, (e->size + 1023u) / 1024u, 1);
     *z++ = 'K'; *z = 0;
-    gfx_text_right(&f20, LEFT_W - 16, y + ROW_H / 2, b, r_dim);
+    gfx_text_right(&f26, LEFT_W - 16, y + ROW_H / 2, b, r_dim);
   }
 }
 
