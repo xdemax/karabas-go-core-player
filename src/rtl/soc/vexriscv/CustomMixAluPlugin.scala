@@ -25,11 +25,16 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> False,
       BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
       RS1_USE -> True, RS2_USE -> False))
-    // 1: LERP1 - no write, RS1/RS2
-    decoderService.add(M"0001010----------000-----0001011", List(
+    // 1: LERP1A - no write, RS1/RS2
+    decoderService.add(M"0001011----------000-----0001011", List(
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> False,
       BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
       RS1_USE -> True, RS2_USE -> True))
+    // 1b: LERP1B - no write, no sources
+    decoderService.add(M"0001010----------000-----0001011", List(
+      IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> False,
+      BYPASSABLE_EXECUTE_STAGE -> False, BYPASSABLE_MEMORY_STAGE -> True,
+      RS1_USE -> False, RS2_USE -> False))
     // 2: MAC - write, RS1/RS2
     decoderService.add(M"0000010----------000-----0001011", List(
       IS_CUSTOM_MIX -> True, REGFILE_WRITE_VALID -> True,
@@ -85,6 +90,7 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
       val h_frac = Reg(UInt(16 bits)) init 0
       val h_p = Reg(UInt(32 bits)) init 0
       val h_neg = Reg(Bool) init False
+      val h_ad = Reg(UInt(18 bits)) init 0
       val h_s0 = Reg(SInt(18 bits)) init 0
       val h_p8 = Reg(UInt(32 bits)) init 0
       val h_neg8 = Reg(Bool) init False
@@ -105,17 +111,21 @@ class CustomMixAluPlugin extends Plugin[VexRiscv] {
           is(0) {
             h_frac := rs1(15 downto 0)
           }
-          // 1: LERP1 - s0=sign16(rs1), s1=sign16(rs2), d=s1-s0
-          //           h_neg=(d<0), h_p=abs(d)*(h_frac>>1), h_s0=s0
-          is(10) {
+          // 1a: LERP1A - s0=sign16(rs1), s1=sign16(rs2), d=s1-s0
+          //              h_neg=(d<0), h_ad=abs(d), h_s0=s0
+          is(11) {
             val s0 = sign16(rs1).resize(18)
             val s1 = sign16(rs2).resize(18)
             val d = s1 - s0
             val is_neg = d < 0
             val ad = Mux(is_neg, (-d).asUInt, d.asUInt)
             h_neg := is_neg
-            h_p := ad * (h_frac >> 1)
+            h_ad := ad.resize(18)
             h_s0 := s0
+          }
+          // 1b: LERP1B - h_p = h_ad * (h_frac >> 1)
+          is(10) {
+            h_p := (h_ad * (h_frac >> 1)).resize(32)
           }
           // 2: MAC - rd = sign32(rs1) + (sign_extend(h_s) * ((rs2[18:0])>>8))
           is(2) {

@@ -60,8 +60,11 @@ static int max_mixed = 32;
 #define FM_SETF(frac) \
   asm volatile (".insn r 0x0b, 0, 0, x0, %0, x0" : : "r"(frac))
 
-#define FM_LERP1(s0, s1) \
-  asm volatile (".insn r 0x0b, 0, 10, x0, %0, %1" : : "r"(s0), "r"(s1))
+#define FM_LERP1A(s0, s1) \
+  asm volatile (".insn r 0x0b, 0, 11, x0, %0, %1" : : "r"(s0), "r"(s1))
+
+#define FM_LERP1B() \
+  asm volatile (".insn r 0x0b, 0, 10, x0, x0, x0")
 
 #define FM_LERP2(s) \
   asm volatile (".insn r 0x0b, 0, 8, %0, x0, x0" : "=r"(s))
@@ -95,22 +98,27 @@ static uint32_t fm_hidden_frac;
 static int32_t fm_hidden_s;
 static uint32_t fm_hidden_p;
 static int fm_hidden_neg;
+static uint32_t fm_hidden_ad;
+static int32_t fm_hidden_s0;
 static uint32_t fm_hidden_p8;
 static int fm_hidden_neg8;
-static int32_t fm_hidden_s0;
 static int32_t fm_hidden_s08;
 
 #define FM_SETF(frac) \
   (fm_hidden_frac = (frac) & 0xFFFFu)
 
-#define FM_LERP1(s0, s1) do { \
+#define FM_LERP1A(s0, s1) do { \
   int32_t _s0 = (s0); \
   int32_t _s1 = (s1); \
   int32_t _d = _s1 - _s0; \
   fm_hidden_neg = (_d < 0); \
   uint32_t _ad = fm_hidden_neg ? (uint32_t)(-_d) : (uint32_t)_d; \
-  fm_hidden_p = _ad * (fm_hidden_frac >> 1); \
+  fm_hidden_ad = _ad; \
   fm_hidden_s0 = _s0; \
+} while (0)
+
+#define FM_LERP1B() do { \
+  fm_hidden_p = fm_hidden_ad * (fm_hidden_frac >> 1); \
 } while (0)
 
 #define FM_LERP2(s) do { \
@@ -240,7 +248,8 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
         FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP1(s0, s1);
+        FM_LERP1A(s0, s1);
+        FM_LERP1B();
         FM_LERP2(s);
       }
     }
@@ -279,7 +288,8 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
         FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP1(s0, s1);
+        FM_LERP1A(s0, s1);
+        FM_LERP1B();
         FM_LERP2(s);
       }
     }
@@ -321,7 +331,8 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
         FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP1(s0, s1);
+        FM_LERP1A(s0, s1);
+        FM_LERP1B();
         FM_LERP2(s);
       }
     }
@@ -361,7 +372,8 @@ FM_AI void kern(int32_t *a, const void *d, int is8, int bwd, int ramping, int ne
         FM_LERP8_2(s);
       } else {
         int32_t s0 = p16[pos], s1 = p16[pos + 1];
-        FM_LERP1(s0, s1);
+        FM_LERP1A(s0, s1);
+        FM_LERP1B();
         FM_LERP2(s);
       }
     }
