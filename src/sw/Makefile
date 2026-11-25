@@ -2,7 +2,7 @@
 XPACK  ?= $(HOME)/opt/xpack-riscv-none-elf-gcc-15.2.0-1/bin
 CROSS  := $(XPACK)/riscv-none-elf-
 BUILD_ID := $(shell sed -n 's/.*"build"[^"]*"\([^"]*\)".*/\1/p' ../core.json)
-CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32imf -mabi=ilp32f -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
+CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall -DFM_CUSTOM_CPU=1
 ifneq ($(IT_PROFILE),)
 CFLAGS += -DIT_PROFILE
 endif
