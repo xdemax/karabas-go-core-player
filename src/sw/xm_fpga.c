@@ -1,7 +1,6 @@
 // The FPGA XM (FastTracker II) player: the first version. It parses the whole file in the SRAM,
 // decodes the delta samples in place and mixes 32 channels at 48 kHz into the audio FIFO.
 // Now: linear frequency, volume/pan, volume envelope/fadeout, the common effects.
-#include <stdio.h>
 #include <string.h>
 #include "fpga.h"
 #include "audio.h"
@@ -510,6 +509,19 @@ static void next_tick(void) {
   X.tleft = X.spt;
 }
 
+
+/* Minimal unsigned formatter: avoids pulling the whole printf machinery into the
+ * firmware (it is linked on every page and was hurting the I-cache). */
+static char *dbg_u(char *q, uint32_t v)
+{
+  char t[10];
+  int n = 0;
+  if (!v) { *q++ = '0'; return q; }
+  while (v) { t[n++] = (char) ('0' + (v % 10u)); v /= 10u; }
+  while (n) *q++ = t[--n];
+  return q;
+}
+
 static int16_t fmout[XM_MIXBUF * 2];
 
 /* Live diagnostics for the footer, same shape as the IT engine:
@@ -555,6 +567,9 @@ static void mix(int n) {
 
 void fpga_xm_service(void) {
   if (!X.active || X.paused) return;
+#ifdef IT_PROFILE
+  uint32_t c0 = R_CYCLES;
+#endif
   int free = audio_free();
   while (free > 2 && X.active) {
     int n = free > XM_CHUNK ? XM_CHUNK : free;
@@ -564,10 +579,7 @@ void fpga_xm_service(void) {
     }
     if (n > X.tleft) n = X.tleft;
     if (n <= 0) break;
-    uint32_t c0 = R_CYCLES;
     mix(n);
-    uint32_t c1 = R_CYCLES;
-    xm_dbg_pcycles += (uint32_t) (c1 - c0);
     
     int out_count = 0;
     for (int i = 0; i < n && out_count < 512; i++) {
@@ -595,9 +607,10 @@ void fpga_xm_service(void) {
     free -= n;
     X.tleft -= n;
     if (X.tleft <= 0) next_tick();
-    xm_dbg_cycles += (uint32_t) (R_CYCLES - c0);
   }
 
+#ifdef IT_PROFILE
+  xm_dbg_cycles += (uint32_t) (R_CYCLES - c0);
   if ((uint32_t) (R_US - xm_dbg_us) >= 1000000u) {
     uint32_t dt = (uint32_t) (R_US - xm_dbg_us);      /* the REAL window */
     xm_dbg_us = R_US;
@@ -610,14 +623,29 @@ void fpga_xm_service(void) {
     uint32_t pct = (uint32_t) ((uint64_t) xm_dbg_cycles * 100u / ((uint64_t) dt * 75u));
     uint32_t rpct = xm_dbg_cycles
         ? (uint32_t) ((uint64_t) xm_dbg_pcycles * 100u / xm_dbg_cycles) : 0;
-    snprintf(xm_dbg, sizeof(xm_dbg), "%d/%dv %lu%% r%lu",
-             voices, X.chn, (unsigned long) pct, (unsigned long) rpct);
+    {
+      char *q = xm_dbg;
+      q = dbg_u(q, (uint32_t) voices);
+      *q++ = '/';
+      q = dbg_u(q, (uint32_t) X.chn);
+      *q++ = 'v'; *q++ = ' ';
+      q = dbg_u(q, pct);
+      *q++ = '%';
+      *q = 0;
+    }
     xm_dbg_cycles = 0;
     xm_dbg_pcycles = 0;
   }
+#endif
 }
 
-const char *fpga_xm_debug(void) { return X.active ? xm_dbg : ""; }
+const char *fpga_xm_debug(void) {
+#ifdef IT_PROFILE
+  return X.active ? xm_dbg : "";
+#else
+  return "";
+#endif
+}
 
 static int parse_xm(uint32_t size) {
   if (size < 80 || memcmp(X.mod, "Extended Module: ", 17)) { set_error("XM: signature"); return -1; }

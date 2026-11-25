@@ -7,6 +7,13 @@ CROSS  := $(XPACK)/riscv-none-elf-
 # same id: the whole point is to tell flashed builds apart.
 BUILD_BASE := $(shell sed -n 's/.*"build"[^"]*"\([^"]*\)".*/\1/p' ../core.json)
 GITREV     := $(shell git -C .. rev-parse --short=6 HEAD 2>/dev/null || echo nogit)
+# Voice/CPU diagnostics in the footer (on by default; `make DIAG=0` builds without them).
+DIAG       ?= 1
+ifeq ($(DIAG),1)
+FM_DIAG_TAG := p
+else
+FM_DIAG_TAG :=
+endif
 ALU        ?= 0
 ifeq ($(ALU),1)
 FM_ALU_TAG := A
@@ -15,11 +22,13 @@ else
 FM_ALU_TAG := N
 FM_ALU_CFLAGS :=
 endif
-BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)
-CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS $(FM_ALU_CFLAGS) -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
-# The voice/CPU diagnostic in the footer is always on: it costs ~2 reads per service call
-# and has repeatedly been the only way to tell what the device is actually doing.
-CFLAGS += -DIT_PROFILE
+BUILD_ID := $(FM_ALU_TAG)$(BUILD_BASE)-$(GITREV)$(FM_DIAG_TAG)
+ifeq ($(DIAG),1)
+CFLAGS_DIAG := -DIT_PROFILE
+else
+CFLAGS_DIAG :=
+endif
+CFLAGS := -DPLAYER_BUILD=\"$(BUILD_ID)\" -Ifatfs -Imikmod -Imikmod/include -Ihelix -DHELIX_STATIC -DNO_DEPACKERS $(FM_ALU_CFLAGS) $(CFLAGS_DIAG) -march=rv32im -mabi=ilp32 -O3 -flto -g -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns -Wall
 CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit -fno-unwind-tables
 B      := build
 

@@ -31,6 +31,19 @@ static uint32_t it_elapsed_rem;
 static rs_t rs;
 static int32_t it_last_l, it_last_r, it_peak_l, it_peak_r;
 static uint8_t it_vu[FMT_CHANNELS];
+
+/* Minimal unsigned formatter: avoids pulling the whole printf machinery into the
+ * firmware (it is linked on every page and was hurting the I-cache). */
+static char *dbg_u(char *q, uint32_t v)
+{
+  char t[10];
+  int n = 0;
+  if (!v) { *q++ = '0'; return q; }
+  while (v) { t[n++] = (char) ('0' + (v % 10u)); v /= 10u; }
+  while (n) *q++ = t[--n];
+  return q;
+}
+
 static char it_dbg[32];
 static uint32_t it_dbg_us, it_dbg_cycles, it_dbg_pcycles, it_dbg_cps;
 static int it_dbg_voices, it_dbg_alloc;
@@ -223,9 +236,17 @@ void it_fpga_service(void) {
         (uint32_t)((uint64_t)it_dbg_pcycles * 100u / it_dbg_cps) : 0;
     it_dbg_voices = it_player_active_voices(&it_pl);
     it_dbg_alloc = it_pl.nv_hi;
-    snprintf(it_dbg, sizeof(it_dbg), "%d/%dv %lu%% r%lu",
-             it_dbg_voices, it_dbg_alloc,
-             (unsigned long)pct, (unsigned long)rpct);
+    {
+      char *q = it_dbg;
+      q = dbg_u(q, (uint32_t) it_dbg_voices);
+      *q++ = '/';
+      q = dbg_u(q, (uint32_t) it_dbg_alloc);
+      *q++ = 'v'; *q++ = ' ';
+      q = dbg_u(q, pct);
+      *q++ = '%'; *q++ = ' '; *q++ = 'r';
+      q = dbg_u(q, rpct);
+      *q = 0;
+    }
     it_dbg_cycles = 0;
     it_dbg_pcycles = 0;
   }
