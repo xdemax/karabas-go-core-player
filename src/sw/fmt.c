@@ -8,8 +8,8 @@
 #include "fpga.h"
 #include "playlist.h"
 
-extern const fmt_module_t fmt_pt1, fmt_asc, fmt_psc, fmt_sqt, fmt_stp, fmt_vtx, fmt_psg, fmt_mp3;
-static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_s3m, &fmt_stm, &fmt_it, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_pt1, &fmt_asc, &fmt_psc, &fmt_sqt, &fmt_stp, &fmt_vtx, &fmt_psg, &fmt_mp3 };
+extern const fmt_module_t fmt_pt1, fmt_asc, fmt_psc, fmt_sqt, fmt_stp, fmt_vtx, fmt_psg, fmt_mp3, fmt_sid;
+static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_s3m, &fmt_stm, &fmt_it, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_pt1, &fmt_asc, &fmt_psc, &fmt_sqt, &fmt_stp, &fmt_vtx, &fmt_psg, &fmt_mp3, &fmt_sid };
 #define NFMT (sizeof(fmt_modules) / sizeof(fmt_modules[0]))
 
 static const play_engine_t *const engines[] = { &fpga_engine };
