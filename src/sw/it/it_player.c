@@ -105,9 +105,12 @@ static void env_advance(const it_env_t *e, uint16_t *pos, int keyoff)
     if (e->num == 0) return;
     last = e->node[e->num - 1].tick;
     np = (unsigned)*pos + 1u;
-    if (!keyoff && (e->flags & IT_ENV_SUSLOOP) && np > e->node[e->sle].tick) np = e->node[e->slb].tick;
-    else if ((e->flags & IT_ENV_LOOP) && np > e->node[e->lpe].tick)           np = e->node[e->lpb].tick;
-    else if (np > last)                                                        np = last;
+    /* a malformed envelope may point past node[]: ignore the loop then */
+    if (!keyoff && (e->flags & IT_ENV_SUSLOOP) && e->sle < e->num && e->slb < e->num
+        && np > e->node[e->sle].tick) np = e->node[e->slb].tick;
+    else if ((e->flags & IT_ENV_LOOP) && e->lpe < e->num && e->lpb < e->num
+             && np > e->node[e->lpe].tick) np = e->node[e->lpb].tick;
+    else if (np > last) np = last;
     *pos = (uint16_t)np;
 }
 
@@ -371,6 +374,7 @@ static int resolve_sample(const it_player_t *p, const it_chn_t *ch, unsigned n,
         *pins = ins; *psmp = ins->kb_smp[n]; *pntr = ins->kb_note[n];
         if (!*psmp || *psmp > m->smpnum) return 0;
     } else {
+        if (ch->inst > m->smpnum) return 0;   /* sample mode: instrument == sample number */
         *psmp = ch->inst;
     }
     return 1;
