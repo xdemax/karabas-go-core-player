@@ -776,6 +776,7 @@ void s3m_fpga_audio(fmt_audio_t *o) {
   o->volume = s3m_volume;
   o->paused = s3m_paused;
   for (int i = 0; i < FMT_CHANNELS; i++) o->vu[i] = s3m_vu[i];
+  s3m_peak_l = s3m_peak_r = 0;
   analysis_bands(o->bands, FMT_BANDS);
 }
 

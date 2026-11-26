@@ -249,6 +249,7 @@ static int play_selected(void) {
     char lp[FS_PATH_MAX];
     { char *q = str_cpy(lp, full); (void) q; }
     playing = 1; audio_reset_stats();
+    fmt_pause(0);                    /* a new track always starts playing */
     fmt_set_volume(volume_setting);
     mix_t0 = R_US; mix_w0 = audio_written(); mix_msg[0] = 0;
     playing_status(m, 0, e->name);

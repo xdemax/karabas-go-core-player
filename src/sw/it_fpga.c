@@ -355,10 +355,10 @@ void it_fpga_audio(fmt_audio_t *o) {
   o->peak_l = it_peak_l;
   o->peak_r = it_peak_r;
   memcpy(o->vu, it_vu, sizeof(o->vu));
+  it_peak_l = it_peak_r = 0;
   analysis_bands(o->bands, FMT_BANDS);   // IT never asked for the bands: the spectrum stayed flat
   o->volume = it_volume;
   o->paused = it_paused;
-  it_peak_l = it_peak_r = 0;
 }
 
 int it_fpga_get_volume(void) { return it_volume; }

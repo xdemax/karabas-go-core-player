@@ -291,6 +291,7 @@ int stm_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   S.ended = 0;
   S.active = 1;
   S.paused = 0;
+  stm_paused = 0;
   S.sample_acc = 0;
   for (int i = 0; i < STM_CHANNELS; i++) S.vox[i].smp = 0;
   stm_error("");
@@ -477,6 +478,7 @@ void stm_fpga_info(fmt_info_t *o) {
 void stm_fpga_audio(fmt_audio_t *o) {
   o->level_l = S.last_l; o->level_r = S.last_r;
   o->peak_l = S.peak_l; o->peak_r = S.peak_r;
+  S.peak_l = S.peak_r = 0;
   o->volume = stm_volume; o->paused = stm_paused;
   memcpy(o->vu, S.vu, sizeof o->vu);
   analysis_bands(o->bands, FMT_BANDS);
