@@ -420,7 +420,12 @@ static void s3m_tick_effects(s3m_module_t *m) {
       if (up) { v->vol += up; if (v->vol > 64) v->vol = 64; }
       else if (dn) { v->vol -= dn; if (v->vol < 0) v->vol = 0; }
     } else if (eff == 7 || eff == 'G') {
-      uint32_t d = (uint32_t) (v->porta_speed ? v->porta_speed : 8) << 8;
+      /* Gxx is a period speed: scale it to the frequency step. The old `par << 2`
+       * was ~0.04% of a step per tick, so portamento never arrived. */
+      int sp = par ? par : (v->porta_speed ? v->porta_speed : 8);
+      if (par) v->porta_speed = par;
+      uint32_t d = (uint32_t) (((uint64_t) v->step * (uint32_t) sp) >> 12);
+      if (!d) d = 1;
       if (v->step < v->target_step) v->step = (v->target_step - v->step > d) ? v->step + d : v->target_step;
       else if (v->step > v->target_step) v->step = (v->step - v->target_step > d) ? v->step - d : v->target_step;
     } else if (eff == 8 || eff == 'H') {
@@ -430,7 +435,8 @@ static void s3m_tick_effects(s3m_module_t *m) {
       int phase = (int) (v->vib_pos & 31);
       int tri = phase < 16 ? phase : 31 - phase;   /* 0..15 */
       int amp = tri - 8;                            /* -8..7 */
-      int32_t d = ((int32_t) v->base_step * amp * v->vib_depth) / 256;
+      /* depth 15 must stay inside about one semitone, not half an octave */
+      int32_t d = ((int32_t) v->base_step * amp * v->vib_depth) / 2048;
       int32_t st = (int32_t) v->base_step + d;
       v->step = st > 0 ? (uint32_t) st : 1;
     } else if (eff == 10 || eff == 'J') {
