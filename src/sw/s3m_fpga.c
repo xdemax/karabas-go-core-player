@@ -362,26 +362,23 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   return 0;
 }
 
-static const uint32_t s3m_semitone_mul[12] = {
-  65536, 69433, 73562, 77936, 82570, 87480, 92682, 98193, 104032, 110218, 116772, 123715
+/* ST3 note periods (the official table). The pitch is NOT 12-TET: ST3 shifts the
+ * period right by the octave and divides, so e.g. A-4 lands on 14203 Hz, not 14064. */
+static const uint16_t s3m_period[12] = {
+  1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960, 907
 };
 
 static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
   int octave = (note >> 4) & 0x0F;
-  int semitone = note & 0x0F;   /* 0 = C, 1 = C#, ... (the whole byte 0 means "no note") */
-  
-  uint32_t step = c2spd;
-  /* C-4 is the note that plays at c2spd (checked against the openmpt render:
-   * a C-5 reference put the whole track an octave low) */
-  if (octave > 4) {
-    for (int i = 0; i < octave - 4; i++) step *= 2;
-  } else if (octave < 4) {
-    for (int i = 0; i < 4 - octave; i++) step /= 2;
-  }
-  
-  step = (step * s3m_semitone_mul[semitone]) >> 16;
-  step = (step * 65536) / 48000;
-  return step;
+  int semitone = note & 0x0F;
+  uint32_t per = s3m_period[semitone];
+  uint32_t shifted = octave < 16 ? (per >> octave) : 1;
+  if (!shifted) shifted = 1;
+  if (!c2spd) c2spd = 8363;
+  /* rate = 14317056 * c2spd / (8363 * 16 * shifted); step is 16.16 of the source index */
+  uint64_t step = ((uint64_t) 14317056u * c2spd * 65536u)
+                / ((uint64_t) 8363u * 16u * shifted * 48000u);
+  return step > 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t) step;
 }
 
 static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
@@ -412,6 +409,7 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
 
 static void s3m_note_off(s3m_voice_t *v) {
   v->keyoff = 1;
+  v->active = 0;      /* "with samples stops smp" (ST3 doc) */
 }
 
 /* Per-tick effects (G tone porta, H vibrato, J arpeggio, D volume slide). */
@@ -545,7 +543,7 @@ void s3m_fpga_service(void) {
                 s3m_note_on(m, ch, note, instr, vol);
               }
               if (has_vol && vol <= 64) v->vol = vol;          /* 0 is a real volume */
-              if (has_vol && vol == 255) s3m_note_off(v);
+              if (note == 254) s3m_note_off(v);                 /* ST3 key off */
               
               if (eff) {
                 v->eff = eff;
