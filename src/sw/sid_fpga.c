@@ -57,6 +57,7 @@ typedef struct {
   uint32_t samples_per_tick;
   int hz;
   uint32_t last_us;
+  uint64_t time_acc;
   uint32_t sid_regs_written;
   uint32_t play_calls;
   char title[32];
@@ -231,6 +232,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.samples_per_tick = (uint32_t) ((48000 + hz / 2) / hz);
   sid.hz = hz;
   sid.last_us = R_US;
+  sid.time_acc = 0;
   sid.sample_acc = 0;
   sid.sid_regs_written = 0;
   sid.play_calls = 0;
@@ -306,21 +308,31 @@ void sid_fpga_service(void) {
     n++;
   }
 
+  uint32_t advance, rsid_steps;
 #ifdef HOST
   if (n == 0) { sid_service_active = 0; return; }
-  uint32_t advance = (uint32_t) n;
+  advance = (uint32_t) n;
+  rsid_steps = (uint32_t) n * 7;
 #else
   uint32_t now = R_US;
   uint32_t dt = (uint32_t) (now - sid.last_us);
   sid.last_us = now;
-  uint32_t advance = (uint32_t) (((uint64_t) dt * (uint32_t) sid.hz) / 1000000u);
+  /* Keep the sub-tick remainder: without it every 1-2 ms pass truncated to zero
+   * ticks and the tune stood still. */
+  sid.time_acc += (uint64_t) dt * (uint32_t) sid.hz;
+  advance = (uint32_t) (sid.time_acc / 1000000u);
+  sid.time_acc -= (uint64_t) advance * 1000000u;
+  rsid_steps = dt / 3;                 /* ~330k instructions/s, as a 1 MHz 6502 */
+  if (rsid_steps > 20000) rsid_steps = 20000;
+  if (advance > 4) advance = 4;
 #endif
 
   if (sid.rsid) {
-    for (uint32_t i = 0; i < advance * 2; i++) {
+    for (uint32_t i = 0; i < rsid_steps; i++) {
       if (sid.cpu->pc >= 0xfffe) sid.cpu->pc = sid.init_addr;
       if (m6502_step(sid.cpu)) break;
     }
+
     sid.irq_acc += advance;
     while (sid.irq_acc >= sid.samples_per_tick) {
       sid.irq_acc -= sid.samples_per_tick;
