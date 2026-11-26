@@ -40,15 +40,15 @@ static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (
 #define SP_STEP (SP_BW + SP_GAP)
 #define SP_W    (SP_BARS * SP_BW + (SP_BARS - 1) * SP_GAP)
 #define SP_X    (PX + (PW - SP_W) / 2)
-#define SP_CAP  4
-#define SP_SEG  4                // one segment is cap-sized
+#define SP_CAP  2
+#define SP_SEG  6
 #define SP_SEG_STEP (SP_SEG + 1)
 // The UI used to show only the middle (yellow) third: the raw bands stay around
 // 85..170, which is exactly the yellow colour zone. Use that zone as the full scale.
 #define SP_LO   85
 #define SP_HI   170
 
-static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_spec, c_grid, c_yellow, c_red;
+static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_spec, c_grid, c_yellow, c_red, c_vud;
 static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent, r_pyellow, r_pgreen;
 
 static int last_sel = -1, last_top = -1, last_now = -1, last_paused = -1, last_font_step = -1;
@@ -74,6 +74,7 @@ static void col_init(void) {
   c_vu = gfx_color(0x39d98a);
   c_hot = gfx_color(0xffb454);
   c_spec = gfx_color(0x59b0ff);
+  c_vud  = gfx_color(0x1f7a4d);
   c_grid = gfx_color(0x1a2433);
   c_yellow = gfx_color(0xffd24a);
   c_red = gfx_color(0xff5a5a);
@@ -543,8 +544,17 @@ static void update_spectrum(const player_view_t *v) {
         if (gy[g] >= top && gy[g] < top + hgt) gfx_fill(bx, gy[g], SP_BW, 1, c_grid);
     }
 
+    /* Interpolate between the 16 measured bands: 60 bars drawn from the nearest band
+     * alone looked like separate sticks, not a spectrum. */
     int si = (i * (FMT_BANDS - 1)) / (SP_BARS - 1);
     int t = v->bands[si];
+    {
+      int num = (i * (FMT_BANDS - 1)) % (SP_BARS - 1);
+      if (num && si + 1 < FMT_BANDS) {
+        int nx = v->bands[si + 1];
+        t += (nx - t) * num / (SP_BARS - 1);
+      }
+    }
     // spectrum sensitivity: 75% overall, with a gentle low-frequency tilt (70%..100%)
     t = t * (70 + (i * 30) / (SP_BARS - 1)) / 100;
     t = t * 3 / 4;
@@ -596,20 +606,27 @@ static void update_spectrum(const player_view_t *v) {
     int lo = ph > mh ? ph : mh + 1;
     int hi = lo + SP_CAP;
     if (hi > SP_H) hi = SP_H;
-    // the cap takes the colour of the zone it is in (green / yellow / red)
-    if (hi > lo) {
-      int t1 = SP_H / 3, t2 = SP_H * 2 / 3;
-      int a = lo, b = hi < t1 ? hi : t1;
-      if (b > a) gfx_fill(bx, SP_BASE - b, SP_BW, b - a, c_vu);
-      a = lo > t1 ? lo : t1; b = hi < t2 ? hi : t2;
-      if (b > a) gfx_fill(bx, SP_BASE - b, SP_BW, b - a, c_yellow);
-      a = lo > t2 ? lo : t2;
-      if (hi > a) gfx_fill(bx, SP_BASE - hi, SP_BW, hi - a, c_red);
+    /* the cap is a separate blue marker so the level and the peak never blend together */
+    if (peak > 3 && hi > lo) {
+      gfx_fill(bx, SP_BASE - hi, SP_BW, hi - lo, c_spec);
+      if (lo > mh + 2) gfx_fill(bx, SP_BASE - lo + 1, SP_BW, 1, c_vud);
     }
     cap_lo[i] = lo;
     cap_hi[i] = hi;
   }
   draw_spectrum_segments();
+
+  /* A short dim reflection under the baseline makes the panel read as a lit surface
+   * instead of bars floating in the dark. */
+  gfx_fill(SP_X, SP_BASE + 2, SP_W, 22, c_panel);
+  for (int i = 0; i < SP_BARS; i++) {
+    int mh = disp_bands[i] * SP_H / 255;
+    int rh = mh / 3;
+    if (rh > 18) rh = 18;
+    if (rh <= 0) continue;
+    gfx_fill(SP_X + i * SP_STEP, SP_BASE + 2, SP_BW, rh, c_vud);
+    if (rh > 4) gfx_fill(SP_X + i * SP_STEP, SP_BASE + 2 + rh - 2, SP_BW, 2, c_grid);
+  }
 }
 
 static void update_player_dynamic(const player_view_t *v, int force) {
