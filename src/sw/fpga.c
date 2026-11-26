@@ -146,7 +146,7 @@ int fpga_pause(int on) {
 
 static int e_init(void) { return 0; }
 static int e_stop(void) { fpga_stop(); return 0; }
-static const char *e_ver(void) { return "1.0"; }
+static const char *e_ver(void) { return "1.1"; }
 static const char *e_err(void) { return fpga_error(); }
 
 const char *fpga_warning(void) {
