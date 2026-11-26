@@ -647,11 +647,31 @@ static void update_spectrum(const player_view_t *v) {
 
 /* The other two looks redraw the whole panel: the clear is one rect fill and the bars are
  * a handful of fills each, which stays cheap at the panel refresh rate. */
+static void spec_erase_col(int bx, int y0, int y1) {
+  if (y1 <= y0) return;
+  gfx_fill(bx, y0, SP_BW, y1 - y0, c_panel);
+  int gy[3] = { SP_BASE - 40, SP_BASE - 80, SP_BASE - 120 };
+  for (int g = 0; g < 3; g++)
+    if (gy[g] >= y0 && gy[g] < y1) gfx_fill(bx, gy[g], SP_BW, 1, c_grid);
+}
+
+static void spec_zone_fill(int bx, int y_lo, int y_hi) {
+  int t1 = SP_H / 3, t2 = SP_H * 2 / 3;
+  int a = y_lo, b = y_hi;
+  int e = b < t1 ? b : t1;
+  if (e > a) gfx_fill(bx, SP_BASE - e, SP_BW, e - a, c_vu);
+  a = a > t1 ? a : t1; e = b < t2 ? b : t2;
+  if (e > a) gfx_fill(bx, SP_BASE - e, SP_BW, e - a, c_yellow);
+  a = a > t2 ? a : t2;
+  if (b > a) gfx_fill(bx, SP_BASE - b, SP_BW, b - a, c_red);
+}
+
+/* The other looks are drawn incrementally like the LED one: repainting the whole panel
+ * every frame showed as a flash, because the skin draws into the buffer on screen. */
 static void update_spectrum_alt(const player_view_t *v) {
-  gfx_fill(SP_X, SP_BASE - SP_H - 2, SP_W, SP_H + 26, c_panel);
-  draw_spectrum_grid();
   int style = v->spectrum_style;
   int center = SP_BASE - SP_H / 2;
+  int t1 = SP_H / 3, t2 = SP_H * 2 / 3;
   for (int i = 0; i < SP_BARS; i++) {
     int si = (i * (FMT_BANDS - 1)) / (SP_BARS - 1);
     int t = v->bands[si];
@@ -662,7 +682,8 @@ static void update_spectrum_alt(const player_view_t *v) {
     t = (t - SP_LO) * 255 / (SP_HI - SP_LO);
     if (t < 0) t = 0; else if (t > 255) t = 255;
 
-    int nv = disp_bands[i];
+    int old = disp_bands[i];
+    int nv = old;
     if (t > nv) nv = t;
     else { nv -= 14; if (nv < t) nv = t; }
     disp_bands[i] = nv;
@@ -674,35 +695,43 @@ static void update_spectrum_alt(const player_view_t *v) {
     peak_bands[i] = peak;
 
     int bx = SP_X + i * SP_STEP;
-    int mh = nv * SP_H / 255;
+    int oh = old * SP_H / 255;
+    int nh = nv * SP_H / 255;
     int ph = peak * SP_H / 255;
-    int t1 = SP_H / 3, t2 = SP_H * 2 / 3;
+
     if (style == 1) {
-      if (mh) {
-        int a = mh < t1 ? mh : t1;
-        gfx_fill(bx, SP_BASE - a, SP_BW, a, c_vu);
-        if (mh > t1) {
-          int b = mh < t2 ? mh : t2;
-          gfx_fill(bx, SP_BASE - b, SP_BW, b - t1, c_yellow);
-        }
-        if (mh > t2) gfx_fill(bx, SP_BASE - mh, SP_BW, mh - t2, c_red);
-        gfx_fill(bx, SP_BASE - mh, SP_BW, 1, c_vu);
-      }
-      int rh = mh / 3; if (rh > 18) rh = 18;
+      if (nh > oh) spec_zone_fill(bx, oh, nh);
+      else if (nh < oh) spec_erase_col(bx, SP_BASE - oh, SP_BASE - nh);
+      uint8_t tc = nh <= t1 ? c_vu : (nh <= t2 ? c_yellow : c_red);
+      if (nh > 0) gfx_fill(bx, SP_BASE - nh, SP_BW, 1, tc);
+      gfx_fill(bx, SP_BASE + 2, SP_BW, 18, c_panel);
+      int rh = nh / 3; if (rh > 18) rh = 18;
       if (rh > 0) gfx_fill(bx, SP_BASE + 2, SP_BW, rh, c_vud);
-      if (ph > 3) gfx_fill(bx, SP_BASE - ph - 1, SP_BW, 1, c_spec);
+      if (cap_hi[i] > cap_lo[i])
+        spec_erase_col(bx, SP_BASE - cap_hi[i], SP_BASE - cap_lo[i]);
+      if (peak > 3) {
+        gfx_fill(bx, SP_BASE - ph - 1, SP_BW, 1, c_spec);
+        cap_lo[i] = ph + 1; cap_hi[i] = ph + 2;
+      } else { cap_lo[i] = cap_hi[i] = 0; }
     } else {
-      /* mirrored around the middle of the panel */
-      int hh = mh / 2;
-      if (hh) {
-        uint8_t cu = hh > t1 / 2 ? c_yellow : c_vu;
-        gfx_fill(bx, center - hh, SP_BW, hh, cu);
-        gfx_fill(bx, center, SP_BW, hh, c_vud);
+      int ohh = oh / 2, nhh = nh / 2, pq = ph / 2;
+      if (nhh > ohh) {
+        uint8_t cu = nhh > t1 / 2 ? c_yellow : c_vu;
+        gfx_fill(bx, center - nhh, SP_BW, nhh - ohh, cu);
+        gfx_fill(bx, center + ohh, SP_BW, nhh - ohh, c_vud);
+      } else if (nhh < ohh) {
+        spec_erase_col(bx, center - ohh, center - nhh);
+        spec_erase_col(bx, center + nhh, center + ohh);
+      }
+      if (cap_lo[i] > 0) {
+        spec_erase_col(bx, center - cap_lo[i], center - cap_lo[i] + 1);
+        spec_erase_col(bx, center + cap_lo[i], center + cap_lo[i] + 1);
+        cap_lo[i] = 0;
       }
       if (peak > 3) {
-        int q = ph / 2;
-        gfx_fill(bx, center - q - 1, SP_BW, 1, c_spec);
-        gfx_fill(bx, center + q, SP_BW, 1, c_spec);
+        gfx_fill(bx, center - pq - 1, SP_BW, 1, c_spec);
+        gfx_fill(bx, center + pq, SP_BW, 1, c_spec);
+        cap_lo[i] = pq + 1;
       }
     }
   }
