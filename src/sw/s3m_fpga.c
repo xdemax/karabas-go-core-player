@@ -642,19 +642,30 @@ void s3m_fpga_service(void) {
       s3m_voice_t *v = &m->vox[ch];
       if (!v->active || v->smp < 0 || v->smp >= m->nsmp) continue;
       
+      const s3m_sample_t *sm = &m->smp[v->smp];
+      int looping = (sm->flags & 1) && sm->loop_len > 0;
+      uint32_t loop_lo = sm->loop_start;
+      uint32_t stop = looping ? loop_lo + sm->loop_len : sm->len;
+      if (looping && stop > sm->len) stop = sm->len;
+
       uint32_t pos_int = v->pos >> 16;
-      if (pos_int >= m->smp[v->smp].len) {
-        if ((m->smp[v->smp].flags & 1) && m->smp[v->smp].loop_len > 0) {
-          v->pos = (m->smp[v->smp].loop_start << 16);
-          pos_int = m->smp[v->smp].loop_start;
+      if (pos_int >= stop) {
+        if (looping) {
+          v->pos = loop_lo << 16;
+          pos_int = loop_lo;
         } else {
           v->active = 0;
           continue;
         }
       }
-      
-      uint8_t smp_byte = *(m->smp[v->smp].data + pos_int);
-      int32_t val = ((int32_t)smp_byte - 128) << 8;
+
+      /* Linear interpolation: nearest sampling at 8 bits crackled on high notes. */
+      uint32_t next = pos_int + 1;
+      if (next >= stop) next = looping ? loop_lo : pos_int;
+      int s0 = (int) sm->data[pos_int] - 128;
+      int s1 = (int) sm->data[next] - 128;
+      int fr = (int) ((v->pos >> 8) & 0xFF);
+      int32_t val = (((s0 * (256 - fr)) + (s1 * fr)) >> 8) << 8;
       
       int vol = (v->vol * m->gvol) >> 6;
       val = (val * vol) >> 8;
