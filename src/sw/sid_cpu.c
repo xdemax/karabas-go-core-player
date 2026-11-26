@@ -34,6 +34,10 @@ static inline uint8_t rd(m6502_t *cpu, uint16_t addr) {
 }
 
 static inline void wr(m6502_t *cpu, uint16_t addr, uint8_t val) {
+  if (addr >= 0xd400 && addr <= 0xd41f && cpu->io_write) {
+    cpu->io_write(addr, val);
+    return;                     /* SID registers are not memory */
+  }
   cpu->mem[addr] = val;
 }
 
@@ -57,11 +61,11 @@ static inline void set_nz(m6502_t *cpu, uint8_t val) {
 
 #define NEXT() do { cpu->pc++; } while(0)
 #define NEXT_W() do { cpu->pc += 2; } while(0)
-#define NEXT_B(val) do { NEXT(); (val) = rd(cpu, cpu->pc); } while(0)
-#define NEXT_W_VAL(val) do { NEXT_W(); (val) = rd16(cpu, cpu->pc - 1); } while(0)
+#define NEXT_B(val) do { (val) = rd(cpu, cpu->pc); NEXT(); } while(0)
+#define NEXT_W_VAL(val) do { (val) = rd16(cpu, cpu->pc); NEXT_W(); } while(0)
 
 int m6502_step(m6502_t *cpu) {
-  if (cpu->pc >= 0xc000) return 1;
+  if (cpu->pc >= 0xfffe) return 1;   /* put the sentinel at the top of memory */
   
   uint8_t op = rd(cpu, cpu->pc);
   NEXT();

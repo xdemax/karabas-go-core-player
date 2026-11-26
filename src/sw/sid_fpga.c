@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include "sid_fpga.h"
 #include "sid_cpu.h"
+#ifdef HOST
+#include <stdio.h>
+#endif
 #include "mmio.h"
 #include "audio.h"
 #include "mixer.h"
@@ -76,35 +79,39 @@ static void sid_wr(uint32_t reg, uint32_t val) {
   sid.sid_regs_written++;
 }
 
+static void sid_io_write(uint16_t addr, uint8_t val) {
+  sid_wr(addr - 0xd400, val);
+}
+
 int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress) {
   (void)progress;
   
-  if (size < sizeof(psid_hdr_t)) {
+  if (size < 0x7c) {
     sid_error("file too short");
     return -1;
   }
 
   const uint8_t *data = src->mem;
-  psid_hdr_t hdr;
-  
-  memcpy(&hdr, data, sizeof(hdr));
-  hdr.version = rd16be((uint8_t *)&hdr.version);
-  hdr.data_offset = rd16be((uint8_t *)&hdr.data_offset);
-  hdr.load_addr = rd16be((uint8_t *)&hdr.load_addr);
-  hdr.init_addr = rd16be((uint8_t *)&hdr.init_addr);
-  hdr.play_addr = rd16be((uint8_t *)&hdr.play_addr);
-  hdr.songs = rd16be((uint8_t *)&hdr.songs);
-  hdr.start_song = rd16be((uint8_t *)&hdr.start_song);
-  hdr.speed = rd32be((uint8_t *)&hdr.speed);
-  hdr.flags = rd16be((uint8_t *)&hdr.flags);
-  
-  if (hdr.version < 2 || hdr.version > 4) {
+
+  /* The PSID header is read at its fixed offsets: relying on a struct layout broke
+   * on the compiler's padding (sizeof became 0x7d and the image loaded shifted). */
+  uint16_t version    = rd16be(data + 0x04);
+  uint16_t data_off   = rd16be(data + 0x06);
+  uint16_t load_field = rd16be(data + 0x08);
+  uint16_t init_addr  = rd16be(data + 0x0a);
+  uint16_t play_addr  = rd16be(data + 0x0c);
+  uint16_t songs      = rd16be(data + 0x0e);
+  uint16_t start_song = rd16be(data + 0x10);
+  uint32_t speed      = rd32be(data + 0x12);
+  uint16_t flags      = (version >= 2 && size >= 0x78) ? rd16be(data + 0x76) : 0;
+
+  if (version < 1 || version > 4) {
     sid_error("unsupported PSID version");
     return -1;
   }
 
-  uint16_t offset = hdr.data_offset;
-  if (offset < sizeof(psid_hdr_t)) offset = sizeof(psid_hdr_t);
+  uint32_t offset = data_off ? data_off : 0x7c;
+  if (offset < 0x7c) offset = 0x7c;
   if (offset >= size) {
     sid_error("data offset out of range");
     return -1;
@@ -112,6 +119,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 
   if (!sid.cpu) {
     sid.cpu = m6502_new();
+    if (sid.cpu) sid.cpu->io_write = sid_io_write;
     if (!sid.cpu) {
       sid_error("malloc failed");
       return -1;
@@ -121,25 +129,35 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   m6502_reset(sid.cpu);
   memset(sid.cpu->mem, 0, 65536);
 
-  uint16_t load_addr = hdr.load_addr;
-  if (load_addr == 0) load_addr = (data[offset + 1] << 8) | data[offset];
-  
-  const uint8_t *img = data + offset + (load_addr == 0 ? 2 : 0);
-  uint32_t img_len = size - (uint32_t)(img - data);
-  if (load_addr + img_len > 65536) img_len = 65536 - load_addr;
-  
-  memcpy(sid.cpu->mem + load_addr, img, img_len);
+  int has_load = (load_field == 0);
+  uint16_t load_addr = load_field;
+  if (has_load) load_addr = (data[offset + 1] << 8) | data[offset];
 
-  sid.init_addr = hdr.init_addr;
-  sid.play_addr = hdr.play_addr;
-  sid.songs = hdr.songs ? hdr.songs : 1;
-  sid.speed = hdr.speed;
-  sid.flags = hdr.flags;
+  const uint8_t *img = data + offset + (has_load ? 2 : 0);
+  uint32_t img_len = size - (uint32_t)(img - data);
+  if ((uint32_t) load_addr + img_len > 65536) img_len = 65536 - load_addr;
+
+  memcpy(sid.cpu->mem + load_addr, img, img_len);
+  memcpy(sid.title, data + 0x16, 31);
+  sid.title[31] = 0;
+
+#ifdef HOST
+  fprintf(stderr, "[sid] has_load=%d img0=%02x %02x load=%04x\n", has_load, data[offset], data[offset+1], load_addr);
+  fprintf(stderr, "[sid] v=%d off=%04x load=%04x init=%04x play=%04x songs=%d start=%d speed=%08x\n",
+          version, data_off, load_addr, init_addr, play_addr,
+          songs, start_song, (unsigned) speed);
+  fprintf(stderr, "[sid] code at init: %02x %02x %02x %02x %02x %02x\n",
+          sid.cpu->mem[init_addr], sid.cpu->mem[init_addr+1], sid.cpu->mem[init_addr+2],
+          sid.cpu->mem[init_addr+3], sid.cpu->mem[init_addr+4], sid.cpu->mem[init_addr+5]);
+#endif
+  sid.init_addr = init_addr;
+  sid.play_addr = play_addr;
+  sid.songs = songs ? songs : 1;
+  sid.speed = speed;
+  sid.flags = flags;
   sid.data = data;
   sid.size = size;
   
-  memcpy(sid.title, hdr.title, 31);
-  sid.title[31] = 0;
 
   sid.vol = 64;
   sid.last_l = sid.last_r = 0;
@@ -153,18 +171,20 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.finished = 0;
   sid.paused = 0;
 
-  if (hdr.init_addr) {
-    sid.cpu->pc = hdr.init_addr;
-    sid.cpu->a = (hdr.start_song - 1) & 0xff;
+  if (init_addr) {
+    /* JSR-style call with a return address of $FFFE on the stack */
+    sid.cpu->a = (start_song - 1) & 0xff;
     sid.cpu->x = 0;
     sid.cpu->y = 0;
-    sid.cpu->s = 0xfd;
-
+    sid.cpu->mem[0x01fd] = 0xff;
+    sid.cpu->mem[0x01fc] = 0xfd;
+    sid.cpu->s = 0xfb;
+    sid.cpu->pc = init_addr;
     int steps = 0;
-    while (steps < 100000) {
-      if (m6502_step(sid.cpu)) break;
-      steps++;
-    }
+    for (; steps < 4000000 && sid.cpu->pc != 0xfffe; steps++) m6502_step(sid.cpu);
+#ifdef HOST
+    fprintf(stderr, "[sid] init steps=%d pc=%04x writes=%u\n", steps, sid.cpu->pc, (unsigned) sid.sid_regs_written);
+#endif
   }
 
   MMIO(0xcc) = 1 | (64 << 8);
@@ -181,16 +201,18 @@ void sid_fpga_service(void) {
     sid.sample_acc += SID_OUT_CHUNK;
     uint32_t play_ticks = sid.sample_acc / sid.samples_per_tick;
     while (play_ticks > 0) {
+      sid.cpu->mem[0x01fd] = 0xff;
+      sid.cpu->mem[0x01fc] = 0xfd;
+      sid.cpu->s = 0xfb;
       sid.cpu->pc = sid.play_addr;
       sid.cpu->x = 0;
       sid.cpu->y = 0;
-      sid.cpu->s = 0xfd;
-      
       int steps = 0;
-      while (steps < 10000) {
-        if (m6502_step(sid.cpu)) break;
-        steps++;
-      }
+      for (; steps < 200000 && sid.cpu->pc != 0xfffe; steps++) m6502_step(sid.cpu);
+#ifdef HOST
+      if (sid.play_calls < 4) fprintf(stderr, "[sid] play pc=%04x steps=%d end=%04x writes=%u\n",
+                                      sid.play_addr, steps, sid.cpu->pc, (unsigned) sid.sid_regs_written);
+#endif
 
       sid.play_calls++;
       play_ticks--;

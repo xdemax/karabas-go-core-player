@@ -7,6 +7,7 @@ typedef struct {
   uint16_t pc;
   uint8_t p;  // flags: NV-BDIZC
   uint8_t mem[65536];
+  void (*io_write)(uint16_t addr, uint8_t val);   /* SID registers $D400..$D41F */
 } m6502_t;
 
 m6502_t *m6502_new(void);

@@ -4,14 +4,15 @@
 #include "it_fpga.h"
 #include "s3m_fpga.h"
 #include "stm_fpga.h"
+#include "sid_fpga.h"
 
 // The active player. Only one of MOD/XM is started at a time (the player stops the previous one).
 int fpga_active(void) {
-  return fpga_mod_active() || fpga_xm_active() || pt3_active() || mikmod_active() || it_fpga_active() || s3m_fpga_active() || stm_fpga_active() || mp3_active();
+  return fpga_mod_active() || fpga_xm_active() || pt3_active() || mikmod_active() || it_fpga_active() || s3m_fpga_active() || stm_fpga_active() || sid_fpga_active() || mp3_active();
 }
 
 int fpga_finished(void) {
-  return fpga_xm_finished() || fpga_mod_finished() || pt3_finished() || mikmod_finished() || it_fpga_finished() || s3m_fpga_finished() || stm_fpga_finished() || mp3_finished();
+  return fpga_xm_finished() || fpga_mod_finished() || pt3_finished() || mikmod_finished() || it_fpga_finished() || s3m_fpga_finished() || stm_fpga_finished() || sid_fpga_finished() || mp3_finished();
 }
 
 void fpga_service(void) {
@@ -22,6 +23,7 @@ void fpga_service(void) {
   else if (it_fpga_active()) it_fpga_service();
   else if (s3m_fpga_active()) s3m_fpga_service();
   else if (stm_fpga_active()) stm_fpga_service();
+  else if (sid_fpga_active()) sid_fpga_service();
   else if (mp3_active()) mp3_service();
 }
 
@@ -33,6 +35,7 @@ void fpga_stop(void) {
   it_fpga_stop();
   s3m_fpga_stop();
   stm_fpga_stop();
+  sid_fpga_stop();
   mp3_stop();
 }
 
@@ -44,6 +47,7 @@ const char *fpga_error(void) {
   if (it_fpga_active()) return it_fpga_error();
   if (s3m_fpga_active()) return s3m_fpga_error();
   if (stm_fpga_active()) return stm_fpga_error();
+  if (sid_fpga_active()) return sid_fpga_error();
   if (mp3_active()) return mp3_error();
   return "";
 }
@@ -56,6 +60,7 @@ const char *fpga_title(void) {
   if (it_fpga_active()) return it_fpga_title();
   if (s3m_fpga_active()) return s3m_fpga_title();
   if (stm_fpga_active()) return stm_fpga_title();
+  if (sid_fpga_active()) return sid_fpga_title();
   if (mp3_active()) return mp3_title();
   return "";
 }
@@ -68,6 +73,7 @@ int fpga_position(uint32_t *cur, uint32_t *total) {
   if (it_fpga_active()) return it_fpga_position(cur, total);
   if (s3m_fpga_active()) return s3m_fpga_position(cur, total);
   if (stm_fpga_active()) return stm_fpga_position(cur, total);
+  if (sid_fpga_active()) return sid_fpga_position(cur, total);
   if (mp3_active()) return mp3_position(cur, total);
   return 0;
 }
@@ -80,6 +86,7 @@ void fpga_info(fmt_info_t *o) {
   else if (it_fpga_active()) it_fpga_info(o);
   else if (s3m_fpga_active()) s3m_fpga_info(o);
   else if (stm_fpga_active()) stm_fpga_info(o);
+  else if (sid_fpga_active()) sid_fpga_info(o);
   else if (mp3_active()) mp3_info(o);
 }
 
@@ -91,6 +98,7 @@ void fpga_audio(fmt_audio_t *o) {
   else if (it_fpga_active()) it_fpga_audio(o);
   else if (s3m_fpga_active()) s3m_fpga_audio(o);
   else if (stm_fpga_active()) stm_fpga_audio(o);
+  else if (sid_fpga_active()) sid_fpga_audio(o);
   else if (mp3_active()) mp3_audio(o);
 }
 
@@ -102,6 +110,7 @@ int fpga_get_volume(void) {
   if (it_fpga_active()) return it_fpga_get_volume();
   if (s3m_fpga_active()) return s3m_fpga_get_volume();
   if (stm_fpga_active()) return stm_fpga_get_volume();
+  if (sid_fpga_active()) return sid_fpga_get_volume();
   if (mp3_active()) return mp3_get_volume();
   return 64;
 }
@@ -114,6 +123,7 @@ int fpga_set_volume(int v) {
   if (it_fpga_active()) return it_fpga_set_volume(v);
   if (s3m_fpga_active()) return s3m_fpga_set_volume(v);
   if (stm_fpga_active()) return stm_fpga_set_volume(v);
+  if (sid_fpga_active()) return sid_fpga_set_volume(v);
   if (mp3_active()) return mp3_set_volume(v);
   return v;
 }
@@ -126,6 +136,7 @@ int fpga_pause(int on) {
   if (it_fpga_active()) return it_fpga_pause(on);
   if (s3m_fpga_active()) return s3m_fpga_pause(on);
   if (stm_fpga_active()) return stm_fpga_pause(on);
+  if (sid_fpga_active()) return sid_fpga_pause(on);
   if (mp3_active()) return mp3_pause(on);
   return 0;
 }
