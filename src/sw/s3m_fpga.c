@@ -48,8 +48,8 @@ typedef struct {
   uint8_t eff, par;
   int porta_speed, retrig_tick;
   int32_t mix_vol, lgain, rgain;
-  uint32_t vib_pos;  // vibrato position (0-255)
-  int vib_depth;     // vibrato depth in semitones
+  uint32_t vib_pos, base_step;
+  int vib_speed, vib_depth;  // vibrato speed and depth
 } s3m_voice_t;
 
 typedef struct {
@@ -330,7 +330,7 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   
   s3m_mod.order = 0;
   s3m_mod.row = 0;
-  s3m_mod.tick = 0;
+  s3m_mod.tick = s3m_mod.speed > 0 ? s3m_mod.speed - 1 : 0;
   s3m_mod.tleft = s3m_mod.spt = 0;
   
   s3m_mod.sample_acc = 0;
@@ -369,10 +369,12 @@ static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
   semitone--;
   
   uint32_t step = c2spd;
-  if (octave > 5) {
-    for (int i = 0; i < octave - 5; i++) step *= 2;
-  } else if (octave < 5) {
-    for (int i = 0; i < 5 - octave; i++) step /= 2;
+  /* C-4 is the note that plays at c2spd (checked against the openmpt render:
+   * a C-5 reference put the whole track an octave low) */
+  if (octave > 4) {
+    for (int i = 0; i < octave - 4; i++) step *= 2;
+  } else if (octave < 4) {
+    for (int i = 0; i < 4 - octave; i++) step /= 2;
   }
   
   step = (step * s3m_semitone_mul[semitone]) >> 16;
@@ -408,6 +410,42 @@ static void s3m_note_off(s3m_voice_t *v) {
   v->keyoff = 1;
 }
 
+/* Per-tick effects (G tone porta, H vibrato, J arpeggio, D volume slide). */
+static void s3m_tick_effects(s3m_module_t *m) {
+  for (int ch = 0; ch < m->chn; ch++) {
+    s3m_voice_t *v = &m->vox[ch];
+    if (!v->active) continue;
+    int eff = v->eff, par = v->par;
+    if (eff == 4 || eff == 'D') {
+      int up = par >> 4, dn = par & 15;
+      if (up) { v->vol += up; if (v->vol > 64) v->vol = 64; }
+      else if (dn) { v->vol -= dn; if (v->vol < 0) v->vol = 0; }
+    } else if (eff == 7 || eff == 'G') {
+      uint32_t d = (uint32_t) (v->porta_speed ? v->porta_speed : 8) << 8;
+      if (v->step < v->target_step) v->step = (v->target_step - v->step > d) ? v->step + d : v->target_step;
+      else if (v->step > v->target_step) v->step = (v->step - v->target_step > d) ? v->step - d : v->target_step;
+    } else if (eff == 8 || eff == 'H') {
+      if (par >> 4) v->vib_speed = par >> 4;
+      if (par & 15) v->vib_depth = par & 15;
+      v->vib_pos += (uint32_t) (v->vib_speed ? v->vib_speed : 1);
+      int phase = (int) (v->vib_pos & 31);
+      int tri = phase < 16 ? phase : 31 - phase;   /* 0..15 */
+      int amp = tri - 8;                            /* -8..7 */
+      int32_t d = ((int32_t) v->base_step * amp * v->vib_depth) / 256;
+      int32_t st = (int32_t) v->base_step + d;
+      v->step = st > 0 ? (uint32_t) st : 1;
+    } else if (eff == 10 || eff == 'J') {
+      int x = par >> 4, y = par & 15;
+      static const uint32_t mul[12] = {65536,69433,73562,77936,82570,87480,92682,98193,104032,110218,116772,123715};
+      int t = m->tick % 3;
+      int semi = t == 1 ? x : t == 2 ? y : 0;
+      uint32_t st = v->base_step;
+      for (int i = 0; i < semi / 12; i++) st *= 2;
+      v->step = (uint32_t) (((uint64_t) st * mul[semi % 12]) >> 16);
+    }
+  }
+}
+
 void s3m_fpga_service(void) {
   if (!s3m_active || s3m_paused) return;
   
@@ -428,7 +466,7 @@ void s3m_fpga_service(void) {
       if (m->tick >= m->speed) m->tick = 0;
       
       // Process next row
-      if (m->row < 64) {
+      if (m->tick == 0 && m->row < 64) {
         uint8_t ord_idx = m->orders[m->order];
         if (ord_idx < 0xFF && ord_idx < m->npat && m->pat[ord_idx].data) {
           s3m_pattern_t *pat = &m->pat[ord_idx];
@@ -471,6 +509,7 @@ void s3m_fpga_service(void) {
             uint8_t ch = what & 0x1f;
             
             uint8_t note = 0, instr = 0, vol = 0, eff = 0, par = 0;
+            int has_vol = 0;
             
             if (what & 0x20) {
               if (pos < pat->len) note = pat->data[pos++];
@@ -478,6 +517,7 @@ void s3m_fpga_service(void) {
             }
             if (what & 0x40) {
               if (pos < pat->len) vol = pat->data[pos++];
+              has_vol = 1;
             }
             if (what & 0x80) {
               if (pos < pat->len) eff = pat->data[pos++];
@@ -486,9 +526,16 @@ void s3m_fpga_service(void) {
             
             if (ch < m->chn) {
               s3m_voice_t *v = &m->vox[ch];
-              if (note) s3m_note_on(m, ch, note, instr, vol);
-              else if (vol > 0 && vol <= 64) v->vol = vol;   /* volume-only cell */
-              if (vol == 255) s3m_note_off(v);
+              if (note && (eff == 7 || eff == 'G') && v->active) {
+                /* tone portamento: slide to the new note instead of retriggering */
+                uint32_t c2 = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
+                v->target_step = s3m_note_to_step(note, c2);
+                if (par) v->porta_speed = par;
+              } else if (note) {
+                s3m_note_on(m, ch, note, instr, vol);
+              }
+              if (has_vol && vol <= 64) v->vol = vol;          /* 0 is a real volume */
+              if (has_vol && vol == 255) s3m_note_off(v);
               
               if (eff) {
                 v->eff = eff;
@@ -509,16 +556,20 @@ void s3m_fpga_service(void) {
         }
       }
       
-      m->row++;
-      if (m->row >= 64) {
-        m->row = 0;
-        m->order++;
-        for (int i = 0; i < 32; i++) m->vox[i].active = 0;
-        if (m->order >= 256 || m->orders[m->order] >= 254) {
-          m->ended = 1;
-          s3m_active = 0;
-          return;
+      if (m->tick == 0) {
+        m->row++;
+        if (m->row >= 64) {
+          m->row = 0;
+          m->order++;
+          for (int i = 0; i < 32; i++) m->vox[i].active = 0;
+          if (m->order >= 256 || m->orders[m->order] >= 254) {
+            m->ended = 1;
+            s3m_active = 0;
+            return;
+          }
         }
+      } else {
+        s3m_tick_effects(m);
       }
     }
     
@@ -616,7 +667,7 @@ void s3m_fpga_service(void) {
       v->pos += v->step;
     }
     
-    mix_l = (mix_l * 3) >> 2; mix_r = (mix_r * 3) >> 2;   /* calibrated to the openmpt rms */
+    /* unity gain: the openmpt reference is rms 2764 and this lands on it */
     if (mix_l > 32767) mix_l = 32767; else if (mix_l < -32768) mix_l = -32768;
     if (mix_r > 32767) mix_r = 32767; else if (mix_r < -32768) mix_r = -32768;
     s3m_out[2 * out_count] = (int16_t) mix_l;
