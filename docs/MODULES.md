@@ -140,6 +140,22 @@ need it. A new format is a new `formats/*.c` + a rebuild of the program (the bit
 | `stp` | `.stp` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `vtx` | `.vtx` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `psg` | `.psg` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
-| `s3m` | `.s3m` | FPGA (MikMod) | `SCRM` at 0x2c |
-| `it` | `.it` | FPGA (MikMod) | `IMPM` at 0 |
+| `s3m` | `.s3m` | **FPGA native** (`s3m_fpga.c`) | `SCRM` at 0x2c |
+| `it` | `.it` | **FPGA** (`it_fpga.c` + `fastmix.c`) | `IMPM` at 0 |
 | `mp3` | `.mp3` | FPGA (Helix, experimental) | ID3 / MPEG sync |
+
+## Planned: STM (Scream Tracker 1/2)
+
+Status: **to add** (not implemented).
+
+A native STM replayer, same shape as the S3M one: `formats/stm.c` + `stm_fpga.c`,
+feeding `mixer_write()`.
+
+Format reference: <https://gist.github.com/cs127/c0f5dffc9f4db2221a66fd9ffc1e3edb>
+("Scream Tracker 1/2 module/song format documentation", v11.6, 2025-12-23). It covers
+ST 2.x and the rare ST 1.x files; OpenMPT's `Load_stm.cpp` is listed there as a second
+source.
+
+Known from the document: the signature `!Scream!` at 0x14, the pattern data after the
+header, 31 instruments with sample headers, and different effect semantics from S3M
+(ST effects are period-based and several S3M commands do not exist).
