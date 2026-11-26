@@ -8,3 +8,5 @@ int playlist_supported(const char *name);                 // 1: a playlist file
 // path is the absolute track path, name is its last component.
 // Returns the count, -1 mount, -2 open/format, -3 no memory, -4 too large.
 int playlist_load(const char *path, fs_entry_t **out);
+
+const char *playlist_extensions(void);   // "ayl, m3u"

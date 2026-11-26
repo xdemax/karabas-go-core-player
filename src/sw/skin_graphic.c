@@ -279,12 +279,31 @@ static void draw_player_static(const player_view_t *v) {
     int cx = RIGHT_X + RIGHT_W / 2;
     gfx_text_center(&f26, cx, 262, "KARABAS GO", r_paccent);
     gfx_text_center(&f26, cx, 294, "MUSIC PLAYER", r_paccent);
-    char b[128], *q = b;
+    char b[160], *q = b;
     *q++ = '(';
     q = str_cpy(q, v->formats && v->formats[0] ? v->formats : "mod, xm");
     *q++ = ')';
     *q = 0;
-    gfx_text_center(&f20, cx, 334, b, r_pdim);
+    if (gfx_text_width(&f20, b) > PW - 12) {
+      int len = (int) strlen(b), mid = len / 2, best = -1, bestd = 1 << 20;
+      for (int i = 1; i < len - 1; i++) {
+        if (b[i] == ',') {
+          int d = i > mid ? i - mid : mid - i;
+          if (d < bestd) { bestd = d; best = i; }
+        }
+      }
+      if (best > 0) {
+        b[best] = 0;
+        gfx_text_center(&f20, cx, 326, b, r_pdim);
+        char *t = b + best + 1;
+        while (*t == ' ') t++;
+        gfx_text_center(&f20, cx, 344, t, r_pdim);
+      } else {
+        gfx_text_center(&f20, cx, 334, b, r_pdim);
+      }
+    } else {
+      gfx_text_center(&f20, cx, 334, b, r_pdim);
+    }
     gfx_text_center(&f20, cx, 382, "Enter a file to play", r_pdim);
     last_now = 0;
     return;

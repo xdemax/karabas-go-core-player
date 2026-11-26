@@ -100,7 +100,10 @@ static const struct {
   line_parser_t parse;
 } parsers[] = {
   { "ayl", ayl_line },
+  { "m3u", ayl_line },     /* plain path lists: # comments are skipped by the same parser */
 };
+
+const char *playlist_extensions(void) { return "ayl, m3u"; }
 
 static line_parser_t parser_for(const char *name) {
   for (unsigned i = 0; i < sizeof(parsers) / sizeof(parsers[0]); i++)

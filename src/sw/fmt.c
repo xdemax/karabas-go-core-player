@@ -6,6 +6,7 @@
 #include "analysis.h"
 #include "mixer.h"
 #include "fpga.h"
+#include "playlist.h"
 
 extern const fmt_module_t fmt_pt1, fmt_asc, fmt_psc, fmt_sqt, fmt_stp, fmt_vtx, fmt_psg, fmt_mp3;
 static const fmt_module_t *const fmt_modules[] = { &fmt_mod, &fmt_xm, &fmt_s3m, &fmt_stm, &fmt_it, &fmt_pt3, &fmt_pt2, &fmt_stc, &fmt_pt1, &fmt_asc, &fmt_psc, &fmt_sqt, &fmt_stp, &fmt_vtx, &fmt_psg, &fmt_mp3 };
@@ -41,11 +42,10 @@ const fmt_module_t *fmt_by_head(const uint8_t *head, uint32_t len) {
 
 int fmt_supported(const char *name) { return fmt_by_ext(name) != NULL; }
 
-// The formats advertised on the title screen. They are not the same as the formats accepted
-// by the browser: IT/S3M/MP3 stay playable if the user selects them, but are not advertised
-// while their quality/performance is still being worked on.
+// The formats advertised on the title screen. MP3 stays playable if the user selects it,
+// but is not advertised while its quality is still being worked on.
 static int title_hidden(const char *e) {
-  return strcmp(e, "it") == 0 || strcmp(e, "s3m") == 0 || strcmp(e, "mp3") == 0;
+  return strcmp(e, "mp3") == 0;
 }
 
 // "mod, xm, s3m": the extensions of the registry, in the registration order. A new format
@@ -63,6 +63,16 @@ int fmt_supported_list(char *out, int max) {
     if (n) { out[n++] = ','; out[n++] = ' '; }
     for (int j = 0; j < len; j++) out[n++] = e[j];
     out[n] = 0;
+  }
+  {
+    const char *pl = playlist_extensions();
+    int len = 0;
+    while (pl[len]) len++;
+    if (n + 2 + len + 1 <= max) {
+      out[n++] = ','; out[n++] = ' ';
+      for (int j = 0; j < len; j++) out[n++] = pl[j];
+      out[n] = 0;
+    }
   }
   return n;
 }
