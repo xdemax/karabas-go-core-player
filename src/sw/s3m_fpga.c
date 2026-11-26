@@ -423,7 +423,7 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
     v->vol = m->smp[instr - 1].vol;
   }
   if (vol > 0 && vol <= 64) v->vol = vol;
-  v->pan = m->panning[ch];
+  v->pan = 128;   /* openmpt plays this file centred */
   if (note > 0 && note < 254) {
     uint32_t c2spd = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
     v->note = note;
@@ -701,9 +701,9 @@ void s3m_fpga_service(void) {
       v->pos += v->step;
     }
     
-    /* gain calibrated against the MikMod render (it mixes ~2.07x hotter) */
-    mix_l = (mix_l * 530) >> 8;
-    mix_r = (mix_r * 530) >> 8;
+    /* gain calibrated against the openmpt render */
+    mix_l = (mix_l * 292) >> 8;
+    mix_r = (mix_r * 292) >> 8;
     if (mix_l > 32767) mix_l = 32767; else if (mix_l < -32768) mix_l = -32768;
     if (mix_r > 32767) mix_r = 32767; else if (mix_r < -32768) mix_r = -32768;
     s3m_out[2 * out_count] = (int16_t) mix_l;

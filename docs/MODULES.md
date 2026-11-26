@@ -159,3 +159,20 @@ source.
 Known from the document: the signature `!Scream!` at 0x14, the pattern data after the
 header, 31 instruments with sample headers, and different effect semantics from S3M
 (ST effects are period-based and several S3M commands do not exist).
+
+## S3M: the reference is OpenMPT
+
+The native S3M replayer (`s3m_fpga.c`) is calibrated against **libopenmpt**, not against
+MikMod. Reference render for a 45 s check:
+
+```
+mkdir -p /tmp/ref && cp song.s3m /tmp/ref/
+cd /tmp/ref && openmpt123 --render --no-float --samplerate 48000 --end-time 45 \
+    --no-progress --no-meters -q song.s3m
+```
+
+The host render of our engine is `host/render_s3m.c` (link `mixer.c` too). Compare:
+overall rms/peak, per-5 s envelope correlation (our engine starts ~20 ms earlier than
+openmpt, so shift by 960 samples), and the dominant pitch per 2048-sample window.
+Current state on Gba1.s3m: rms 3425 vs 3419, peak 13010 vs 13077, envelope 0.96-0.997
+(0.81-0.88 in the vibrato/portamento-heavy 35-45 s), pitch match 61-88% of windows.
