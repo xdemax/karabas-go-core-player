@@ -10,6 +10,7 @@
 #include "browser.h"
 #include "playlist.h"
 #include "it_fpga.h"
+#include "sid_fpga.h"
 #ifndef PLAYER_BUILD
 #define PLAYER_BUILD "?"
 #endif
@@ -343,6 +344,13 @@ static void key(key_ev_t *e) {
       u2s(q, (uint32_t) v, 0);
       status(b);
       update_view();
+      return;
+    }
+    case K_F11: {
+      static int sid_on;
+      sid_on = !sid_on;
+      sid_test_tone(sid_on);
+      status(sid_on ? "SID tone on" : "SID tone off");
       return;
     }
     case K_F12: core_reset();

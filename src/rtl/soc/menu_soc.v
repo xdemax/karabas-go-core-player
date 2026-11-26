@@ -436,6 +436,70 @@ always @(posedge clk) begin
 	end
 end
 
+
+// ------------------------------------------------------------------ SID 8580
+// One hardware SID (MiSTer 8580 model). The CPU writes its registers through 0xc8; the
+// three voices run continuously at the 1 MHz enable, are low-passed at that rate and sampled
+// by the 48 kHz audio tick, like the AY pair above.
+//   0xc8 W: { addr[4:0], data[7:0] }   one SID register write
+//   0xcc W: bit 0 active, bits 15..8 volume (0..64)
+//   0xd8 R: the next mixed SID sample { L[15:0], R[15:0] }
+//   0xdc R: 1 while the SID tap ring has samples
+reg [4:0] sid_addr = 5'd0;
+reg [7:0] sid_data = 8'd0;
+reg       sid_cmd = 1'b0;
+reg       sid_active = 1'b0;
+reg [7:0] sid_gain = 8'd64;
+wire signed [17:0] sid_raw_l, sid_raw_r;
+wire [7:0] sid_do;
+
+// 75 MHz / 1 MHz with a fractional accumulator
+reg [31:0] sid_ce_acc = 32'd0;
+wire sid_ce = (sid_ce_acc + 32'd1000000 >= 32'd75000000);
+always @(posedge clk) begin
+	if (cpu_reset) sid_ce_acc <= 32'd0;
+	else if (sid_ce) sid_ce_acc <= sid_ce_acc + 32'd1000000 - 32'd75000000;
+	else sid_ce_acc <= sid_ce_acc + 32'd1000000;
+end
+
+sid_top sid (
+	.reset(cpu_reset), .clk(clk), .ce_1m(sid_ce),
+	.cs(2'b11), .we(sid_cmd), .addr(sid_addr), .data_in(sid_data), .data_out(sid_do),
+	.pot_x_l(8'hFF), .pot_y_l(8'hFF), .pot_x_r(8'hFF), .pot_y_r(8'hFF),
+	.audio_l(sid_raw_l), .audio_r(sid_raw_r),
+	.ext_in_l(18'sd0), .ext_in_r(18'sd0),
+	.fc_offset_l(13'sd0), .fc_offset_r(13'sd0),
+	.filter_en(2'b00), .mode(2'b00), .cfg(4'b0000),
+	.ld_clk(1'b0), .ld_addr(12'd0), .ld_data(16'd0), .ld_wr(1'b0)
+);
+
+reg signed [17:0] sid_lp1_l = 18'sd0, sid_lp2_l = 18'sd0;
+reg signed [17:0] sid_lp1_r = 18'sd0, sid_lp2_r = 18'sd0;
+always @(posedge clk) begin
+	if (cpu_reset) begin
+		sid_lp1_l <= 18'sd0; sid_lp2_l <= 18'sd0;
+		sid_lp1_r <= 18'sd0; sid_lp2_r <= 18'sd0;
+	end else if (sid_ce) begin
+		sid_lp1_l <= sid_lp1_l + ((sid_raw_l - sid_lp1_l) >>> 4);
+		sid_lp2_l <= sid_lp2_l + ((sid_lp1_l - sid_lp2_l) >>> 4);
+		sid_lp1_r <= sid_lp1_r + ((sid_raw_r - sid_lp1_r) >>> 4);
+		sid_lp2_r <= sid_lp2_r + ((sid_lp1_r - sid_lp2_r) >>> 4);
+	end
+end
+
+wire signed [26:0] sid_scaled_l = (sid_lp2_l * $signed({1'b0, sid_gain})) >>> 8;
+wire signed [26:0] sid_scaled_r = (sid_lp2_r * $signed({1'b0, sid_gain})) >>> 8;
+function signed [15:0] sid_sat16(input signed [26:0] v);
+	begin
+		sid_sat16 = (v > 27'sd32767) ? 16'sh7FFF : (v < -27'sd32768) ? 16'sh8000 : v[15:0];
+	end
+endfunction
+wire signed [15:0] sid_l = sid_sat16(sid_scaled_l);
+wire signed [15:0] sid_r = sid_sat16(sid_scaled_r);
+
+reg [9:0] sid_tap_wr = 10'd0, sid_tap_rd = 10'd0;
+reg [31:0] sid_tap [0:1023];
+
 // ------------------------------------------------------------------ SPI
 
 // 0x50 W the byte to send (a transfer starts), R { busy, the byte received }
@@ -483,7 +547,7 @@ reg aud_t_r = 1'b0;
 reg [9:0] ay_tap_wr = 10'd0, ay_tap_rd = 10'd0;
 reg [31:0] ay_tap [0:1023];
 
-wire aud_read = aud_tick && !ay_active && !aud_empty;
+wire aud_read = aud_tick && !ay_active && !sid_active && !aud_empty;
 kg_sdpram #(.DW(32), .AW(AUD_W)) aud_ram (
 	.clka(clk), .wea(aud_we && !aud_full), .addra(aud_wr), .dina(aud_wdat),
 	.clkb(clk), .enb(aud_read), .addrb(aud_rd), .doutb(aud_dout)
@@ -517,6 +581,7 @@ always @(posedge clk) begin
 		aud_drop <= 16'd0;
 		aud_under <= 16'd0;
 		ay_tap_wr <= 10'd0;
+		sid_tap_wr <= 10'd0;
 	end else begin
 		if (aud_stats_clr) begin
 			aud_drop <= 16'd0;
@@ -529,7 +594,14 @@ always @(posedge clk) begin
 		if (aud_tick) begin
 			ay_tap[ay_tap_wr] <= {ay_l, ay_r};
 			ay_tap_wr <= ay_tap_wr + 10'd1;
-			if (ay_active) begin
+			if (sid_active) begin
+				sid_tap[sid_tap_wr] <= {sid_l, sid_r};
+				sid_tap_wr <= sid_tap_wr + 10'd1;
+				aud_l_r <= sid_l;
+				aud_r_r <= sid_r;
+				aud_valid <= 1'b0;
+				aud_rd <= aud_wr;
+			end else if (ay_active) begin
 				aud_l_r <= ay_l;
 				aud_r_r <= ay_r;
 				aud_valid <= 1'b0;
@@ -609,6 +681,7 @@ always @(posedge clk) begin
 	aud_stats_clr <= 1'b0;
 	ay_cmd <= 1'b0;
 	ay_rst_req <= 1'b0;
+	sid_cmd <= 1'b0;
 	launch_clr <= 1'b0;
 	launch_call <= 1'b0;
 	if (launch_wait && !clr_req && !clr_busy && !launch_clr) begin
@@ -701,6 +774,8 @@ always @(posedge clk) begin
 					if (d_dat_o[31]) ay_rst_req <= 1'b1;
 				end
 				8'hc4: begin ay_active <= d_dat_o[0]; ay_gain <= d_dat_o[15:8]; end
+				8'hc8: begin sid_addr <= d_dat_o[12:8]; sid_data <= d_dat_o[7:0]; sid_cmd <= 1'b1; end
+				8'hcc: begin sid_active <= d_dat_o[0]; sid_gain <= d_dat_o[15:8]; end
 				8'h78: aud_stats_clr <= 1'b1;
 				8'h14: begin halted <= 1'b1; show <= 1'b0; launch_clr <= 1'b1; launch_wait <= 1'b1; end
 				default: ;
@@ -739,6 +814,13 @@ always @(posedge clk) begin
 					end else io_dat <= 32'd0;
 				end
 				8'hd4: io_dat <= { 31'd0, (ay_tap_rd != ay_tap_wr) };
+				8'hd8: begin
+					if (sid_tap_rd != sid_tap_wr) begin
+						io_dat <= sid_tap[sid_tap_rd];
+						sid_tap_rd <= sid_tap_rd + 10'd1;
+					end else io_dat <= 32'd0;
+				end
+				8'hdc: io_dat <= { 31'd0, (sid_tap_rd != sid_tap_wr) };
 				8'h8c: io_dat <= { 23'd0, snd_playing[0], 8'd0 };
 				8'h9c: io_dat <= { 23'd0, snd_playing[1], 8'd0 };
 				8'ha0: io_dat <= { 31'd0, midi_full };
