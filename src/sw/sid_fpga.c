@@ -283,10 +283,10 @@ void sid_fpga_service(void) {
   sid_service_active = 1;
 
   /* The sound is written to the output FIFO by the FPGA on its own tick. The CPU only
-   * reads the tap: a late redraw may cost a few meter samples, never the audio. */
-  uint32_t cnt = MMIO(0xdc) & 0x3ff;
-  if (cnt > 512) { while (cnt-- > 1) (void) MMIO(0xd8); }
-
+   * reads the tap: a late redraw may cost a few meter samples, never the audio.
+   * Draining a big backlog sample by sample was a trap: a thousand MMIO reads per
+   * pass slowed the player down to ~90 passes a second. Reading the usual chunk
+   * catches up within a few passes instead. */
   int n = 0;
   while (n < SID_OUT_CHUNK && (MMIO(0xdc) & 0x3ff)) {
     uint32_t sample = MMIO(0xd8);
@@ -308,24 +308,19 @@ void sid_fpga_service(void) {
     n++;
   }
 
-  uint32_t advance, rsid_steps;
-#ifdef HOST
-  if (n == 0) { sid_service_active = 0; return; }
-  advance = (uint32_t) n;
-  rsid_steps = (uint32_t) n * 7;
-#else
+  /* The same wall-clock pacing on the board and on the host bench (the bench answers
+   * R_US from the samples it has written), so the timing is verified before flashing. */
   uint32_t now = R_US;
   uint32_t dt = (uint32_t) (now - sid.last_us);
   sid.last_us = now;
   /* Keep the sub-tick remainder: without it every 1-2 ms pass truncated to zero
    * ticks and the tune stood still. */
   sid.time_acc += (uint64_t) dt * (uint32_t) sid.hz;
-  advance = (uint32_t) (sid.time_acc / 1000000u);
+  uint32_t advance = (uint32_t) (sid.time_acc / 1000000u);
   sid.time_acc -= (uint64_t) advance * 1000000u;
-  rsid_steps = dt / 3;                 /* ~330k instructions/s, as a 1 MHz 6502 */
-  if (rsid_steps > 20000) rsid_steps = 20000;
+  uint32_t rsid_steps = dt / 3;        /* ~330k instructions/s, as a 1 MHz 6502 */
+  if (rsid_steps > 8000) rsid_steps = 8000;
   if (advance > 4) advance = 4;
-#endif
 
   if (sid.rsid) {
     for (uint32_t i = 0; i < rsid_steps; i++) {
@@ -333,9 +328,8 @@ void sid_fpga_service(void) {
       if (m6502_step(sid.cpu)) break;
     }
 
-    sid.irq_acc += advance;
-    while (sid.irq_acc >= sid.samples_per_tick) {
-      sid.irq_acc -= sid.samples_per_tick;
+    while (advance > 0) {
+      advance--;
       if (!(sid.cpu->p & 0x04)) {             /* I flag clear */
         uint16_t vec = (uint16_t) (sid.cpu->mem[0x0314] | (sid.cpu->mem[0x0315] << 8));
         if (!vec || vec == 0xffff)
@@ -347,15 +341,12 @@ void sid_fpga_service(void) {
           sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) (sid.cpu->p & ~0x10); sid.cpu->s--;
           sid.cpu->p |= 0x04;
           sid.cpu->pc = vec;
-          for (int i = 0; i < 50000; i++) if (m6502_step(sid.cpu)) break;
+          for (int i = 0; i < 20000; i++) if (m6502_step(sid.cpu)) break;
         }
       }
     }
   } else if (sid.play_addr) {
-    sid.sample_acc += advance;
-    uint32_t ticks = sid.sample_acc / sid.samples_per_tick;
-    sid.sample_acc -= ticks * sid.samples_per_tick;
-    if (ticks > 4) ticks = 4;
+    uint32_t ticks = advance;     /* one play call per VBI/CIA tick, advance is a tick count */
     while (ticks > 0) {
       sid.cpu->mem[0x01fd] = 0xff;
       sid.cpu->mem[0x01fc] = 0xfd;

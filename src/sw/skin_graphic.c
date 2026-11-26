@@ -482,12 +482,19 @@ static void draw_spectrum_off(const player_view_t *v) {
 // Cut the solid bars into cap-sized segments. The background gaps are drawn over
 // every bar; this is one pass over the spectrum, not per-bar rectangle drawing.
 static void draw_spectrum_segments(void) {
-  for (int y = SP_BASE - SP_SEG; y > SP_BASE - SP_H; y -= SP_SEG_STEP) {
+  for (int y = SP_BASE - SP_SEG; y > SP_BASE - SP_H; y -= SP_SEG_STEP)
     gfx_fill(SP_X, y, SP_W, 1, c_panel);
-    /* take the two corner pixels off the rows above and below the gap, so every
-     * segment reads as a small rounded pill instead of a square block */
-    for (int i = 0; i < SP_BARS; i++) {
-      int bx = SP_X + i * SP_STEP;
+
+  /* Take the two corner pixels off the rows above and below every gap, so each
+   * segment reads as a rounded pill. Only inside the bar, otherwise short bars would
+   * pay for dozens of draws in the empty area above them. */
+  for (int i = 0; i < SP_BARS; i++) {
+    int mh = disp_bands[i] * SP_H / 255;
+    if (mh < SP_SEG) continue;
+    int top = SP_BASE - mh;
+    int bx = SP_X + i * SP_STEP;
+    for (int y = SP_BASE - SP_SEG; y > SP_BASE - SP_H; y -= SP_SEG_STEP) {
+      if (y - 1 < top) continue;
       gfx_fill(bx, y - 1, 1, 1, c_panel);
       gfx_fill(bx + SP_BW - 1, y - 1, 1, 1, c_panel);
       gfx_fill(bx, y + 1, 1, 1, c_panel);

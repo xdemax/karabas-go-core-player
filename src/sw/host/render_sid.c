@@ -25,6 +25,7 @@ static uint32_t last_sid_wr;
 
 static volatile uint32_t host_regs[64];
 static uint32_t sid_reg_count;
+static uint32_t written;
 
 static uint32_t gen_sample(void) {
   uint32_t wr = host_regs[0xc8 >> 2];
@@ -52,6 +53,11 @@ static void tap_push(void) {
 
 volatile uint32_t *host_reg(uint32_t off) {
   off &= 0xfc;
+  if (off == 0x40) {          /* R_US: the virtual clock of the bench */
+    static uint32_t us;
+    us = (uint32_t) (((uint64_t) written * 1000000u) / 48000u);
+    return &us;
+  }
   if (off == 0xc8) sid_reg_count++;
   if (off == 0xdc) host_regs[0xdc >> 2] = tap_wr - tap_rd;
   if (off == 0xd8 && tap_wr != tap_rd) {
