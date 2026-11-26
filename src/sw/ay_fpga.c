@@ -308,7 +308,7 @@ static int start_engine(int fmt, const play_src_t *src, uint32_t size, play_prog
         return -1;
       }
       off += got;
-      if (progress && (off >> 15) != ((off - got) >> 15)) progress(off, size);
+      if (progress && ((off >> 15) != ((off - got) >> 15) || off == size)) progress(off, size);
     }
     d = dst;
   } else {
@@ -367,7 +367,7 @@ static int start_kind(int kind, const play_src_t *src, uint32_t size, play_progr
         return -1;
       }
       off += got;
-      if (progress && (off >> 15) != ((off - got) >> 15)) progress(off, size);
+      if (progress && ((off >> 15) != ((off - got) >> 15) || off == size)) progress(off, size);
     }
     d = dst;
   } else {

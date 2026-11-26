@@ -267,7 +267,7 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
         s3m_error("read error"); return -1;
       }
       off += got;
-      if (progress && (off >> 15) != ((off - got) >> 15)) progress(off, size);
+      if (progress && ((off >> 15) != ((off - got) >> 15) || off == size)) progress(off, size);
     }
   } else {
     buf = (uint8_t *) src->mem;
