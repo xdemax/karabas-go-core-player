@@ -48,6 +48,8 @@ typedef struct {
   uint8_t eff, par;
   int porta_speed, retrig_tick;
   int32_t mix_vol, lgain, rgain;
+  uint32_t vib_pos;  // vibrato position (0-255)
+  int vib_depth;     // vibrato depth in semitones
 } s3m_voice_t;
 
 typedef struct {
@@ -367,10 +369,10 @@ static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
   semitone--;
   
   uint32_t step = c2spd;
-  if (octave > 2) {
-    for (int i = 0; i < octave - 2; i++) step *= 2;
-  } else if (octave < 2) {
-    for (int i = 0; i < 2 - octave; i++) step /= 2;
+  if (octave > 5) {
+    for (int i = 0; i < octave - 5; i++) step *= 2;
+  } else if (octave < 5) {
+    for (int i = 0; i < 5 - octave; i++) step /= 2;
   }
   
   step = (step * s3m_semitone_mul[semitone]) >> 16;
@@ -392,8 +394,11 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
   
   if (note > 0 && note < 254) {
     uint32_t c2spd = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
+    v->note = note;
     v->pos = 0;
-    v->step = s3m_note_to_step(note, c2spd);
+    v->target_step = s3m_note_to_step(note, c2spd);
+    v->step = v->target_step;
+    v->vib_pos = 0;
     v->active = 1;
     v->keyoff = 0;
   }
@@ -419,6 +424,8 @@ void s3m_fpga_service(void) {
     m->sample_acc++;
     if (m->sample_acc >= m->samples_per_tick) {
       m->sample_acc = 0;
+      m->tick++;
+      if (m->tick >= m->speed) m->tick = 0;
       
       // Process next row
       if (m->row < 64) {
@@ -478,19 +485,22 @@ void s3m_fpga_service(void) {
             }
             
             if (ch < m->chn) {
+              s3m_voice_t *v = &m->vox[ch];
               if (note) s3m_note_on(m, ch, note, instr, vol);
-              else if (vol > 0 && vol <= 64) m->vox[ch].vol = vol;   /* volume-only cell */
-              if (vol == 255) s3m_note_off(&m->vox[ch]);
+              else if (vol > 0 && vol <= 64) v->vol = vol;   /* volume-only cell */
+              if (vol == 255) s3m_note_off(v);
               
               if (eff) {
+                v->eff = eff;
+                v->par = par;
                 switch (eff) {
                   case 'A': case 1: m->speed = par; break;
-                  case 'B': case 2: m->order = par; break;
+                  case 'B': case 2: m->order = par; m->row = 0; break;
                   case 'C': case 3: m->row = 63; break;
-                  case 'D': case 4: break;  // vol slide
-                  case 'G': case 7: break;  // tone porta
-                  case 'H': case 8: break;  // vibrato
-                  case 'J': case 10: break; // arpeggio
+                  case 'D': case 4: break;  // vol slide - stored
+                  case 'G': case 7: break;  // tone porta - stored
+                  case 'H': case 8: break;  // vibrato - stored
+                  case 'J': case 10: break; // arpeggio - stored
                   case 'V': m->gvol = par & 0x7f; break;
                 }
               }
@@ -512,7 +522,68 @@ void s3m_fpga_service(void) {
       }
     }
     
-    // Mix voices
+    // Per-tick effect processing
+    for (int ch = 0; ch < m->chn; ch++) {
+      s3m_voice_t *v = &m->vox[ch];
+      if (!v->active) continue;
+      
+      uint8_t eff = v->eff;
+      uint8_t par = v->par;
+      
+      switch (eff) {
+        case 'D': case 4: {  // Volume slide
+          int speed = (par >> 4) & 0x0F;  // up speed
+          int down = par & 0x0F;          // down speed
+          if (speed > 0) {
+            v->vol += speed;
+            if (v->vol > 64) v->vol = 64;
+          } else if (down > 0) {
+            v->vol -= down;
+            if (v->vol < 0) v->vol = 0;
+          }
+          break;
+        }
+        case 'G': case 7: {  // Tone portamento
+          if (par == 0) par = 1;
+          if (v->target_step > v->step) {
+            v->step += (par << 2);
+            if (v->step > v->target_step) v->step = v->target_step;
+          } else if (v->target_step < v->step) {
+            v->step -= (par << 2);
+            if (v->step < v->target_step) v->step = v->target_step;
+          }
+          break;
+        }
+        case 'H': case 8: {  // Vibrato
+          int speed = (par >> 4) & 0x0F;
+          int depth = par & 0x0F;
+          if (speed > 0) {
+            v->vib_pos += speed;
+            int vib_wave = (v->vib_pos >> 1) & 0xFF;
+            int sine = (vib_wave < 64) ? vib_wave : (vib_wave < 128) ? (128 - vib_wave) : 
+                       (vib_wave < 192) ? (vib_wave - 128) : (256 - vib_wave);
+            int32_t delta = ((int32_t)v->step * sine * depth) >> 10;
+            v->step += delta;
+          }
+          break;
+        }
+        case 'J': case 10: {  // Arpeggio
+          int semi1 = (par >> 4) & 0x0F;
+          int semi2 = par & 0x0F;
+          int arp_tick = m->tick % 3;
+          uint32_t c2spd = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
+          if (arp_tick == 1) {
+            v->step = s3m_note_to_step(v->note + (semi1 << 4), c2spd);
+          } else if (arp_tick == 2) {
+            v->step = s3m_note_to_step(v->note + (semi2 << 4), c2spd);
+          } else {
+            v->step = s3m_note_to_step(v->note, c2spd);
+          }
+          break;
+        }
+      }
+    }
+    
     int32_t mix_l = 0, mix_r = 0;
     for (int ch = 0; ch < m->chn; ch++) {
       s3m_voice_t *v = &m->vox[ch];
