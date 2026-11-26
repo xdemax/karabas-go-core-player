@@ -45,6 +45,8 @@ typedef struct {
   uint16_t flags;
   
   int active, finished, paused;
+  int rsid;
+  uint32_t irq_acc;
   char err[48];
   int vol;
   int32_t last_l, last_r, peak_l, peak_r;
@@ -53,12 +55,15 @@ typedef struct {
   uint8_t gate[3];
   uint32_t sample_acc;
   uint32_t samples_per_tick;
+  int hz;
+  uint32_t last_us;
   uint32_t sid_regs_written;
   uint32_t play_calls;
   char title[32];
 } sid_state_t;
 
 static sid_state_t sid;
+static void sid_hw_on(void);
 static int16_t sid_out[SID_OUT_CHUNK * 2];
 static int sid_service_active;
 
@@ -76,7 +81,14 @@ static uint32_t rd32be(const uint8_t *p) {
   return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
 }
 
+#ifdef HOST
+void sid_host_reg_write(uint32_t reg, uint32_t val);
+#endif
+
 static void sid_wr(uint32_t reg, uint32_t val) {
+#ifdef HOST
+  sid_host_reg_write(reg, val);
+#endif
   MMIO(0xc8) = ((reg & 0x1f) << 8) | (val & 0xff);
   sid.sid_regs_written++;
 }
@@ -165,6 +177,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   m6502_reset(sid.cpu);
   memset(sid.cpu->mem, 0, 65536);
 
+  int is_rsid = (data[0] == 'R' && data[1] == 'S' && data[2] == 'I' && data[3] == 'D');
   int has_load = (load_field == 0);
   uint16_t load_addr = load_field;
   if (has_load) {
@@ -201,6 +214,8 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.songs = songs ? songs : 1;
   sid.speed = speed;
   sid.flags = flags;
+  sid.rsid = is_rsid;
+  sid.irq_acc = 0;
   sid.data = data;
   sid.size = size;
   
@@ -214,6 +229,8 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   int hz = (((flags >> 2) & 3) == 2) ? 60 : 50;
   if (start_song >= 1 && start_song <= 32 && (speed & (1u << (start_song - 1)))) hz = 60;
   sid.samples_per_tick = (uint32_t) ((48000 + hz / 2) / hz);
+  sid.hz = hz;
+  sid.last_us = R_US;
   sid.sample_acc = 0;
   sid.sid_regs_written = 0;
   sid.play_calls = 0;
@@ -223,7 +240,17 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.finished = 0;
   sid.paused = 0;
 
-  if (init_addr) {
+  if (init_addr && is_rsid) {
+    /* RSID: the tune installs its own IRQ vector ($0314) and runs by itself. Start it
+     * and warm up briefly; the service keeps the CPU going in real time. */
+    sid.cpu->a = 0;
+    sid.cpu->x = 0;
+    sid.cpu->y = 0;
+    sid.cpu->s = 0xff;
+    sid.cpu->p = 0x04;
+    sid.cpu->pc = init_addr;
+    for (int i = 0; i < 50000; i++) if (m6502_step(sid.cpu)) break;
+  } else if (init_addr) {
     /* JSR-style call with a return address of $FFFE on the stack */
     sid.cpu->a = (start_song - 1) & 0xff;
     sid.cpu->x = 0;
@@ -239,25 +266,27 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 #endif
   }
 
-  MMIO(0xcc) = 1 | (192 << 8);
+  sid.vol = 64;
+  sid_hw_on();
 
   return 0;
+}
+
+static void sid_hw_on(void) {
+  MMIO(0xcc) = 1u | ((uint32_t) (sid.vol * 3) << 8);   /* 0..64 -> gain 0..192 */
 }
 
 void sid_fpga_service(void) {
   if (!sid.active || sid.paused || sid_service_active) return;
   sid_service_active = 1;
 
-  /* The tap ring holds ~21 ms. After a stall (SD read, redraw, pause) the whole
-   * backlog is stale, so drop it down to a couple of samples. */
+  /* The sound is written to the output FIFO by the FPGA on its own tick. The CPU only
+   * reads the tap: a late redraw may cost a few meter samples, never the audio. */
   uint32_t cnt = MMIO(0xdc) & 0x3ff;
-  while (cnt > 64) { (void) MMIO(0xd8); cnt--; }
+  if (cnt > 512) { while (cnt-- > 1) (void) MMIO(0xd8); }
 
-  int free = audio_free();
-  int maxn = free > SID_OUT_CHUNK ? SID_OUT_CHUNK : free;
-  if (maxn < 0) maxn = 0;
   int n = 0;
-  while (n < maxn && (MMIO(0xdc) & 0x3ff)) {
+  while (n < SID_OUT_CHUNK && (MMIO(0xdc) & 0x3ff)) {
     uint32_t sample = MMIO(0xd8);
     sid.last_tap = sample;
     int16_t l = (int16_t)(sample >> 16);
@@ -265,19 +294,56 @@ void sid_fpga_service(void) {
     int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
     if (al > sid.peak_l) sid.peak_l = al;
     if (ar > sid.peak_r) sid.peak_r = ar;
+    sid.last_l = l;
+    sid.last_r = r;
+#ifdef HOST
     sid_out[n * 2] = (int16_t)((int32_t) l * sid.vol / 64);
     sid_out[n * 2 + 1] = (int16_t)((int32_t) r * sid.vol / 64);
-    sid.last_l = sid_out[n * 2];
-    sid.last_r = sid_out[n * 2 + 1];
+#else
+    analysis_push(l, r);
+    audio_note_written(1);              /* the MIX indicator counts the played samples */
+#endif
     n++;
   }
-  if (n == 0) { sid_service_active = 0; return; }
 
-  if (sid.play_addr) {
-    sid.sample_acc += (uint32_t) n;
+#ifdef HOST
+  if (n == 0) { sid_service_active = 0; return; }
+  uint32_t advance = (uint32_t) n;
+#else
+  uint32_t now = R_US;
+  uint32_t dt = (uint32_t) (now - sid.last_us);
+  sid.last_us = now;
+  uint32_t advance = (uint32_t) (((uint64_t) dt * (uint32_t) sid.hz) / 1000000u);
+#endif
+
+  if (sid.rsid) {
+    for (uint32_t i = 0; i < advance * 2; i++) {
+      if (sid.cpu->pc >= 0xfffe) sid.cpu->pc = sid.init_addr;
+      if (m6502_step(sid.cpu)) break;
+    }
+    sid.irq_acc += advance;
+    while (sid.irq_acc >= sid.samples_per_tick) {
+      sid.irq_acc -= sid.samples_per_tick;
+      if (!(sid.cpu->p & 0x04)) {             /* I flag clear */
+        uint16_t vec = (uint16_t) (sid.cpu->mem[0x0314] | (sid.cpu->mem[0x0315] << 8));
+        if (!vec || vec == 0xffff)
+          vec = (uint16_t) (sid.cpu->mem[0xfffe] | (sid.cpu->mem[0xffff] << 8));
+        if (vec && vec != 0xffff) {
+          uint16_t ret = sid.cpu->pc;
+          sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) (ret >> 8); sid.cpu->s--;
+          sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) ret; sid.cpu->s--;
+          sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) (sid.cpu->p & ~0x10); sid.cpu->s--;
+          sid.cpu->p |= 0x04;
+          sid.cpu->pc = vec;
+          for (int i = 0; i < 50000; i++) if (m6502_step(sid.cpu)) break;
+        }
+      }
+    }
+  } else if (sid.play_addr) {
+    sid.sample_acc += advance;
     uint32_t ticks = sid.sample_acc / sid.samples_per_tick;
     sid.sample_acc -= ticks * sid.samples_per_tick;
-    if (ticks > 16) ticks = 16;
+    if (ticks > 4) ticks = 4;
     while (ticks > 0) {
       sid.cpu->mem[0x01fd] = 0xff;
       sid.cpu->mem[0x01fc] = 0xfd;
@@ -291,7 +357,9 @@ void sid_fpga_service(void) {
     }
   }
 
+#ifdef HOST
   for (int i = 0; i < n; i++) mixer_write(sid_out[i * 2], sid_out[i * 2 + 1]);
+#endif
 
   memset(sid.vu, 0, sizeof sid.vu);
   for (int vch = 0; vch < 3; vch++)

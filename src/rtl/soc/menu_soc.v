@@ -548,8 +548,14 @@ reg [9:0] ay_tap_wr = 10'd0, ay_tap_rd = 10'd0;
 reg [31:0] ay_tap [0:1023];
 
 wire aud_read = aud_tick && !ay_active && !aud_empty;
+// The SID feeds the output FIFO straight from hardware: the CPU only runs the tune, so a
+// slow redraw can no longer starve or drop the sound.
+wire aud_sid_we = aud_tick && sid_active;
+wire aud_any_we = aud_we || aud_sid_we;
+wire [31:0] aud_wdat_m = sid_active ? {sid_l, sid_r} : aud_wdat;
+
 kg_sdpram #(.DW(32), .AW(AUD_W)) aud_ram (
-	.clka(clk), .wea(aud_we && !aud_full), .addra(aud_wr), .dina(aud_wdat),
+	.clka(clk), .wea(aud_any_we && !aud_full), .addra(aud_wr), .dina(aud_wdat_m),
 	.clkb(clk), .enb(aud_read), .addrb(aud_rd), .doutb(aud_dout)
 );
 reg [26:0] aud_acc = 27'd0;
@@ -587,17 +593,16 @@ always @(posedge clk) begin
 			aud_drop <= 16'd0;
 			aud_under <= 16'd0;
 		end else begin
-			if (aud_we && aud_full) aud_drop <= aud_drop + 1'b1;
+			if (aud_any_we && aud_full) aud_drop <= aud_drop + 1'b1;
 			if (aud_tick && aud_empty && !ay_active) aud_under <= aud_under + 1'b1;
 		end
-		if (aud_we && !aud_full) aud_wr <= aud_wr + 1'b1;
+		if (aud_any_we && !aud_full) aud_wr <= aud_wr + 1'b1;
 		if (aud_tick) begin
 			ay_tap[ay_tap_wr] <= {ay_l, ay_r};
 			ay_tap_wr <= ay_tap_wr + 10'd1;
-			if (sid_active) begin
-				// The SID keeps its own tap for the spectrum/meters; the audio itself goes
-				// through the software FIFO as for every other engine, so the player is
-				// paced by the FIFO instead of free-running.
+			if (sid_active && (sid_tap_wr - sid_tap_rd) != 10'd1023) begin
+				// The tap is for the meters only; it saturates instead of wrapping, so a
+				// slow redraw cannot make an almost full ring look empty.
 				sid_tap[sid_tap_wr] <= {sid_l, sid_r};
 				sid_tap_wr <= sid_tap_wr + 10'd1;
 			end

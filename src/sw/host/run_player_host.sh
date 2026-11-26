@@ -5,6 +5,6 @@ set -e
 cd "$(dirname "$0")/.."
 mkdir -p host/out
 gcc -O1 -g -DHOST -Wall -Wno-unused-function -I. -Ifatfs -o host/player_host \
-  host/player_host.c player.c browser.c ui_skin.c skin_graphic.c ui.c gfx.c fonts.c sound.c
+  host/player_host.c player.c fmt.c browser.c ui_skin.c skin_graphic.c ui.c gfx.c fonts.c sound.c
 ./host/player_host
 cd host/out && python3 -c "from PIL import Image; Image.open('frame.ppm').save('frame.png')" && rm frame.ppm

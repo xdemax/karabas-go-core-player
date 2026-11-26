@@ -35,7 +35,7 @@ static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (
 #define SP_BASE 462
 #define SP_H    160
 #define SP_BARS 60               // 2 px bars, 2 px gaps
-#define SP_BW   2
+#define SP_BW   3
 #define SP_GAP  2
 #define SP_STEP (SP_BW + SP_GAP)
 #define SP_W    (SP_BARS * SP_BW + (SP_BARS - 1) * SP_GAP)
@@ -482,8 +482,18 @@ static void draw_spectrum_off(const player_view_t *v) {
 // Cut the solid bars into cap-sized segments. The background gaps are drawn over
 // every bar; this is one pass over the spectrum, not per-bar rectangle drawing.
 static void draw_spectrum_segments(void) {
-  for (int y = SP_BASE - SP_SEG; y > SP_BASE - SP_H; y -= SP_SEG_STEP)
+  for (int y = SP_BASE - SP_SEG; y > SP_BASE - SP_H; y -= SP_SEG_STEP) {
     gfx_fill(SP_X, y, SP_W, 1, c_panel);
+    /* take the two corner pixels off the rows above and below the gap, so every
+     * segment reads as a small rounded pill instead of a square block */
+    for (int i = 0; i < SP_BARS; i++) {
+      int bx = SP_X + i * SP_STEP;
+      gfx_fill(bx, y - 1, 1, 1, c_panel);
+      gfx_fill(bx + SP_BW - 1, y - 1, 1, 1, c_panel);
+      gfx_fill(bx, y + 1, 1, 1, c_panel);
+      gfx_fill(bx + SP_BW - 1, y + 1, 1, 1, c_panel);
+    }
+  }
 }
 
 static void update_spectrum(const player_view_t *v) {

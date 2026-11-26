@@ -61,9 +61,15 @@ volatile uint32_t *host_reg(uint32_t off) {
   return &host_regs[(off >> 2) & 63];
 }
 
-static FILE *out;
+static FILE *out, *regs;
 static uint32_t written;
 static uint32_t total;
+
+void sid_host_reg_write(uint32_t reg, uint32_t val) {
+  if (!regs) return;
+  uint32_t rec[2] = { written, (reg & 0x1f) | ((val & 0xff) << 8) };
+  fwrite(rec, 4, 2, regs);
+}
 
 int audio_free(void) { return 2047; }
 
@@ -97,6 +103,7 @@ int main(int argc, char **argv) {
   fclose(f);
 
   out = fopen(argv[2], "wb");
+  { char rp[512]; snprintf(rp, sizeof rp, "%s.regs", argv[2]); regs = fopen(rp, "wb"); }
   if (!out) { perror(argv[2]); return 1; }
   uint8_t h[44];
   memset(h, 0, sizeof h);
@@ -124,6 +131,7 @@ int main(int argc, char **argv) {
   fseek(out, 4, SEEK_SET);  uint32_t riff = (uint32_t) (36 + data); fwrite(&riff, 4, 1, out);
   fseek(out, 40, SEEK_SET); uint32_t ds = (uint32_t) data; fwrite(&ds, 4, 1, out);
   fclose(out);
+  if (regs) fclose(regs);
 
   fprintf(stderr, "rendered %u samples, '%s'\n", written, sid_fpga_title());
   fprintf(stderr, "SID register writes: %u\n", sid_reg_count);
