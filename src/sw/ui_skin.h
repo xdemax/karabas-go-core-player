@@ -29,6 +29,7 @@ typedef struct {
   const char *format;
   const char *title;
   const char *formats;          // "mod, xm, s3m": the registry, for the startup panel
+  const char *warning;          // a compatibility note from the engine, or NULL
 
   int channels, samples;
   int order, pattern, row, song_len;

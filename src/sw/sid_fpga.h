@@ -14,6 +14,7 @@ int sid_fpga_active(void);
 int sid_fpga_finished(void);
 void sid_fpga_stop(void);
 const char *sid_fpga_error(void);
+const char *sid_fpga_warning(void);
 const char *sid_fpga_title(void);
 int sid_fpga_position(uint32_t *cur, uint32_t *total);
 void sid_fpga_info(fmt_info_t *o);

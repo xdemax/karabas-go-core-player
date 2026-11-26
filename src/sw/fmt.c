@@ -186,5 +186,15 @@ const char *fmt_error(void) {
   return "";
 }
 
+const char *fmt_warning(void) {
+  for (unsigned i = 0; i < NENG; i++) {
+    if (engines[i]->warning) {
+      const char *w = engines[i]->warning();
+      if (w && w[0]) return w;
+    }
+  }
+  return NULL;
+}
+
 const char *fmt_engine_name(void) { return NENG ? engines[0]->name : ""; }
 const char *fmt_engine_version(void) { return NENG && engines[0]->version ? engines[0]->version() : ""; }

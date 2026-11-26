@@ -78,6 +78,7 @@ static void view_fill(int audio) {
   V.title = np_title;
   fmt_grouped_list(fmt_list, sizeof(fmt_list));
   V.formats = fmt_list;
+  V.warning = fmt_warning();
   V.skin = skin_name();
   V.elapsed = np_on ? (uint32_t) ((R_US - np_start) / 1000000u) : 0;
   V.cur = np_cur;

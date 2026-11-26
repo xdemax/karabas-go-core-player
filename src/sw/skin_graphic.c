@@ -62,7 +62,7 @@ static int peak_bands[SP_BARS], cap_lo[SP_BARS], cap_hi[SP_BARS], peak_hold[SP_B
 static int spec_off;
 static int chan_off;
 static uint32_t last_elapsed = 0xFFFFFFFFu;
-static char last_title[40], last_format[8], last_status[32], last_mix[40], last_meta[48];
+static char last_title[40], last_format[8], last_status[32], last_mix[40], last_meta[48], last_warn[48];
 
 static void col_init(void) {
   c_bg = gfx_color(0x0b0f18);
@@ -380,6 +380,13 @@ static void update_info(const player_view_t *v) {
   q = str_cpy(q, v->loading ? "  LOADING" : (v->paused ? "  PAUSED" : "  PLAYING"));
   gfx_fill(PX, 525, PW, 24, c_panel);
   gfx_text_left(&f20, PX, 536, b, r_pdim);
+
+  const char *w = v->warning ? v->warning : "";
+  if (strcmp(w, last_warn) != 0) {
+    copy_fit(last_warn, w, sizeof(last_warn));
+    gfx_fill(PX, 548, PW, 18, c_panel);
+    if (w[0]) gfx_text_left(&f20, PX, 555, w, r_pyellow);
+  }
 }
 
 static void update_progress(const player_view_t *v) {

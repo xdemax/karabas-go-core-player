@@ -61,12 +61,20 @@ typedef struct {
   uint32_t sid_regs_written;
   uint32_t play_calls;
   char title[32];
+  char warn[48];
+  uint32_t vol_writes;
 } sid_state_t;
 
 static sid_state_t sid;
 static void sid_hw_on(void);
 static int16_t sid_out[SID_OUT_CHUNK * 2];
 static int sid_service_active;
+
+static void sid_set_warn(const char *w) {
+  int i = 0;
+  for (; w && w[i] && i < (int) sizeof(sid.warn) - 1; i++) sid.warn[i] = w[i];
+  sid.warn[i] = 0;
+}
 
 static void sid_error(const char *s) {
   int i = 0;
@@ -96,6 +104,7 @@ static void sid_wr(uint32_t reg, uint32_t val) {
 
 static void sid_io_write(uint16_t addr, uint8_t val) {
   uint32_t r = addr - 0xd400;
+  if (r == 0x18) sid.vol_writes++;
   if (r == 0x04 || r == 0x0b || r == 0x12) sid.gate[(r == 0x04) ? 0 : (r == 0x0b) ? 1 : 2] = val & 1;
   sid_wr(r, val);
 }
@@ -219,6 +228,10 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.irq_acc = 0;
   sid.data = data;
   sid.size = size;
+  sid.vol_writes = 0;
+  if (is_rsid) sid_set_warn("RSID: real C64 environment, partial");
+  else if (((flags >> 4) & 3) == 1) sid_set_warn("made for the 6581, playing the 8580");
+  else sid_set_warn("");
   
 
   sid.vol = 64;
@@ -227,6 +240,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   memset(sid.vu, 0, sizeof(sid.vu));
   /* PSID flags bits 2-3: 1 PAL, 2 NTSC. */
   int hz = (((flags >> 2) & 3) == 2) ? 60 : 50;
+  if (is_rsid) hz = 60;                /* the RSID environment is CIA timer A at 60 Hz */
   sid.samples_per_tick = (uint32_t) ((48000 + hz / 2) / hz);
   sid.hz = hz;
   sid.last_us = R_US;
@@ -278,6 +292,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 #ifdef HOST
     fprintf(stderr, "[sid] CIA latch=%04x rate=%d Hz\n", latch, hz2);
 #endif
+    if (!latch && !sid.warn[0]) sid_set_warn("CIA rate unknown, using 60 Hz");
   }
 
   sid.vol = 64;
@@ -380,6 +395,14 @@ void sid_fpga_service(void) {
   for (int i = 0; i < n; i++) mixer_write(sid_out[i * 2], sid_out[i * 2 + 1]);
 #endif
 
+  /* A tune that only streams the volume register is a digi trick the 8580 model in
+   * this core cannot reproduce (volume is a multiplier here, not a DAC). */
+  if (!sid.warn[0] && sid.play_calls > 200 && sid.sid_regs_written &&
+      sid.vol_writes * 10 > sid.sid_regs_written * 9)
+    sid_set_warn("digi via volume: silent on this core");
+  else if (!sid.warn[0] && sid.play_calls > 150 && sid.sid_regs_written == 0)
+    sid_set_warn("tune writes no SID registers");
+
   memset(sid.vu, 0, sizeof sid.vu);
   for (int vch = 0; vch < 3; vch++)
     if (sid.gate[vch]) sid.vu[vch] = (uint8_t) (sid.vol * 4 > 255 ? 255 : sid.vol * 4);
@@ -399,6 +422,10 @@ void sid_fpga_stop(void) {
     m6502_free(sid.cpu);
     sid.cpu = NULL;
   }
+}
+
+const char *sid_fpga_warning(void) {
+  return sid.warn;
 }
 
 const char *sid_fpga_error(void) {

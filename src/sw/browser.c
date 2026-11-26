@@ -116,13 +116,31 @@ int browser_up(browser_t *b, fs_keep_t keep, fs_idle_t idle) {
     return 1;
   }
   if (strcmp(b->path, "/") == 0) return 0;
+  /* Remember the directory we are leaving so the parent list opens with it selected:
+   * going back up should land on the folder you just came out of, not at the top. */
+  char name[FS_NAME_MAX + 1];
+  name[0] = 0;
+  {
+    const char *p = strrchr(b->path, '/');
+    if (p && p[1]) {
+      int i = 0;
+      for (p++; *p && i < FS_NAME_MAX; p++) name[i++] = *p;
+      name[i] = 0;
+    }
+  }
   char full[FS_PATH_MAX];
   strncpy(full, b->path, sizeof(full) - 1);
   full[sizeof(full) - 1] = 0;
   fs_path_up(full);
   int n = load(b, full, keep, idle);
   if (n < 0) return n;
-  b->sel = 0;
-  b->top = 0;
+  int idx = 0;
+  if (name[0]) {
+    for (int i = 0; i < b->nent; i++)
+      if (b->ent[i].dir && strcmp(b->ent[i].name, name) == 0) { idx = i; break; }
+  }
+  b->sel = idx;
+  b->top = idx > 3 ? idx - 3 : 0;
+  clamp(b);
   return 1;
 }

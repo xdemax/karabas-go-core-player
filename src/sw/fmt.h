@@ -54,6 +54,7 @@ typedef struct {
   int (*get_volume)(void);
   int (*set_volume)(int v);
   int (*pause)(int on);              // -1 toggle; returns the paused state
+  const char *(*warning)(void);      // a compatibility note for the player panel, or NULL
 } play_engine_t;
 
 extern const fmt_module_t fmt_mod;
@@ -68,6 +69,7 @@ extern const fmt_module_t fmt_sid;
 
 const fmt_module_t *fmt_by_ext(const char *name);
 const fmt_module_t *fmt_by_head(const uint8_t *head, uint32_t len);
+const char *fmt_warning(void);
 int fmt_supported(const char *name);
 int fmt_supported_list(char *out, int max);
 int fmt_grouped_list(char *out, int max);

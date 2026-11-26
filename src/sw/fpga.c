@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "fpga.h"
 #include "mikmod_fpga.h"
 #include "mp3_fpga.h"
@@ -51,6 +52,8 @@ const char *fpga_error(void) {
   if (mp3_active()) return mp3_error();
   return "";
 }
+
+const char *fpga_warning(void);
 
 const char *fpga_title(void) {
   if (fpga_xm_active()) return fpga_xm_title();
@@ -146,6 +149,11 @@ static int e_stop(void) { fpga_stop(); return 0; }
 static const char *e_ver(void) { return "1.0"; }
 static const char *e_err(void) { return fpga_error(); }
 
+const char *fpga_warning(void) {
+  if (sid_fpga_active()) return sid_fpga_warning();
+  return NULL;
+}
+
 const play_engine_t fpga_engine = { "FPGA", e_init, e_stop, e_ver, e_err, fpga_service, fpga_active,
                                     fpga_title, fpga_position, fpga_info, fpga_audio,
-                                    fpga_get_volume, fpga_set_volume, fpga_pause };
+                                    fpga_get_volume, fpga_set_volume, fpga_pause, fpga_warning };
