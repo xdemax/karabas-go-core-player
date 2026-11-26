@@ -291,7 +291,8 @@ void it_fpga_service(void) {
     }
   }
 #endif
-  if (!it_pl.finished && it_total_ms && it_elapsed_ms > it_total_ms + 1500u) {
+  if (!it_pl.finished && it_total_ms && it_elapsed_ms > it_total_ms
+      && it_elapsed_ms - it_total_ms > 1500u) {   /* no overflow on a long total */
     it_active = 0;
     it_ended = 1;
   }
