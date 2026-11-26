@@ -512,6 +512,10 @@ static void draw_spectrum_segments(void) {
   }
 }
 
+static void update_spectrum_alt(const player_view_t *v);
+
+static int spec_style_prev = -1;
+
 static void update_spectrum(const player_view_t *v) {
   if (!v->spectrum) {
     if (!spec_off) {
@@ -531,6 +535,18 @@ static void update_spectrum(const player_view_t *v) {
     gfx_fill(SP_X - 4, SP_BASE - SP_H - 2, SP_W + 8, SP_H + 4, c_panel);
     draw_spectrum_grid();
   }
+
+  if (v->spectrum_style != spec_style_prev) {
+    /* Start the new look from a clean panel: the incremental path and the full redraw
+     * styles would otherwise leave pieces of each other behind. */
+    spec_style_prev = v->spectrum_style;
+    gfx_fill(SP_X, SP_BASE - SP_H - 2, SP_W, SP_H + 26, c_panel);
+    draw_spectrum_grid();
+    for (int i = 0; i < SP_BARS; i++) {
+      disp_bands[i] = 0; peak_bands[i] = 0; cap_lo[i] = cap_hi[i] = 0; peak_hold[i] = 0;
+    }
+  }
+  if (v->spectrum_style) { update_spectrum_alt(v); return; }
 
   int gy[3] = { SP_BASE - 40, SP_BASE - 80, SP_BASE - 120 };
   for (int i = 0; i < SP_BARS; i++) {
@@ -626,6 +642,69 @@ static void update_spectrum(const player_view_t *v) {
     if (rh <= 0) continue;
     gfx_fill(SP_X + i * SP_STEP, SP_BASE + 2, SP_BW, rh, c_vud);
     if (rh > 4) gfx_fill(SP_X + i * SP_STEP, SP_BASE + 2 + rh - 2, SP_BW, 2, c_grid);
+  }
+}
+
+/* The other two looks redraw the whole panel: the clear is one rect fill and the bars are
+ * a handful of fills each, which stays cheap at the panel refresh rate. */
+static void update_spectrum_alt(const player_view_t *v) {
+  gfx_fill(SP_X, SP_BASE - SP_H - 2, SP_W, SP_H + 26, c_panel);
+  draw_spectrum_grid();
+  int style = v->spectrum_style;
+  int center = SP_BASE - SP_H / 2;
+  for (int i = 0; i < SP_BARS; i++) {
+    int si = (i * (FMT_BANDS - 1)) / (SP_BARS - 1);
+    int t = v->bands[si];
+    int num = (i * (FMT_BANDS - 1)) % (SP_BARS - 1);
+    if (num && si + 1 < FMT_BANDS) t += (v->bands[si + 1] - t) * num / (SP_BARS - 1);
+    t = t * (70 + (i * 30) / (SP_BARS - 1)) / 100;
+    t = t * 3 / 4;
+    t = (t - SP_LO) * 255 / (SP_HI - SP_LO);
+    if (t < 0) t = 0; else if (t > 255) t = 255;
+
+    int nv = disp_bands[i];
+    if (t > nv) nv = t;
+    else { nv -= 14; if (nv < t) nv = t; }
+    disp_bands[i] = nv;
+    int peak = peak_bands[i];
+    if (nv > peak) { peak = nv; peak_hold[i] = 6; }
+    else if (peak_hold[i] > 0) peak_hold[i]--;
+    else { peak -= 4; if (peak < nv) peak = nv; }
+    if (peak < 0) peak = 0;
+    peak_bands[i] = peak;
+
+    int bx = SP_X + i * SP_STEP;
+    int mh = nv * SP_H / 255;
+    int ph = peak * SP_H / 255;
+    int t1 = SP_H / 3, t2 = SP_H * 2 / 3;
+    if (style == 1) {
+      if (mh) {
+        int a = mh < t1 ? mh : t1;
+        gfx_fill(bx, SP_BASE - a, SP_BW, a, c_vu);
+        if (mh > t1) {
+          int b = mh < t2 ? mh : t2;
+          gfx_fill(bx, SP_BASE - b, SP_BW, b - t1, c_yellow);
+        }
+        if (mh > t2) gfx_fill(bx, SP_BASE - mh, SP_BW, mh - t2, c_red);
+        gfx_fill(bx, SP_BASE - mh, SP_BW, 1, c_vu);
+      }
+      int rh = mh / 3; if (rh > 18) rh = 18;
+      if (rh > 0) gfx_fill(bx, SP_BASE + 2, SP_BW, rh, c_vud);
+      if (ph > 3) gfx_fill(bx, SP_BASE - ph - 1, SP_BW, 1, c_spec);
+    } else {
+      /* mirrored around the middle of the panel */
+      int hh = mh / 2;
+      if (hh) {
+        uint8_t cu = hh > t1 / 2 ? c_yellow : c_vu;
+        gfx_fill(bx, center - hh, SP_BW, hh, cu);
+        gfx_fill(bx, center, SP_BW, hh, c_vud);
+      }
+      if (peak > 3) {
+        int q = ph / 2;
+        gfx_fill(bx, center - q - 1, SP_BW, 1, c_spec);
+        gfx_fill(bx, center + q, SP_BW, 1, c_spec);
+      }
+    }
   }
 }
 

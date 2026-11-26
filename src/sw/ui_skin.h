@@ -45,6 +45,7 @@ typedef struct {
   int32_t peak_l, peak_r;       // the peak since the previous audio() call
   uint8_t bands[FMT_BANDS];     // 0..255, low .. high frequency (the analyzer)
   int spectrum;                 // 0: too many channels, the analyzer is off (the skin says so)
+  int spectrum_style;           // 0 LED bars, 1 solid, 2 mirrored
   uint8_t vu[FMT_CHANNELS];     // 0..255 per channel
   int volume;                   // 0..64
 

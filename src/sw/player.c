@@ -35,7 +35,11 @@ static int np_on;
 static char np_fmt[8], np_title[48];
 static char fmt_list[224];
 static uint32_t np_start, np_cur, np_total, np_us;
-static int np_pos_sec;          // the position is (seconds, length in seconds)
+static int np_pos_sec;
+#ifndef SPEC_STYLE
+#define SPEC_STYLE 0
+#endif
+static int spec_style = SPEC_STYLE;          // the position is (seconds, length in seconds)
 static uint32_t nav_t;
 static int view_ch;
 static int spectrum_on = 1;
@@ -79,6 +83,7 @@ static void view_fill(int audio) {
   V.title = np_title;
   fmt_grouped_list(fmt_list, sizeof(fmt_list));
   V.formats = fmt_list;
+  V.spectrum_style = spec_style;
   V.warning = fmt_warning();
   V.skin = skin_name();
   V.elapsed = np_on ? (uint32_t) ((R_US - np_start) / 1000000u) : 0;
@@ -324,6 +329,13 @@ static void key(key_ev_t *e) {
     case K_PGDN: br.sel += ROWS; if (br.sel >= br.nent) br.sel = br.nent ? br.nent - 1 : 0; nav = 1; break;
     case K_HOME: br.sel = 0; nav = 1; break;
     case K_END: br.sel = br.nent ? br.nent - 1 : 0; nav = 1; break;
+    case K_A: {
+      spec_style = (spec_style + 1) % 3;
+      static const char *nm[3] = { "analyzer: LED", "analyzer: solid", "analyzer: mirror" };
+      status(nm[spec_style]);
+      draw_view();
+      return;
+    }
     case K_TAB: skin_next(); status(skin_name()); draw_view(); return;
     case K_SPACE: {
       int p = fmt_pause(-1);
