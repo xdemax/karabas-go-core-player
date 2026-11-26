@@ -39,7 +39,7 @@ static int np_pos_sec;
 #ifndef SPEC_STYLE
 #define SPEC_STYLE 0
 #endif
-static int spec_style = SPEC_STYLE;          // the position is (seconds, length in seconds)
+static int spec_style = SPEC_STYLE;
 static uint32_t nav_t;
 static int view_ch;
 static int spectrum_on = 1;

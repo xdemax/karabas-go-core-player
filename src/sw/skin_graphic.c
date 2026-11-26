@@ -666,8 +666,9 @@ static void spec_zone_fill(int bx, int y_lo, int y_hi) {
   if (b > a) gfx_fill(bx, SP_BASE - b, SP_BW, b - a, c_red);
 }
 
-/* The other looks are drawn incrementally like the LED one: repainting the whole panel
- * every frame showed as a flash, because the skin draws into the buffer on screen. */
+/* The other looks use the same incremental scheme as the LED one, with the cap attached
+ * to the bar (as in the LED bars) instead of a separate floating marker, so the erase of
+ * the bar always covers the cap it drew. */
 static void update_spectrum_alt(const player_view_t *v) {
   int style = v->spectrum_style;
   int center = SP_BASE - SP_H / 2;
@@ -697,24 +698,32 @@ static void update_spectrum_alt(const player_view_t *v) {
     int bx = SP_X + i * SP_STEP;
     int oh = old * SP_H / 255;
     int nh = nv * SP_H / 255;
-    int ph = peak * SP_H / 255;
 
     if (style == 1) {
+      if (cap_hi[i] > cap_lo[i])
+        spec_erase_col(bx, SP_BASE - cap_hi[i], SP_BASE - cap_lo[i]);
       if (nh > oh) spec_zone_fill(bx, oh, nh);
       else if (nh < oh) spec_erase_col(bx, SP_BASE - oh, SP_BASE - nh);
+
       uint8_t tc = nh <= t1 ? c_vu : (nh <= t2 ? c_yellow : c_red);
       if (nh > 0) gfx_fill(bx, SP_BASE - nh, SP_BW, 1, tc);
+
       gfx_fill(bx, SP_BASE + 2, SP_BW, 18, c_panel);
       int rh = nh / 3; if (rh > 18) rh = 18;
       if (rh > 0) gfx_fill(bx, SP_BASE + 2, SP_BW, rh, c_vud);
-      if (cap_hi[i] > cap_lo[i])
-        spec_erase_col(bx, SP_BASE - cap_hi[i], SP_BASE - cap_lo[i]);
-      if (peak > 3) {
-        gfx_fill(bx, SP_BASE - ph - 1, SP_BW, 1, c_spec);
-        cap_lo[i] = ph + 1; cap_hi[i] = ph + 2;
-      } else { cap_lo[i] = cap_hi[i] = 0; }
+
+      if (nh > 2) {
+        int hi = nh + 2 < SP_H ? nh + 2 : SP_H;
+        gfx_fill(bx, SP_BASE - hi, SP_BW, hi - nh, c_spec);
+        cap_lo[i] = nh; cap_hi[i] = hi;
+      } else cap_lo[i] = cap_hi[i] = 0;
     } else {
-      int ohh = oh / 2, nhh = nh / 2, pq = ph / 2;
+      int ohh = oh / 2, nhh = nh / 2;
+      if (cap_lo[i] > 0) {
+        spec_erase_col(bx, center - cap_lo[i], center - cap_lo[i] + 1);
+        spec_erase_col(bx, center + cap_lo[i] - 1, center + cap_lo[i]);
+        cap_lo[i] = 0;
+      }
       if (nhh > ohh) {
         uint8_t cu = nhh > t1 / 2 ? c_yellow : c_vu;
         gfx_fill(bx, center - nhh, SP_BW, nhh - ohh, cu);
@@ -723,16 +732,11 @@ static void update_spectrum_alt(const player_view_t *v) {
         spec_erase_col(bx, center - ohh, center - nhh);
         spec_erase_col(bx, center + nhh, center + ohh);
       }
-      if (cap_lo[i] > 0) {
-        spec_erase_col(bx, center - cap_lo[i], center - cap_lo[i] + 1);
-        spec_erase_col(bx, center + cap_lo[i], center + cap_lo[i] + 1);
-        cap_lo[i] = 0;
-      }
-      if (peak > 3) {
-        gfx_fill(bx, center - pq - 1, SP_BW, 1, c_spec);
-        gfx_fill(bx, center + pq, SP_BW, 1, c_spec);
-        cap_lo[i] = pq + 1;
-      }
+      if (nhh > 1) {
+        gfx_fill(bx, center - nhh - 1, SP_BW, 1, c_spec);
+        gfx_fill(bx, center + nhh, SP_BW, 1, c_spec);
+        cap_lo[i] = nhh + 1;
+      } else cap_lo[i] = 0;
     }
   }
 }
