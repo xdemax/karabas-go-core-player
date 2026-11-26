@@ -142,8 +142,11 @@ const char *fmt_title(void) {
 }
 
 int fmt_position(uint32_t *cur, uint32_t *total) {
-  for (unsigned i = 0; i < NENG; i++)
-    if (engines[i]->position && engines[i]->position(cur, total)) return 1;
+  for (unsigned i = 0; i < NENG; i++) {
+    if (!engines[i]->position) continue;
+    int r = engines[i]->position(cur, total);
+    if (r) return r;                   /* 2: total is a known length in seconds */
+  }
   return 0;
 }
 

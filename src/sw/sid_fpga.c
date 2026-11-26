@@ -63,6 +63,13 @@ typedef struct {
   char title[32];
   char warn[48];
   uint32_t vol_writes;
+  /* loop detection: the tune is a 6502 program that normally loops forever */
+  uint8_t shadow[25];
+  uint32_t tick, tick_writes, tick_hash, loop_ticks, loop_end_tick, start_us;
+  int loop_found;
+  uint32_t ring[8192];
+  uint32_t wrbits[8192 / 32];
+  uint32_t map_hash[4096], map_tick[4096];
 } sid_state_t;
 
 static sid_state_t sid;
@@ -102,8 +109,54 @@ static void sid_wr(uint32_t reg, uint32_t val) {
   sid.sid_regs_written++;
 }
 
+static void sid_tick_update(void) {
+  /* Hash exactly what the tune wrote during this tick: the register state alone repeats
+   * at musical phrases, but an identical write stream over a whole window means a loop. */
+  uint32_t h = sid.tick_hash;
+  uint32_t t = sid.tick++;
+  sid.ring[t & 8191] = h;
+  if (sid.tick_writes) sid.wrbits[(t >> 5) & 255] |= 1u << (t & 31);
+  else sid.wrbits[(t >> 5) & 255] &= ~(1u << (t & 31));
+  sid.tick_writes = 0;
+  sid.tick_hash = 2166136261u;
+
+  int slot = (int) ((h ^ (h >> 16)) & 4095);
+  uint32_t prev = sid.map_tick[slot];
+  if (sid.map_hash[slot] == h && prev < t && !sid.loop_found) {
+    uint32_t d = t - prev;
+    if (d >= 100 && d <= 8191) {
+      int ok = 1, writes = 0;
+      for (int k = 0; k < 64; k++) {
+        uint32_t a = (t - k) & 8191, b = (prev - k) & 8191;
+        if (sid.ring[a] != sid.ring[b]) { ok = 0; break; }
+        writes += (int) ((sid.wrbits[(a >> 5) & 255] >> (a & 31)) & 1);
+      }
+      if (ok && writes >= 8 && d >= 200) {
+        /* A repeated 64-tick run can be a phrase, not the loop: require the whole
+         * period to match, tick hash by tick hash. */
+        int full = 1;
+        for (uint32_t k = 0; k < d; k++)
+          if (sid.ring[(t - k) & 8191] != sid.ring[(prev - k) & 8191]) { full = 0; break; }
+        if (!full) goto no_loop;
+        sid.loop_found = 1;
+        sid.loop_ticks = d;
+        sid.loop_end_tick = t + d;      /* one more full loop, then the track is done */
+#ifdef HOST
+        fprintf(stderr, "[sid] loop detected: %u ticks\n", d);
+#endif
+      }
+    }
+  }
+no_loop:
+  sid.map_hash[slot] = h;
+  sid.map_tick[slot] = t;
+}
+
 static void sid_io_write(uint16_t addr, uint8_t val) {
   uint32_t r = addr - 0xd400;
+  if (r < 25) sid.shadow[r] = val;
+  sid.tick_writes++;
+  sid.tick_hash = (sid.tick_hash ^ ((r << 8) | (uint32_t) val)) * 16777619u;
   if (r == 0x18) sid.vol_writes++;
   if (r == 0x04 || r == 0x0b || r == 0x12) sid.gate[(r == 0x04) ? 0 : (r == 0x0b) ? 1 : 2] = val & 1;
   sid_wr(r, val);
@@ -229,6 +282,13 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.data = data;
   sid.size = size;
   sid.vol_writes = 0;
+  memset(sid.shadow, 0, sizeof(sid.shadow));
+  memset(sid.ring, 0, sizeof(sid.ring));
+  memset(sid.wrbits, 0, sizeof(sid.wrbits));
+  memset(sid.map_hash, 0, sizeof(sid.map_hash));
+  memset(sid.map_tick, 0, sizeof(sid.map_tick));
+  sid.tick = 0; sid.tick_writes = 0; sid.tick_hash = 2166136261u; sid.loop_found = 0; sid.loop_ticks = 0; sid.loop_end_tick = 0;
+  sid.start_us = R_US;
   if (is_rsid) sid_set_warn("RSID: real C64 environment, partial");
   else if (((flags >> 4) & 3) == 1) sid_set_warn("made for the 6581, playing the 8580");
   else sid_set_warn("");
@@ -386,8 +446,10 @@ void sid_fpga_service(void) {
       sid.cpu->x = 0;
       sid.cpu->y = 0;
       for (int steps = 0; steps < 50000; steps++) if (m6502_step(sid.cpu)) break;
+      sid_tick_update();
       sid.play_calls++;
       ticks--;
+      if (sid.loop_found && sid.tick >= sid.loop_end_tick) { sid.finished = 1; break; }
     }
   }
 
@@ -437,8 +499,15 @@ const char *sid_fpga_title(void) {
 }
 
 int sid_fpga_position(uint32_t *cur, uint32_t *total) {
-  (void) cur; (void) total;
-  return 0;                        /* no length: the engine cannot estimate the end */
+  /* A SID has no length: the tune loops. Once the register state has repeated we know
+   * the loop length and can show it as the total (return 2: the values are seconds). */
+  if (!sid.loop_found || !sid.loop_ticks || !sid.hz) return 0;
+  uint32_t len = (uint32_t) ((uint64_t) sid.loop_ticks * 1000000u / (uint32_t) sid.hz);
+  if (!len) return 0;
+  uint32_t el = (uint32_t) ((R_US - sid.start_us) / 1000000u);
+  if (cur) *cur = el % len;
+  if (total) *total = len;
+  return 2;
 }
 
 void sid_fpga_info(fmt_info_t *o) {

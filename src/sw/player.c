@@ -35,6 +35,7 @@ static int np_on;
 static char np_fmt[8], np_title[48];
 static char fmt_list[224];
 static uint32_t np_start, np_cur, np_total, np_us;
+static int np_pos_sec;          // the position is (seconds, length in seconds)
 static uint32_t nav_t;
 static int view_ch;
 static int spectrum_on = 1;
@@ -84,7 +85,8 @@ static void view_fill(int audio) {
   V.cur = np_cur;
   V.total_pos = np_total;
   V.has_pos = (np_total != 0);
-  V.total = (V.has_pos && np_cur) ? (uint32_t) ((uint64_t) V.elapsed * np_total / np_cur) : 0;
+  V.total = np_pos_sec ? np_total
+            : (V.has_pos && np_cur) ? (uint32_t) ((uint64_t) V.elapsed * np_total / np_cur) : 0;
 
   V.engine = fmt_engine_name();
   V.version = fmt_engine_version();
@@ -186,12 +188,12 @@ static void np_copy(const fmt_module_t *m, const char *name) {
 }
 
 static void np_begin(const fmt_module_t *m, const char *name) {
-  np_on = 1; np_start = R_US; np_cur = np_total = np_us = 0;
+  np_on = 1; np_start = R_US; np_cur = np_total = np_us = 0; np_pos_sec = 0;
   np_copy(m, name);
 }
 
 static void np_set(const fmt_module_t *m, const char *name) {
-  np_on = 1; np_start = R_US; np_cur = np_total = np_us = 0;
+  np_on = 1; np_start = R_US; np_cur = np_total = np_us = 0; np_pos_sec = 0;
   np_copy(m, name);
 }
 
@@ -421,7 +423,7 @@ void player_run(void) {
   str_cpy(np_fmt, "mod");
   str_cpy(np_title, "BrillSmurf");
   np_start = R_US - 84000000u;
-  np_cur = 40; np_total = 100;
+  np_cur = 40; np_total = 100; np_pos_sec = 0;
   draw_view();
   update_view();          // the live 200 ms refresh must keep the list
   return;
@@ -477,7 +479,8 @@ void player_run(void) {
         ((uint32_t) (R_US - nav_t) >= 150000u || (uint32_t) (R_US - np_us) >= 200000u)) {
       np_us = R_US;
       uint32_t c, t;
-      if (fmt_position(&c, &t)) { np_cur = c; np_total = t; }
+      int r = fmt_position(&c, &t);
+      if (r) { np_cur = c; np_total = t; np_pos_sec = (r == 2); }
       update_view();
     } else if (!np_on && br.nent && (uint32_t) (R_US - list_t) >= 50000u) {
       // Keep the long selected name moving while the player is idle.
