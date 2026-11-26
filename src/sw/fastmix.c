@@ -653,12 +653,17 @@ void fm_mix(int16_t *dst, int frames, fm_voice_t *voices, int nvoices)
     int n = frames < FM_CHUNK ? frames : FM_CHUNK;
     int cnt = n * 2;
     for (i = 0; i < cnt; i++) acc[i] = 0;
+    /* voice-major: render each active voice into shared frame buffer acc[] */
+    for (k = 0; k < nm; k++) {
+      fm_voice_t * const v = &voices[order[k]];
+      mix_voice(v, acc, n);
+    }
+    /* advance silenced voices (not in top nm) */
     for (i = 0; i < nvoices; i++) {
       fm_voice_t *v = &voices[i];
-      if (!(v->flags & FM_ACTIVE)) continue;
-      if (mixed[i]) mix_voice(v, acc, n);
-      else advance_voice(v, n);
+      if ((v->flags & FM_ACTIVE) && !mixed[i]) advance_voice(v, n);
     }
+    /* saturate and write */
     for (i = 0; i < cnt; i++) {
       int32_t x = acc[i] >> 8;
       if (x > 32767) x = 32767; else if (x < -32768) x = -32768;
