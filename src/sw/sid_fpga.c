@@ -475,11 +475,16 @@ int sid_fpga_set_volume(int v) {
   if (v < 0) v = 0;
   if (v > 64) v = 64;
   sid.vol = v;
+  if (sid.active && !sid.paused) sid_hw_on();   /* the gain lives in the FPGA now */
   return v;
 }
 
 int sid_fpga_pause(int on) {
   if (on < 0) sid.paused ^= 1;
   else sid.paused = on;
+  /* The FPGA feeds the output FIFO by itself, so the flag alone is not enough:
+   * disable the hardware path, otherwise the tune keeps sounding while "paused". */
+  if (sid.paused) MMIO(0xcc) = 0;
+  else if (sid.active) { sid.last_us = R_US; sid.time_acc = 0; sid_hw_on(); }
   return sid.paused;
 }
