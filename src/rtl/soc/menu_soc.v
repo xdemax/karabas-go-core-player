@@ -449,7 +449,7 @@ reg [4:0] sid_addr = 5'd0;
 reg [7:0] sid_data = 8'd0;
 reg       sid_cmd = 1'b0;
 reg       sid_active = 1'b0;
-reg [7:0] sid_gain = 8'd64;
+reg [7:0] sid_gain = 8'd192;
 wire signed [17:0] sid_raw_l, sid_raw_r;
 wire [7:0] sid_do;
 
@@ -480,10 +480,10 @@ always @(posedge clk) begin
 		sid_lp1_l <= 18'sd0; sid_lp2_l <= 18'sd0;
 		sid_lp1_r <= 18'sd0; sid_lp2_r <= 18'sd0;
 	end else if (sid_ce) begin
-		sid_lp1_l <= sid_lp1_l + ((sid_raw_l - sid_lp1_l) >>> 4);
-		sid_lp2_l <= sid_lp2_l + ((sid_lp1_l - sid_lp2_l) >>> 4);
-		sid_lp1_r <= sid_lp1_r + ((sid_raw_r - sid_lp1_r) >>> 4);
-		sid_lp2_r <= sid_lp2_r + ((sid_lp1_r - sid_lp2_r) >>> 4);
+		sid_lp1_l <= sid_lp1_l + ((sid_raw_l - sid_lp1_l) >>> 3);
+		sid_lp2_l <= sid_lp2_l + ((sid_lp1_l - sid_lp2_l) >>> 3);
+		sid_lp1_r <= sid_lp1_r + ((sid_raw_r - sid_lp1_r) >>> 3);
+		sid_lp2_r <= sid_lp2_r + ((sid_lp1_r - sid_lp2_r) >>> 3);
 	end
 end
 
@@ -582,6 +582,9 @@ always @(posedge clk) begin
 		aud_under <= 16'd0;
 		ay_tap_wr <= 10'd0;
 		sid_tap_wr <= 10'd0;
+		sid_tap_rd <= 10'd0;
+		sid_active <= 1'b0;
+		sid_gain <= 8'd192;
 	end else begin
 		if (aud_stats_clr) begin
 			aud_drop <= 16'd0;
@@ -820,7 +823,7 @@ always @(posedge clk) begin
 						sid_tap_rd <= sid_tap_rd + 10'd1;
 					end else io_dat <= 32'd0;
 				end
-				8'hdc: io_dat <= { 31'd0, (sid_tap_rd != sid_tap_wr) };
+				8'hdc: io_dat <= { 22'd0, (sid_tap_wr - sid_tap_rd) }; // how many tap samples are waiting
 				8'h8c: io_dat <= { 23'd0, snd_playing[0], 8'd0 };
 				8'h9c: io_dat <= { 23'd0, snd_playing[1], 8'd0 };
 				8'ha0: io_dat <= { 31'd0, midi_full };

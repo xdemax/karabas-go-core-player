@@ -50,6 +50,7 @@ typedef struct {
   int32_t last_l, last_r, peak_l, peak_r;
   uint32_t last_tap;
   uint8_t vu[FMT_CHANNELS];
+  uint8_t gate[3];
   uint32_t sample_acc;
   uint32_t samples_per_tick;
   uint32_t sid_regs_written;
@@ -81,13 +82,28 @@ static void sid_wr(uint32_t reg, uint32_t val) {
 }
 
 static void sid_io_write(uint16_t addr, uint8_t val) {
-  sid_wr(addr - 0xd400, val);
+  uint32_t r = addr - 0xd400;
+  if (r == 0x04 || r == 0x0b || r == 0x12) sid.gate[(r == 0x04) ? 0 : (r == 0x0b) ? 1 : 2] = val & 1;
+  sid_wr(r, val);
+}
+
+static uint8_t sid_io_read(uint16_t addr) {
+  uint32_t r = addr - 0xd400;
+  if (r == 0x1b) {                 /* OSC3: a random byte, as the noise source */
+    static uint32_t lfsr = 0x1d872b41u;
+    uint32_t bit = ((lfsr >> 22) ^ (lfsr >> 17) ^ lfsr) & 1u;
+    lfsr = (lfsr << 1) | bit;
+    return (uint8_t) (lfsr >> 8);
+  }
+  if (r == 0x1c)                   /* ENV3: crude gate-derived envelope */
+    return sid.gate[2] ? 0xff : 0x00;
+  return 0;
 }
 
 int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progress) {
   (void)progress;
   
-  if (size < 0x7c) {
+  if (size < 0x76) {
     sid_error("file too short");
     return -1;
   }
@@ -124,13 +140,14 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   uint32_t speed      = rd32be(data + 0x12);
   uint16_t flags      = (version >= 2 && size >= 0x78) ? rd16be(data + 0x76) : 0;
 
+  if (start_song < 1) start_song = 1;
   if (version < 1 || version > 4) {
     sid_error("unsupported PSID version");
     return -1;
   }
 
-  uint32_t offset = data_off ? data_off : 0x7c;
-  if (offset < 0x7c) offset = 0x7c;
+  uint32_t offset = data_off ? data_off : (version == 1 ? 0x76 : 0x7c);
+  if (offset < 0x76) offset = 0x76;
   if (offset >= size) {
     sid_error("data offset out of range");
     return -1;
@@ -138,7 +155,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 
   if (!sid.cpu) {
     sid.cpu = m6502_new();
-    if (sid.cpu) sid.cpu->io_write = sid_io_write;
+    if (sid.cpu) { sid.cpu->io_write = sid_io_write; sid.cpu->io_read = sid_io_read; }
     if (!sid.cpu) {
       sid_error("malloc failed");
       return -1;
@@ -150,11 +167,21 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 
   int has_load = (load_field == 0);
   uint16_t load_addr = load_field;
-  if (has_load) load_addr = (data[offset + 1] << 8) | data[offset];
+  if (has_load) {
+    if (offset + 2 > size) {
+      sid_error("truncated load address");
+      return -1;
+    }
+    load_addr = (data[offset + 1] << 8) | data[offset];
+  }
 
   const uint8_t *img = data + offset + (has_load ? 2 : 0);
+  if ((uint32_t) (img - data) > size) {
+    sid_error("truncated image");
+    return -1;
+  }
   uint32_t img_len = size - (uint32_t)(img - data);
-  if ((uint32_t) load_addr + img_len > 65536) img_len = 65536 - load_addr;
+  if ((uint64_t) load_addr + img_len > 65536u) img_len = 65536u - load_addr;
 
   memcpy(sid.cpu->mem + load_addr, img, img_len);
   memcpy(sid.title, data + 0x16, 31);
@@ -182,11 +209,16 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.last_l = sid.last_r = 0;
   sid.peak_l = sid.peak_r = 0;
   memset(sid.vu, 0, sizeof(sid.vu));
-  sid.samples_per_tick = 48000 / 50;
+  /* PSID flags bits 2-3: 1 PAL, 2 NTSC. A CIA-timed song is approximated at 60 Hz:
+   * the firmware has no CIA timer, but 50 Hz made those songs 20% slow. */
+  int hz = (((flags >> 2) & 3) == 2) ? 60 : 50;
+  if (start_song >= 1 && start_song <= 32 && (speed & (1u << (start_song - 1)))) hz = 60;
+  sid.samples_per_tick = (uint32_t) ((48000 + hz / 2) / hz);
   sid.sample_acc = 0;
   sid.sid_regs_written = 0;
   sid.play_calls = 0;
   sid.last_tap = 0;
+  memset(sid.gate, 0, sizeof(sid.gate));
   sid.active = 1;
   sid.finished = 0;
   sid.paused = 0;
@@ -201,34 +233,51 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
     sid.cpu->s = 0xfb;
     sid.cpu->pc = init_addr;
     int steps = 0;
-    for (; steps < 4000000 && sid.cpu->pc != 0xfffe; steps++) m6502_step(sid.cpu);
+    for (; steps < 2000000; steps++) if (m6502_step(sid.cpu)) break;
 #ifdef HOST
     fprintf(stderr, "[sid] init steps=%d pc=%04x writes=%u\n", steps, sid.cpu->pc, (unsigned) sid.sid_regs_written);
 #endif
   }
 
-  MMIO(0xcc) = 1 | (64 << 8);
+  MMIO(0xcc) = 1 | (192 << 8);
 
   return 0;
 }
 
 void sid_fpga_service(void) {
   if (!sid.active || sid.paused || sid_service_active) return;
-
-  /* Pace by the output FIFO like every other engine: without this the main loop calls
-   * the engine as fast as it can and the tune races (the register writes flood the
-   * bus, the UI crawls and the tap holds one note). */
-  int free = audio_free();
-  if (free <= 0) return;
-  int n = free > SID_OUT_CHUNK ? SID_OUT_CHUNK : free;
-
   sid_service_active = 1;
+
+  /* The tap ring holds ~21 ms. After a stall (SD read, redraw, pause) the whole
+   * backlog is stale, so drop it down to a couple of samples. */
+  uint32_t cnt = MMIO(0xdc) & 0x3ff;
+  while (cnt > 64) { (void) MMIO(0xd8); cnt--; }
+
+  int free = audio_free();
+  int maxn = free > SID_OUT_CHUNK ? SID_OUT_CHUNK : free;
+  if (maxn < 0) maxn = 0;
+  int n = 0;
+  while (n < maxn && (MMIO(0xdc) & 0x3ff)) {
+    uint32_t sample = MMIO(0xd8);
+    sid.last_tap = sample;
+    int16_t l = (int16_t)(sample >> 16);
+    int16_t r = (int16_t)(sample & 0xffff);
+    int32_t al = l < 0 ? -l : l, ar = r < 0 ? -r : r;
+    if (al > sid.peak_l) sid.peak_l = al;
+    if (ar > sid.peak_r) sid.peak_r = ar;
+    sid_out[n * 2] = (int16_t)((int32_t) l * sid.vol / 64);
+    sid_out[n * 2 + 1] = (int16_t)((int32_t) r * sid.vol / 64);
+    sid.last_l = sid_out[n * 2];
+    sid.last_r = sid_out[n * 2 + 1];
+    n++;
+  }
+  if (n == 0) { sid_service_active = 0; return; }
 
   if (sid.play_addr) {
     sid.sample_acc += (uint32_t) n;
     uint32_t ticks = sid.sample_acc / sid.samples_per_tick;
     sid.sample_acc -= ticks * sid.samples_per_tick;
-    if (ticks > 16) ticks = 16;        /* a long stall must not turn into a burst */
+    if (ticks > 16) ticks = 16;
     while (ticks > 0) {
       sid.cpu->mem[0x01fd] = 0xff;
       sid.cpu->mem[0x01fc] = 0xfd;
@@ -236,48 +285,17 @@ void sid_fpga_service(void) {
       sid.cpu->pc = sid.play_addr;
       sid.cpu->x = 0;
       sid.cpu->y = 0;
-      int steps = 0;
-      for (; steps < 200000 && sid.cpu->pc != 0xfffe; steps++) m6502_step(sid.cpu);
-#ifdef HOST
-      if (sid.play_calls < 4) fprintf(stderr, "[sid] play pc=%04x steps=%d end=%04x writes=%u\n",
-                                      sid.play_addr, steps, sid.cpu->pc, (unsigned) sid.sid_regs_written);
-#endif
+      for (int steps = 0; steps < 50000; steps++) if (m6502_step(sid.cpu)) break;
       sid.play_calls++;
       ticks--;
     }
   }
 
-  /* One tap sample per output sample: the tap ring is filled at the 48 kHz tick, so
-   * draining it in a burst repeated the last sample and destroyed the timing. */
-  for (int i = 0; i < n; i++) {
-    uint32_t sample = sid.last_tap;
-    if (MMIO(0xdc)) {
-      sample = MMIO(0xd8);
-      sid.last_tap = sample;
-    }
-    int16_t l = (int16_t)(sample >> 16);
-    int16_t r = (int16_t)(sample & 0xffff);
+  for (int i = 0; i < n; i++) mixer_write(sid_out[i * 2], sid_out[i * 2 + 1]);
 
-    if (l < 0) l = -l;
-    if (r < 0) r = -r;
-    if (l > sid.peak_l) sid.peak_l = l;
-    if (r > sid.peak_r) sid.peak_r = r;
-
-    l = (int16_t)(sample >> 16);
-    r = (int16_t)(sample & 0xffff);
-    l = (int32_t)l * sid.vol / 64;
-    r = (int32_t)r * sid.vol / 64;
-
-    sid_out[i * 2] = l;
-    sid_out[i * 2 + 1] = r;
-
-    sid.last_l = l;
-    sid.last_r = r;
-  }
-
-  for (int i = 0; i < n; i++) {
-    mixer_write(sid_out[i * 2], sid_out[i * 2 + 1]);
-  }
+  memset(sid.vu, 0, sizeof sid.vu);
+  for (int vch = 0; vch < 3; vch++)
+    if (sid.gate[vch]) sid.vu[vch] = (uint8_t) (sid.vol * 4 > 255 ? 255 : sid.vol * 4);
 
   sid_service_active = 0;
 }
@@ -305,9 +323,8 @@ const char *sid_fpga_title(void) {
 }
 
 int sid_fpga_position(uint32_t *cur, uint32_t *total) {
-  if (cur) *cur = sid.play_calls;
-  if (total) *total = sid.songs;
-  return 0;
+  (void) cur; (void) total;
+  return 0;                        /* no length: the engine cannot estimate the end */
 }
 
 void sid_fpga_info(fmt_info_t *o) {
@@ -329,8 +346,9 @@ void sid_fpga_audio(fmt_audio_t *o) {
   o->level_r = sid.last_r;
   o->peak_l = sid.peak_l;
   o->peak_r = sid.peak_r;
-  memset(o->bands, 0, sizeof(o->bands));
+  sid.peak_l = sid.peak_r = 0;
   memcpy(o->vu, sid.vu, sizeof(o->vu));
+  analysis_bands(o->bands, FMT_BANDS);
   o->volume = sid.vol;
   o->paused = sid.paused;
 }

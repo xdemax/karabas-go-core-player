@@ -28,6 +28,7 @@ void m6502_reset(m6502_t *cpu) {
 }
 
 static inline uint8_t rd(m6502_t *cpu, uint16_t addr) {
+  if (addr >= 0xd400 && addr <= 0xd41f && cpu->io_read) return cpu->io_read(addr);
   return cpu->mem[addr];
 }
 
@@ -41,6 +42,10 @@ static inline void wr(m6502_t *cpu, uint16_t addr, uint8_t val) {
 
 static inline uint16_t rd16(m6502_t *cpu, uint16_t addr) {
   return rd(cpu, addr) | (rd(cpu, addr + 1) << 8);
+}
+
+static inline uint16_t rd16zp(m6502_t *cpu, uint8_t zp) {
+  return rd(cpu, zp) | (rd(cpu, (uint8_t) (zp + 1)) << 8);
 }
 
 static inline void push(m6502_t *cpu, uint8_t val) {
@@ -62,11 +67,197 @@ static inline void set_nz(m6502_t *cpu, uint8_t val) {
 #define NEXT_B(val) do { (val) = rd(cpu, cpu->pc); NEXT(); } while(0)
 #define NEXT_W_VAL(val) do { (val) = rd16(cpu, cpu->pc); NEXT_W(); } while(0)
 
+
+/* ADC/SBC with the decimal mode of the NMOS 6502 (some players keep counters in BCD). */
+static void adc_op(m6502_t *cpu, uint8_t val) {
+  unsigned a = cpu->a, c = (cpu->p & FLAG_C) ? 1u : 0u;
+  unsigned bin = a + val + c;
+  if (cpu->p & FLAG_D) {
+    unsigned lo = (a & 0xf) + (val & 0xf) + c;
+    unsigned hi = (a >> 4) + (val >> 4);
+    if (lo > 9) { lo += 6; hi++; }
+    unsigned v = (hi << 4) | (lo & 0xf);
+    if (hi > 9) v += 0x60;
+    cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+             (bin > 0xff ? FLAG_C : 0) |
+             ((~(a ^ val) & (a ^ bin) & 0x80) ? FLAG_V : 0);
+    cpu->a = (uint8_t) v;
+    set_nz(cpu, cpu->a);
+    return;
+  }
+  cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+           (bin > 0xff ? FLAG_C : 0) |
+           ((~(a ^ val) & (a ^ bin) & 0x80) ? FLAG_V : 0);
+  cpu->a = (uint8_t) bin;
+  set_nz(cpu, cpu->a);
+}
+
+static void sbc_op(m6502_t *cpu, uint8_t val) {
+  unsigned a = cpu->a, c = (cpu->p & FLAG_C) ? 1u : 0u;
+  int res = (int) a - (int) val - (int) (1 - c);
+  if (cpu->p & FLAG_D) {
+    int lo = (int) (a & 0xf) - (int) (val & 0xf) - (int) (1 - c);
+    int hi = (int) (a >> 4) - (int) (val >> 4);
+    if (lo < 0) { lo -= 6; hi--; }
+    if (hi < 0) hi -= 6;
+    cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+             (res >= 0 ? FLAG_C : 0) |
+             (((a ^ val) & (a ^ (unsigned) res) & 0x80) ? FLAG_V : 0);
+    cpu->a = (uint8_t) (((hi << 4) | (lo & 0xf)) & 0xff);
+    set_nz(cpu, cpu->a);
+    return;
+  }
+  cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+           (res >= 0 ? FLAG_C : 0) |
+           (((a ^ val) & (a ^ (unsigned) res) & 0x80) ? FLAG_V : 0);
+  cpu->a = (uint8_t) res;
+  set_nz(cpu, cpu->a);
+}
+
+
+/* The NMOS 6502 illegal operations the SID players use. Multi-byte ones must consume their
+ * operand, otherwise the CPU desynchronises and the tune runs into the weeds. Values:
+ * kind << 4 | mode. */
+enum { IM_IMM = 0, IM_ZP, IM_ZPX, IM_ZPY, IM_ABS, IM_ABSX, IM_ABSY, IM_IZX, IM_IZY };
+enum { IK_NOP = 1, IK_SLO, IK_RLA, IK_SRE, IK_RRA, IK_SAX, IK_LAX, IK_DCP, IK_ISC,
+       IK_ANC, IK_ALR, IK_ARR, IK_SBX, IK_LAS };
+
+static const uint8_t ill_tbl[256] = {
+  [0x03] = (IK_SLO << 4) | IM_IZX, [0x07] = (IK_SLO << 4) | IM_ZP,  [0x0f] = (IK_SLO << 4) | IM_ABS,
+  [0x13] = (IK_SLO << 4) | IM_IZY, [0x17] = (IK_SLO << 4) | IM_ZPX, [0x1b] = (IK_SLO << 4) | IM_ABSY,
+  [0x1f] = (IK_SLO << 4) | IM_ABSX,
+  [0x23] = (IK_RLA << 4) | IM_IZX, [0x27] = (IK_RLA << 4) | IM_ZP,  [0x2f] = (IK_RLA << 4) | IM_ABS,
+  [0x33] = (IK_RLA << 4) | IM_IZY, [0x37] = (IK_RLA << 4) | IM_ZPX, [0x3b] = (IK_RLA << 4) | IM_ABSY,
+  [0x3f] = (IK_RLA << 4) | IM_ABSX,
+  [0x43] = (IK_SRE << 4) | IM_IZX, [0x47] = (IK_SRE << 4) | IM_ZP,  [0x4f] = (IK_SRE << 4) | IM_ABS,
+  [0x53] = (IK_SRE << 4) | IM_IZY, [0x57] = (IK_SRE << 4) | IM_ZPX, [0x5b] = (IK_SRE << 4) | IM_ABSY,
+  [0x5f] = (IK_SRE << 4) | IM_ABSX,
+  [0x63] = (IK_RRA << 4) | IM_IZX, [0x67] = (IK_RRA << 4) | IM_ZP,  [0x6f] = (IK_RRA << 4) | IM_ABS,
+  [0x73] = (IK_RRA << 4) | IM_IZY, [0x77] = (IK_RRA << 4) | IM_ZPX, [0x7b] = (IK_RRA << 4) | IM_ABSY,
+  [0x7f] = (IK_RRA << 4) | IM_ABSX,
+  [0x83] = (IK_SAX << 4) | IM_IZX, [0x87] = (IK_SAX << 4) | IM_ZP,  [0x8f] = (IK_SAX << 4) | IM_ABS,
+  [0x97] = (IK_SAX << 4) | IM_ZPY,
+  [0xa3] = (IK_LAX << 4) | IM_IZX, [0xa7] = (IK_LAX << 4) | IM_ZP,  [0xaf] = (IK_LAX << 4) | IM_ABS,
+  [0xb3] = (IK_LAX << 4) | IM_IZY, [0xb7] = (IK_LAX << 4) | IM_ZPY, [0xbf] = (IK_LAX << 4) | IM_ABSY,
+  [0xab] = (IK_LAX << 4) | IM_IMM,
+  [0xc3] = (IK_DCP << 4) | IM_IZX, [0xc7] = (IK_DCP << 4) | IM_ZP,  [0xcf] = (IK_DCP << 4) | IM_ABS,
+  [0xd3] = (IK_DCP << 4) | IM_IZY, [0xd7] = (IK_DCP << 4) | IM_ZPX, [0xdb] = (IK_DCP << 4) | IM_ABSY,
+  [0xdf] = (IK_DCP << 4) | IM_ABSX,
+  [0xe3] = (IK_ISC << 4) | IM_IZX, [0xe7] = (IK_ISC << 4) | IM_ZP,  [0xef] = (IK_ISC << 4) | IM_ABS,
+  [0xf3] = (IK_ISC << 4) | IM_IZY, [0xf7] = (IK_ISC << 4) | IM_ZPX, [0xfb] = (IK_ISC << 4) | IM_ABSY,
+  [0xff] = (IK_ISC << 4) | IM_ABSX,
+  [0x0b] = (IK_ANC << 4) | IM_IMM, [0x2b] = (IK_ANC << 4) | IM_IMM,
+  [0x4b] = (IK_ALR << 4) | IM_IMM, [0x6b] = (IK_ARR << 4) | IM_IMM,
+  [0xcb] = (IK_SBX << 4) | IM_IMM, [0xbb] = (IK_LAS << 4) | IM_ABSY,
+  /* multi-byte NOPs */
+  [0x80] = (IK_NOP << 4) | IM_IMM, [0x82] = (IK_NOP << 4) | IM_IMM, [0x89] = (IK_NOP << 4) | IM_IMM,
+  [0xc2] = (IK_NOP << 4) | IM_IMM, [0xe2] = (IK_NOP << 4) | IM_IMM,
+  [0x04] = (IK_NOP << 4) | IM_ZP,  [0x44] = (IK_NOP << 4) | IM_ZP,  [0x64] = (IK_NOP << 4) | IM_ZP,
+  [0x14] = (IK_NOP << 4) | IM_ZPX, [0x34] = (IK_NOP << 4) | IM_ZPX, [0x54] = (IK_NOP << 4) | IM_ZPX,
+  [0x74] = (IK_NOP << 4) | IM_ZPX, [0xd4] = (IK_NOP << 4) | IM_ZPX, [0xf4] = (IK_NOP << 4) | IM_ZPX,
+  [0x0c] = (IK_NOP << 4) | IM_ABS,
+  [0x1c] = (IK_NOP << 4) | IM_ABSX, [0x3c] = (IK_NOP << 4) | IM_ABSX, [0x5c] = (IK_NOP << 4) | IM_ABSX,
+  [0x7c] = (IK_NOP << 4) | IM_ABSX, [0xdc] = (IK_NOP << 4) | IM_ABSX, [0xfc] = (IK_NOP << 4) | IM_ABSX,
+  [0x93] = (IK_NOP << 4) | IM_IZY,  [0x9f] = (IK_NOP << 4) | IM_ABSY,
+  [0x9e] = (IK_NOP << 4) | IM_ABSY, [0x9c] = (IK_NOP << 4) | IM_ABSX,
+  [0x9b] = (IK_NOP << 4) | IM_ABSY, [0x8b] = (IK_NOP << 4) | IM_IMM,
+  [0x1a] = (IK_NOP << 4) | IM_IMM, [0x3a] = (IK_NOP << 4) | IM_IMM, [0x5a] = (IK_NOP << 4) | IM_IMM,
+  [0x7a] = (IK_NOP << 4) | IM_IMM, [0xda] = (IK_NOP << 4) | IM_IMM, [0xfa] = (IK_NOP << 4) | IM_IMM,
+};
+
+static void do_illegal(m6502_t *cpu, uint8_t op) {
+  uint8_t kind = ill_tbl[op] >> 4, mode = ill_tbl[op] & 0xf;
+  uint16_t addr = 0;
+  uint8_t val = 0;
+
+  if (mode == IM_IMM) NEXT_B(val);
+  else if (mode == IM_ZP) { uint8_t zp; NEXT_B(zp); addr = zp; }
+  else if (mode == IM_ZPX) { uint8_t zp; NEXT_B(zp); addr = (uint8_t) (zp + cpu->x); }
+  else if (mode == IM_ZPY) { uint8_t zp; NEXT_B(zp); addr = (uint8_t) (zp + cpu->y); }
+  else if (mode == IM_ABS) NEXT_W_VAL(addr);
+  else if (mode == IM_ABSX) { NEXT_W_VAL(addr); addr += cpu->x; }
+  else if (mode == IM_ABSY) { NEXT_W_VAL(addr); addr += cpu->y; }
+  else if (mode == IM_IZX) { uint8_t zp; NEXT_B(zp); addr = rd16zp(cpu, (uint8_t) (zp + cpu->x)); }
+  else { uint8_t zp; NEXT_B(zp); addr = rd16zp(cpu, zp) + cpu->y; }
+
+  if (kind == IK_NOP) return;
+
+  if (kind == IK_LAX) {
+    cpu->a = cpu->x = rd(cpu, addr);
+    set_nz(cpu, cpu->a);
+  } else if (kind == IK_SAX) {
+    wr(cpu, addr, cpu->a & cpu->x);
+  } else if (kind == IK_LAS) {
+    cpu->a = cpu->x = (uint8_t) (rd(cpu, addr) & cpu->s);
+    set_nz(cpu, cpu->a);
+  } else if (kind == IK_SLO) {
+    val = rd(cpu, addr);
+    cpu->p = (cpu->p & ~FLAG_C) | ((val >> 7) & 1);
+    val <<= 1;
+    wr(cpu, addr, val);
+    cpu->a |= val;
+    set_nz(cpu, cpu->a);
+  } else if (kind == IK_RLA) {
+    val = rd(cpu, addr);
+    uint8_t c = (cpu->p & FLAG_C) ? 1 : 0;
+    cpu->p = (cpu->p & ~FLAG_C) | ((val >> 7) & 1);
+    val = (uint8_t) ((val << 1) | c);
+    wr(cpu, addr, val);
+    cpu->a &= val;
+    set_nz(cpu, cpu->a);
+  } else if (kind == IK_SRE) {
+    val = rd(cpu, addr);
+    cpu->p = (cpu->p & ~FLAG_C) | (val & 1);
+    val >>= 1;
+    wr(cpu, addr, val);
+    cpu->a ^= val;
+    set_nz(cpu, cpu->a);
+  } else if (kind == IK_RRA) {
+    val = rd(cpu, addr);
+    uint8_t c = (cpu->p & FLAG_C) ? 1 : 0;
+    cpu->p = (cpu->p & ~FLAG_C) | (val & 1);
+    val = (uint8_t) ((val >> 1) | (c << 7));
+    wr(cpu, addr, val);
+    adc_op(cpu, val);
+  } else if (kind == IK_DCP) {
+    val = (uint8_t) (rd(cpu, addr) - 1);
+    wr(cpu, addr, val);
+    cpu->p = (cpu->p & ~FLAG_C) | (cpu->a >= val ? FLAG_C : 0);
+    set_nz(cpu, (uint8_t) (cpu->a - val));
+  } else if (kind == IK_ISC) {
+    val = (uint8_t) (rd(cpu, addr) + 1);
+    wr(cpu, addr, val);
+    sbc_op(cpu, val);
+  } else if (kind == IK_ANC) {
+    cpu->a &= val;
+    set_nz(cpu, cpu->a);
+    cpu->p = (cpu->p & ~FLAG_C) | ((cpu->a >> 7) & 1);
+  } else if (kind == IK_ALR) {
+    cpu->a &= val;
+    cpu->p = (cpu->p & ~FLAG_C) | (cpu->a & 1);
+    cpu->a >>= 1;
+    set_nz(cpu, cpu->a);
+  } else if (kind == IK_ARR) {
+    cpu->a &= val;
+    cpu->a = (uint8_t) ((cpu->a >> 1) | ((cpu->p & FLAG_C) ? 0x80 : 0));
+    set_nz(cpu, cpu->a);
+    cpu->p = (cpu->p & ~(FLAG_C | FLAG_V)) |
+             ((cpu->a & 0x40) ? FLAG_C : 0) |
+             ((((cpu->a >> 6) ^ (cpu->a >> 5)) & 1) ? FLAG_V : 0);
+  } else if (kind == IK_SBX) {
+    int t = (int) (cpu->a & cpu->x) - val;
+    cpu->p = (cpu->p & ~FLAG_C) | (t >= 0 ? FLAG_C : 0);
+    cpu->x = (uint8_t) t;
+    set_nz(cpu, cpu->x);
+  }
+}
+
 int m6502_step(m6502_t *cpu) {
   if (cpu->pc >= 0xfffe) return 1;   /* put the sentinel at the top of memory */
   
   uint8_t op = rd(cpu, cpu->pc);
   NEXT();
+  if (ill_tbl[op]) { do_illegal(cpu, op); return 0; }
   
   uint8_t lo, hi, val, tmp;
   uint16_t addr;
@@ -85,7 +276,7 @@ int m6502_step(m6502_t *cpu) {
     // ORA (Indirect,X)
     case 0x01:
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       cpu->a |= rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -152,7 +343,7 @@ int m6502_step(m6502_t *cpu) {
     // ORA (Indirect),Y
     case 0x11:
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       cpu->a |= rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -210,15 +401,15 @@ int m6502_step(m6502_t *cpu) {
     // JSR
     case 0x20:
       NEXT_W_VAL(addr);
-      push(cpu, (cpu->pc >> 8) & 0xff);
-      push(cpu, cpu->pc & 0xff);
+      push(cpu, ((cpu->pc - 1) >> 8) & 0xff);
+      push(cpu, (cpu->pc - 1) & 0xff);
       cpu->pc = addr;
       break;
 
     // AND (Indirect,X)
     case 0x21:
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       cpu->a &= rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -300,7 +491,7 @@ int m6502_step(m6502_t *cpu) {
     // AND (Indirect),Y
     case 0x31:
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       cpu->a &= rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -358,13 +549,13 @@ int m6502_step(m6502_t *cpu) {
     // RTI
     case 0x40:
       cpu->p = pop(cpu);
-      cpu->pc = pop(cpu) | (pop(cpu) << 8);
+      { uint8_t lo = pop(cpu), hi = pop(cpu); cpu->pc = (uint16_t) (lo | (hi << 8)); }
       break;
 
     // EOR (Indirect,X)
     case 0x41:
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       cpu->a ^= rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -437,7 +628,7 @@ int m6502_step(m6502_t *cpu) {
     // EOR (Indirect),Y
     case 0x51:
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       cpu->a ^= rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -494,22 +685,15 @@ int m6502_step(m6502_t *cpu) {
 
     // RTS
     case 0x60:
-      cpu->pc = pop(cpu) | (pop(cpu) << 8);
-      cpu->pc++;
+      { uint8_t lo = pop(cpu), hi = pop(cpu); cpu->pc = (uint16_t) ((lo | (hi << 8)) + 1); }
       break;
 
     // ADC (Indirect,X)
     case 0x61: {
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -517,13 +701,7 @@ int m6502_step(m6502_t *cpu) {
     case 0x65: {
       NEXT_B(lo);
       val = rd(cpu, lo);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -546,13 +724,7 @@ int m6502_step(m6502_t *cpu) {
     // ADC Immediate
     case 0x69: {
       NEXT_B(val);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -577,13 +749,7 @@ int m6502_step(m6502_t *cpu) {
     case 0x6d: {
       NEXT_W_VAL(addr);
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -606,15 +772,9 @@ int m6502_step(m6502_t *cpu) {
     // ADC (Indirect),Y
     case 0x71: {
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -622,13 +782,7 @@ int m6502_step(m6502_t *cpu) {
     case 0x75: {
       NEXT_B(lo);
       val = rd(cpu, (lo + cpu->x) & 0xff);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -653,13 +807,7 @@ int m6502_step(m6502_t *cpu) {
       NEXT_W_VAL(addr);
       addr += cpu->y;
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -668,13 +816,7 @@ int m6502_step(m6502_t *cpu) {
       NEXT_W_VAL(addr);
       addr += cpu->x;
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a + val + carry;
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res > 0xff ? FLAG_C : 0) |
-               ((~(cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      adc_op(cpu, val);
       break;
     }
 
@@ -692,7 +834,7 @@ int m6502_step(m6502_t *cpu) {
     // STA (Indirect,X)
     case 0x81:
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       wr(cpu, addr, cpu->a);
       break;
 
@@ -753,7 +895,7 @@ int m6502_step(m6502_t *cpu) {
     // STA (Indirect),Y
     case 0x91:
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       wr(cpu, addr, cpu->a);
       break;
 
@@ -807,7 +949,7 @@ int m6502_step(m6502_t *cpu) {
     // LDA (Indirect,X)
     case 0xa1:
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       cpu->a = rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -887,7 +1029,7 @@ int m6502_step(m6502_t *cpu) {
     // LDA (Indirect),Y
     case 0xb1:
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       cpu->a = rd(cpu, addr);
       set_nz(cpu, cpu->a);
       break;
@@ -962,7 +1104,7 @@ int m6502_step(m6502_t *cpu) {
     // CMP (Indirect,X)
     case 0xc1:
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       val = rd(cpu, addr);
       tmp = cpu->a - val;
       cpu->p = (cpu->p & ~(FLAG_N | FLAG_Z | FLAG_C)) | (tmp & 0x80) | (tmp == 0 ? FLAG_Z : 0) | (cpu->a >= val ? FLAG_C : 0);
@@ -1044,7 +1186,7 @@ int m6502_step(m6502_t *cpu) {
     // CMP (Indirect),Y
     case 0xd1:
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       val = rd(cpu, addr);
       tmp = cpu->a - val;
       cpu->p = (cpu->p & ~(FLAG_N | FLAG_Z | FLAG_C)) | (tmp & 0x80) | (tmp == 0 ? FLAG_Z : 0) | (cpu->a >= val ? FLAG_C : 0);
@@ -1109,15 +1251,9 @@ int m6502_step(m6502_t *cpu) {
     // SBC (Indirect,X)
     case 0xe1: {
       NEXT_B(lo);
-      addr = rd16(cpu, (lo + cpu->x) & 0xff);
+      addr = rd16zp(cpu, (uint8_t) (lo + cpu->x));
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1133,13 +1269,7 @@ int m6502_step(m6502_t *cpu) {
     case 0xe5: {
       NEXT_B(lo);
       val = rd(cpu, lo);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1160,13 +1290,7 @@ int m6502_step(m6502_t *cpu) {
     // SBC Immediate
     case 0xe9: {
       NEXT_B(val);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1186,13 +1310,7 @@ int m6502_step(m6502_t *cpu) {
     case 0xed: {
       NEXT_W_VAL(addr);
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1213,15 +1331,9 @@ int m6502_step(m6502_t *cpu) {
     // SBC (Indirect),Y
     case 0xf1: {
       NEXT_B(lo);
-      addr = rd16(cpu, lo) + cpu->y;
+      addr = rd16zp(cpu, lo) + cpu->y;
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1229,13 +1341,7 @@ int m6502_step(m6502_t *cpu) {
     case 0xf5: {
       NEXT_B(lo);
       val = rd(cpu, (lo + cpu->x) & 0xff);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1258,13 +1364,7 @@ int m6502_step(m6502_t *cpu) {
       NEXT_W_VAL(addr);
       addr += cpu->y;
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
@@ -1273,13 +1373,7 @@ int m6502_step(m6502_t *cpu) {
       NEXT_W_VAL(addr);
       addr += cpu->x;
       val = rd(cpu, addr);
-      int carry = cpu->p & FLAG_C;
-      int res = cpu->a - val - (1 - carry);
-      cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-               (res >= 0 ? FLAG_C : 0) |
-               (((cpu->a ^ val) & (cpu->a ^ res) & 0x80) ? FLAG_V : 0);
-      cpu->a = res & 0xff;
-      set_nz(cpu, cpu->a);
+      sbc_op(cpu, val);
       break;
     }
 
