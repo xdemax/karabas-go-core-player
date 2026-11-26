@@ -141,38 +141,6 @@ need it. A new format is a new `formats/*.c` + a rebuild of the program (the bit
 | `vtx` | `.vtx` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `psg` | `.psg` | **FPGA** (`ay_fpga.c`, libayfly) | extension |
 | `s3m` | `.s3m` | **FPGA native** (`s3m_fpga.c`) | `SCRM` at 0x2c |
+| `stm` | `.stm` | **FPGA native** (`stm_fpga.c`) | type 2 at 0x1d, version 2.x at 0x1e |
 | `it` | `.it` | **FPGA** (`it_fpga.c` + `fastmix.c`) | `IMPM` at 0 |
 | `mp3` | `.mp3` | FPGA (Helix, experimental) | ID3 / MPEG sync |
-
-## Planned: STM (Scream Tracker 1/2)
-
-Status: **to add** (not implemented).
-
-A native STM replayer, same shape as the S3M one: `formats/stm.c` + `stm_fpga.c`,
-feeding `mixer_write()`.
-
-Format reference: <https://gist.github.com/cs127/c0f5dffc9f4db2221a66fd9ffc1e3edb>
-("Scream Tracker 1/2 module/song format documentation", v11.6, 2025-12-23). It covers
-ST 2.x and the rare ST 1.x files; OpenMPT's `Load_stm.cpp` is listed there as a second
-source.
-
-Known from the document: the signature `!Scream!` at 0x14, the pattern data after the
-header, 31 instruments with sample headers, and different effect semantics from S3M
-(ST effects are period-based and several S3M commands do not exist).
-
-## S3M: the reference is OpenMPT
-
-The native S3M replayer (`s3m_fpga.c`) is calibrated against **libopenmpt**, not against
-MikMod. Reference render for a 45 s check:
-
-```
-mkdir -p /tmp/ref && cp song.s3m /tmp/ref/
-cd /tmp/ref && openmpt123 --render --no-float --samplerate 48000 --end-time 45 \
-    --no-progress --no-meters -q song.s3m
-```
-
-The host render of our engine is `host/render_s3m.c` (link `mixer.c` too). Compare:
-overall rms/peak, per-5 s envelope correlation (our engine starts ~20 ms earlier than
-openmpt, so shift by 960 samples), and the dominant pitch per 2048-sample window.
-Current state on Gba1.s3m: rms 3425 vs 3419, peak 13010 vs 13077, envelope 0.96-0.997
-(0.81-0.88 in the vibrato/portamento-heavy 35-45 s), pitch match 61-88% of windows.

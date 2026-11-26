@@ -62,6 +62,7 @@ extern const fmt_module_t fmt_pt3;
 extern const fmt_module_t fmt_pt2;
 extern const fmt_module_t fmt_stc;
 extern const fmt_module_t fmt_s3m;
+extern const fmt_module_t fmt_stm;
 extern const fmt_module_t fmt_it;
 
 const fmt_module_t *fmt_by_ext(const char *name);
