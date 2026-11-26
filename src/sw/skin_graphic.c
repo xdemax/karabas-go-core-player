@@ -373,20 +373,21 @@ static void update_info(const player_view_t *v) {
   gfx_fill(PX, 503, PW, 22, c_panel);
   gfx_text_left(&f20, PX, 514, b, r_ptext);
 
-  q = str_cpy(b, v->engine ? v->engine : "");
-  if (v->version && v->version[0]) { *q++ = ' '; q = str_cpy(q, v->version); }
-  q = str_cpy(q, "  AUD ");
-  q = u2s(q, v->aud_rate, 0);
-  q = str_cpy(q, v->loading ? "  LOADING" : (v->paused ? "  PAUSED" : "  PLAYING"));
-  gfx_fill(PX, 525, PW, 24, c_panel);
-  gfx_text_left(&f20, PX, 536, b, r_pdim);
-
+  /* A compatibility note takes the place of the engine line (the same font): it must
+   * not draw over the frame below the panel. */
   const char *w = v->warning ? v->warning : "";
-  if (strcmp(w, last_warn) != 0) {
-    copy_fit(last_warn, w, sizeof(last_warn));
-    gfx_fill(PX, 548, PW, 18, c_panel);
-    if (w[0]) gfx_text_left(&f20, PX, 555, w, r_pyellow);
+  if (w[0]) {
+    copy_fit(b, w, sizeof(b) - 1);
+  } else {
+    q = str_cpy(b, v->engine ? v->engine : "");
+    if (v->version && v->version[0]) { *q++ = ' '; q = str_cpy(q, v->version); }
+    q = str_cpy(q, "  AUD ");
+    q = u2s(q, v->aud_rate, 0);
+    q = str_cpy(q, v->loading ? "  LOADING" : (v->paused ? "  PAUSED" : "  PLAYING"));
   }
+  copy_fit(last_warn, w, sizeof(last_warn));
+  gfx_fill(PX, 525, PW, 24, c_panel);
+  gfx_text_left(&f20, PX, 536, b, w[0] ? r_pyellow : r_pdim);
 }
 
 static void update_progress(const player_view_t *v) {
@@ -618,7 +619,9 @@ static void update_player_dynamic(const player_view_t *v, int force) {
   update_meter(v->peak_r, 154, &disp_vu_r);
   update_channels(v);
   update_spectrum(v);
-  if (force || v->elapsed != last_elapsed) {
+  const char *wnow = v->warning ? v->warning : "";
+  int warn_changed = strcmp(wnow, last_warn) != 0;
+  if (force || v->elapsed != last_elapsed || warn_changed) {
     update_time(v);
     update_info(v);
     last_elapsed = v->elapsed;
