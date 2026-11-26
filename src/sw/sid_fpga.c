@@ -31,6 +31,9 @@ typedef struct {
   uint8_t reserved[2];
 } psid_hdr_t;
 
+/* A SID has no length: if it does not loop exactly, assume this listening time. */
+#define SID_FALLBACK_LEN 180u
+
 #define SID_OUT_CHUNK 256
 #define SID_OUT_MAX   512
 
@@ -409,6 +412,13 @@ void sid_fpga_service(void) {
   if (rsid_steps > 8000) rsid_steps = 8000;
   if (advance > 4) advance = 4;
 
+  if (!sid.loop_found &&
+      (uint32_t) ((R_US - sid.start_us) / 1000000u) >= SID_FALLBACK_LEN) {
+    sid.finished = 1;
+    sid_service_active = 0;
+    return;
+  }
+
   if (sid.rsid) {
     for (uint32_t i = 0; i < rsid_steps; i++) {
       if (sid.cpu->pc >= 0xfffe) sid.cpu->pc = sid.init_addr;
@@ -498,15 +508,21 @@ const char *sid_fpga_title(void) {
   return sid.title;
 }
 
+/* A SID has no length. If the tune repeats exactly we know its loop; otherwise assume a
+ * listening length, show it on the progress bar and move on (the usual behaviour of
+ * players that have no song-length database). */
 int sid_fpga_position(uint32_t *cur, uint32_t *total) {
-  /* A SID has no length: the tune loops. Once the register state has repeated we know
-   * the loop length and can show it as the total (return 2: the values are seconds). */
-  if (!sid.loop_found || !sid.loop_ticks || !sid.hz) return 0;
-  uint32_t len = (uint32_t) ((uint64_t) sid.loop_ticks * 1000000u / (uint32_t) sid.hz);
-  if (!len) return 0;
   uint32_t el = (uint32_t) ((R_US - sid.start_us) / 1000000u);
-  if (cur) *cur = el % len;
-  if (total) *total = len;
+  if (sid.loop_found && sid.loop_ticks && sid.hz) {
+    uint32_t len = (uint32_t) ((uint64_t) sid.loop_ticks * 1000000u / (uint32_t) sid.hz);
+    if (len) {
+      if (cur) *cur = el % len;
+      if (total) *total = len;
+      return 2;
+    }
+  }
+  if (cur) *cur = el < SID_FALLBACK_LEN ? el : SID_FALLBACK_LEN;
+  if (total) *total = SID_FALLBACK_LEN;
   return 2;
 }
 
