@@ -188,16 +188,16 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
       continue;
     }
     
-    // memseg at +14 u16: points directly to sample data
-    uint32_t memseg = read16le(buf, hoff + 14, size);
+    // sample data pointer is 3 bytes: a high byte at +13 and the low word at +14
+    uint32_t memseg = ((uint32_t) read8(buf, hoff + 13, size) << 16)
+                    | read16le(buf, hoff + 14, size);
     uint32_t doff = memseg * 16;
     
     // length at +16 u32
     uint32_t length = read32le(buf, hoff + 16, size);
-    // loopbeg at +20 u16
-    uint16_t loopbeg = read16le(buf, hoff + 20, size);
-    // loopend at +24 u16
-    uint16_t loopend = read16le(buf, hoff + 24, size);
+    // loop start/end are 32-bit (+0x14, +0x18)
+    uint32_t loopbeg = read32le(buf, hoff + 20, size);
+    uint32_t loopend = read32le(buf, hoff + 24, size);
     // volume at +28
     uint8_t vol = read8(buf, hoff + 28, size);
     // flags at +31
