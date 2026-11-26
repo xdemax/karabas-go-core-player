@@ -51,6 +51,7 @@ typedef struct {
   int32_t mix_vol, lgain, rgain;
   uint32_t vib_pos, base_step;
   int vib_speed, vib_depth;  // vibrato speed and depth
+  int vol_cur;               // smoothed volume, Q8 of 0..64
 } s3m_voice_t;
 
 typedef struct {
@@ -321,8 +322,11 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   if (s3m_mod.bpm < 32) s3m_mod.bpm = 125;
   
   for (int i = 0; i < 32; i++) {
+    /* A used channel has a pan 0..15; 0xFF marks an unused channel. The old code
+     * read bit 7 instead, so every channel ended up centred. */
     uint8_t chpan = read8(buf, 64 + i, size);
-    if (chpan & 0x80) {
+    int defpan = (read8(buf, 0x35, size) & 0x80) != 0;
+    if (defpan && chpan != 0xFF && (chpan & 0x7F) <= 15) {
       s3m_mod.panning[i] = (chpan & 0x0f) * 17;
     } else {
       s3m_mod.panning[i] = 128;
@@ -387,7 +391,7 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
   if (instr > 0 && instr <= m->nsmp) {
     v->smp = instr - 1;
     v->vol = m->smp[instr - 1].vol;
-    v->pan = m->smp[instr - 1].pan;
+    v->pan = 128;   /* openmpt keeps this file centred; the pan table is ignored */
   }
   
   if (vol > 0 && vol <= 64) v->vol = vol;
@@ -399,6 +403,7 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
     v->target_step = s3m_note_to_step(note, c2spd);
     v->step = v->target_step;
     v->base_step = v->step;     /* vibrato/arpeggio modulate from here */
+    v->vol_cur = 0;             /* fade in from silence, no click at the note start */
     v->vib_pos = 0;
     v->active = 1;
     v->keyoff = 0;
@@ -670,7 +675,12 @@ void s3m_fpga_service(void) {
       int fr = (int) ((v->pos >> 8) & 0xFF);
       int32_t val = (((s0 * (256 - fr)) + (s1 * fr)) >> 8) << 8;
       
-      int vol = (v->vol * m->gvol) >> 6;
+      /* The volume used to jump at every tick (50 Hz), which buzzed; slide it per sample. */
+      int vc = v->vol_cur, tgt = v->vol << 8;
+      if (vc < 0) vc = 0;
+      vc += (tgt - vc) >> 4;
+      v->vol_cur = vc;
+      int vol = (((vc >> 8) * m->gvol) >> 6);
       val = (val * vol) >> 8;
       
       int pan = v->pan;
