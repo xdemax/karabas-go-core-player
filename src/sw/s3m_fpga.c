@@ -5,6 +5,7 @@
 #include "mmio.h"
 #include "audio.h"
 #include "mixer.h"
+#include "analysis.h"
 
 #define S3M_META_BYTES  (32u * 1024u)
 #define S3M_OUT_CHUNK   256
@@ -690,7 +691,7 @@ void s3m_fpga_service(void) {
     s3m_last_l = l;
     s3m_last_r = r;
     
-    mixer_write_noana((int16_t)l, (int16_t)r);
+    mixer_write((int16_t)l, (int16_t)r);   /* also feed the spectrum analyzer */
   }
   
   memset(s3m_vu, 0, sizeof(s3m_vu));
@@ -740,6 +741,7 @@ void s3m_fpga_audio(fmt_audio_t *o) {
   o->volume = s3m_volume;
   o->paused = s3m_paused;
   for (int i = 0; i < FMT_CHANNELS; i++) o->vu[i] = s3m_vu[i];
+  analysis_bands(o->bands, FMT_BANDS);
 }
 
 int s3m_fpga_get_volume(void) { return s3m_volume; }
