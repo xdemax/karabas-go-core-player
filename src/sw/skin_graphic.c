@@ -49,7 +49,7 @@ static int list_row_h(void) { int s = cur_font_step; if (s < 0) s = 0; else if (
 #define SP_HI   170
 
 static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_spec, c_grid, c_yellow, c_red;
-static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent;
+static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent, r_pyellow, r_pgreen;
 
 static int last_sel = -1, last_top = -1, last_now = -1, last_paused = -1, last_font_step = -1;
 static int load_x = -1, load_phase;
@@ -83,6 +83,8 @@ static void col_init(void) {
   r_ptext = gfx_ramp_over(0xe8eef8, 0x101724);
   r_pdim = gfx_ramp_over(0x8a97ab, 0x101724);
   r_paccent = gfx_ramp_over(0x59b0ff, 0x101724);
+  r_pyellow = gfx_ramp_over(0xf2d64b, 0x101724);
+  r_pgreen  = gfx_ramp_over(0x39d98a, 0x101724);
 }
 
 static void copy_fit(char *d, const char *s, int max) {
@@ -289,7 +291,22 @@ static void draw_player_static(const player_view_t *v) {
       while (*p && *p != '\n' && k < (int) sizeof(line) - 1) line[k++] = *p++;
       line[k] = 0;
       if (*p == '\n') p++;
-      if (k) { gfx_text_center(&f20, cx, fy, line, r_pdim); fy += 12; fn++; }
+      if (k) {
+        char *colon = strchr(line, ':');
+        if (colon) {
+          *colon = 0;
+          const char *ext = colon + 1;
+          while (*ext == ' ') ext++;
+          int wl = gfx_text_width(&f20, line) + 5 + gfx_text_width(&f20, ext);
+          int x = cx - wl / 2;
+          gfx_text_left(&f20, x, fy, line, r_pyellow);
+          gfx_text_left(&f20, x + gfx_text_width(&f20, line) + 5, fy, ext, r_pgreen);
+        } else {
+          gfx_text_center(&f20, cx, fy, line, r_pdim);
+        }
+        fy += 12;
+        fn++;
+      }
     }
     gfx_text_center(&f20, cx, fy + 10, "Enter a file to play", r_pdim);
     last_now = 0;

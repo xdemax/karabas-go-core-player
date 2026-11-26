@@ -52,13 +52,13 @@ static int title_hidden(const char *e) {
 // module automatically appears in the startup panel of the skin unless it is hidden above.
 // The title screen groups the formats by the chip / tracker they come from.
 static const struct { const char *label, *exts; } fmt_groups[] = {
-  { "AY8912",           "pt2 pt3 stc pt1 asc psc sqt stp vtx psg" },
+  { "AY8912",           "pt2, pt3, stc, pt1, asc, psc, sqt, stp, vtx, psg" },
   { "SID8580",          "sid" },
-  { "Scream Tracker",   "stm s3m" },
+  { "Scream Tracker",   "stm, s3m" },
   { "ProTracker",       "mod" },
   { "FastTracker",      "xm" },
   { "Impulse Tracker",  "it" },
-  { "Playlists",        "m3u ayl" },
+  { "Playlists",        "m3u, ayl" },
 };
 #define NFMT_GROUPS (sizeof(fmt_groups) / sizeof(fmt_groups[0]))
 
