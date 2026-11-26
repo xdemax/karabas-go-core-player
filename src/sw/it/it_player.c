@@ -350,8 +350,9 @@ static void apply_defaults(it_player_t *p, it_chn_t *ch, const it_sample_t *s, c
     int vol = s->vol, pan = -1;
     if (ins && ins->rv) vol += ((int)(rnd(p) % (2u * ins->rv + 1u)) - (int)ins->rv) * vol / 100;
     ch->vol = (uint8_t)clampi(vol, 0, 64);
-    if (s->dfp & 0x80) pan = s->dfp & 0x7F;
-    if (ins && !(ins->dfp & 0x80)) pan = ins->dfp & 0x7F;
+    /* IT: instrument DfP bit7 = use its pan; sample DfP bit7 = pan disabled */
+    if (!(s->dfp & 0x80)) pan = s->dfp & 0x7F;
+    if (ins && (ins->dfp & 0x80)) pan = ins->dfp & 0x7F;
     if (pan >= 0) { ch->pan = (uint8_t)clampi(pan, 0, 64); ch->surround = 0; }
     if (ins && ins->rp)
         ch->pan = (uint8_t)clampi((int)ch->pan + (int)(rnd(p) % (2u * ins->rp + 1u)) - (int)ins->rp, 0, 64);
