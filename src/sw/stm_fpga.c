@@ -37,7 +37,7 @@ typedef struct {
   stm_sample_t smp[STM_SAMPLES];
   const uint8_t *pat[128];
   stm_voice_t vox[STM_CHANNELS];
-  int gvol, next_order, ended, active, paused;
+  int gvol, override_order, brk, ended, active, paused;
   int32_t last_l, last_r, peak_l, peak_r;
   uint8_t vu[FMT_CHANNELS];
   int vol;
@@ -252,7 +252,8 @@ int stm_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
     if (s->vol > 64) s->vol = 64;
     s->c2spd = r16(buf, h + 0x18, size);
     if (s->c2spd < 100) s->c2spd = 8448;
-    if (s->len && pos + s->len <= size) {
+    if (s->len && pos < size) {
+      if (pos + s->len > size) s->len = size - pos;   /* truncated sample: keep what exists */
       s->data = buf + pos;
       if (le > s->loop_start && le != 0xFFFF) {
         s->loop = 1;
@@ -285,7 +286,8 @@ int stm_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   S.order = 0;
   S.row = 0;
   S.tick = S.speed > 0 ? S.speed - 1 : 0;
-  S.next_order = -1;
+  S.override_order = -1;
+  S.brk = 0;
   S.ended = 0;
   S.active = 1;
   S.paused = 0;
@@ -368,20 +370,20 @@ void stm_fpga_service(void) {
               v->eff = eff;
               v->par = par;
               if (eff == 1) stm_set_tempo(&S, par);
-              else if (eff == 2) S.next_order = par;
-              else if (eff == 3) S.next_order = S.order + 1;
+              else if (eff == 2) S.override_order = par;   /* "next order" only */
+              else if (eff == 3) S.brk = 1;                /* break after this row */
             }
           }
         }
         stm_tick_effects(&S);
 
-        if (S.next_order >= 0) {
-          S.order = (uint8_t) S.next_order;
+        int advance = 0;
+        if (S.brk) { S.brk = 0; advance = 1; }
+        else { S.row++; if (S.row >= STM_ROWS) { S.row = 0; advance = 1; } }
+        if (advance) {
+          S.order = (S.override_order >= 0) ? (uint8_t) S.override_order : (uint8_t) (S.order + 1);
+          S.override_order = -1;
           S.row = 0;
-          S.next_order = -1;
-        } else {
-          S.row++;
-          if (S.row >= STM_ROWS) { S.row = 0; S.order++; }
         }
         if (S.order >= 128 || S.orders[S.order] >= 98) {
           S.ended = 1; stm_active = 0; stm_ended = 1;
