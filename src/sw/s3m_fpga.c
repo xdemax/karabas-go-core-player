@@ -227,7 +227,7 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
     
     if (flags & 1) {
       m->smp[s].loop_start = loopbeg;
-      m->smp[s].loop_len = loopend - loopbeg;
+      m->smp[s].loop_len = loopend > loopbeg ? loopend - loopbeg : 0;
       if (m->smp[s].loop_start > m->smp[s].len) m->smp[s].loop_start = m->smp[s].len;
       if (m->smp[s].loop_start + m->smp[s].loop_len > m->smp[s].len)
         m->smp[s].loop_len = m->smp[s].len - m->smp[s].loop_start;
@@ -401,6 +401,7 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
     v->pos = 0;
     v->target_step = s3m_note_to_step(note, c2spd);
     v->step = v->target_step;
+    v->base_step = v->step;     /* vibrato/arpeggio modulate from here */
     v->vib_pos = 0;
     v->active = 1;
     v->keyoff = 0;
