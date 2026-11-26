@@ -546,7 +546,7 @@ static void update_spectrum(const player_view_t *v) {
       disp_bands[i] = 0; peak_bands[i] = 0; cap_lo[i] = cap_hi[i] = 0; peak_hold[i] = 0;
     }
   }
-  if (v->spectrum_style) { update_spectrum_alt(v); return; }
+  if (v->spectrum_style == 2) { update_spectrum_alt(v); return; }
 
   int gy[3] = { SP_BASE - 40, SP_BASE - 80, SP_BASE - 120 };
   for (int i = 0; i < SP_BARS; i++) {
@@ -630,7 +630,7 @@ static void update_spectrum(const player_view_t *v) {
     cap_lo[i] = lo;
     cap_hi[i] = hi;
   }
-  draw_spectrum_segments();
+  if (v->spectrum_style == 0) draw_spectrum_segments();
 
   /* A short dim reflection under the baseline makes the panel read as a lit surface
    * instead of bars floating in the dark. */
@@ -666,13 +666,22 @@ static void spec_zone_fill(int bx, int y_lo, int y_hi) {
   if (b > a) gfx_fill(bx, SP_BASE - b, SP_BW, b - a, c_red);
 }
 
-/* The other looks use the same incremental scheme as the LED one, with the cap attached
- * to the bar (as in the LED bars) instead of a separate floating marker, so the erase of
- * the bar always covers the cap it drew. */
+/* The mirrored look: the same zone colours as the LED bars, measured from the centre. */
+static void mir_zone(int bx, int a, int b, int down) {
+  int t1 = SP_H / 6, t2 = SP_H / 3;      /* half of the LED thirds: the bar is split in two */
+  int e = b < t1 ? b : t1;
+  if (e > a) gfx_fill(bx, down ? SP_BASE - SP_H / 2 + a : SP_BASE - SP_H / 2 - e,
+                      SP_BW, e - a, c_vu);
+  int f = a > t1 ? a : t1; e = b < t2 ? b : t2;
+  if (e > f) gfx_fill(bx, down ? SP_BASE - SP_H / 2 + f : SP_BASE - SP_H / 2 - e,
+                      SP_BW, e - f, c_yellow);
+  f = a > t2 ? a : t2;
+  if (b > f) gfx_fill(bx, down ? SP_BASE - SP_H / 2 + f : SP_BASE - SP_H / 2 - b,
+                      SP_BW, b - f, c_red);
+}
+
 static void update_spectrum_alt(const player_view_t *v) {
-  int style = v->spectrum_style;
   int center = SP_BASE - SP_H / 2;
-  int t1 = SP_H / 3, t2 = SP_H * 2 / 3;
   for (int i = 0; i < SP_BARS; i++) {
     int si = (i * (FMT_BANDS - 1)) / (SP_BARS - 1);
     int t = v->bands[si];
@@ -696,47 +705,23 @@ static void update_spectrum_alt(const player_view_t *v) {
     peak_bands[i] = peak;
 
     int bx = SP_X + i * SP_STEP;
-    int oh = old * SP_H / 255;
-    int nh = nv * SP_H / 255;
+    int oh = old * SP_H / 255 / 2;
+    int nh = nv * SP_H / 255 / 2;
 
-    if (style == 1) {
-      if (cap_hi[i] > cap_lo[i])
-        spec_erase_col(bx, SP_BASE - cap_hi[i], SP_BASE - cap_lo[i]);
-      if (nh > oh) spec_zone_fill(bx, oh, nh);
-      else if (nh < oh) spec_erase_col(bx, SP_BASE - oh, SP_BASE - nh);
-
-      uint8_t tc = nh <= t1 ? c_vu : (nh <= t2 ? c_yellow : c_red);
-      if (nh > 0) gfx_fill(bx, SP_BASE - nh, SP_BW, 1, tc);
-
-      gfx_fill(bx, SP_BASE + 2, SP_BW, 18, c_panel);
-      int rh = nh / 3; if (rh > 18) rh = 18;
-      if (rh > 0) gfx_fill(bx, SP_BASE + 2, SP_BW, rh, c_vud);
-
-      if (nh > 2) {
-        int hi = nh + 2 < SP_H ? nh + 2 : SP_H;
-        gfx_fill(bx, SP_BASE - hi, SP_BW, hi - nh, c_spec);
-        cap_lo[i] = nh; cap_hi[i] = hi;
-      } else cap_lo[i] = cap_hi[i] = 0;
-    } else {
-      int ohh = oh / 2, nhh = nh / 2;
-      if (cap_lo[i] > 0) {
-        spec_erase_col(bx, center - cap_lo[i], center - cap_lo[i] + 1);
-        spec_erase_col(bx, center + cap_lo[i] - 1, center + cap_lo[i]);
-        cap_lo[i] = 0;
-      }
-      if (nhh > ohh) {
-        uint8_t cu = nhh > t1 / 2 ? c_yellow : c_vu;
-        gfx_fill(bx, center - nhh, SP_BW, nhh - ohh, cu);
-        gfx_fill(bx, center + ohh, SP_BW, nhh - ohh, c_vud);
-      } else if (nhh < ohh) {
-        spec_erase_col(bx, center - ohh, center - nhh);
-        spec_erase_col(bx, center + nhh, center + ohh);
-      }
-      if (nhh > 1) {
-        gfx_fill(bx, center - nhh - 1, SP_BW, 1, c_spec);
-        gfx_fill(bx, center + nhh, SP_BW, 1, c_spec);
-        cap_lo[i] = nhh + 1;
-      } else cap_lo[i] = 0;
+    if (cap_lo[i] > 0) {
+      spec_erase_col(bx, center - cap_lo[i], center - cap_lo[i] + 1);
+      spec_erase_col(bx, center + cap_lo[i] - 1, center + cap_lo[i]);
+      cap_lo[i] = 0;
+    }
+    if (nh > oh) { mir_zone(bx, oh, nh, 0); mir_zone(bx, oh, nh, 1); }
+    else if (nh < oh) {
+      spec_erase_col(bx, center - oh, center - nh);
+      spec_erase_col(bx, center + nh, center + oh);
+    }
+    if (nh > 1) {
+      gfx_fill(bx, center - nh - 1, SP_BW, 1, c_spec);
+      gfx_fill(bx, center + nh, SP_BW, 1, c_spec);
+      cap_lo[i] = nh + 1;
     }
   }
 }
