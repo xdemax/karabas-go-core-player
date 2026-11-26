@@ -48,6 +48,7 @@ typedef struct {
   char err[48];
   int vol;
   int32_t last_l, last_r, peak_l, peak_r;
+  uint32_t last_tap;
   uint8_t vu[FMT_CHANNELS];
   uint32_t sample_acc;
   uint32_t samples_per_tick;
@@ -185,6 +186,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.sample_acc = 0;
   sid.sid_regs_written = 0;
   sid.play_calls = 0;
+  sid.last_tap = 0;
   sid.active = 1;
   sid.finished = 0;
   sid.paused = 0;
@@ -211,14 +213,23 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 }
 
 void sid_fpga_service(void) {
-  if (!sid.active || sid_service_active) return;
-  
+  if (!sid.active || sid.paused || sid_service_active) return;
+
+  /* Pace by the output FIFO like every other engine: without this the main loop calls
+   * the engine as fast as it can and the tune races (the register writes flood the
+   * bus, the UI crawls and the tap holds one note). */
+  int free = audio_free();
+  if (free <= 0) return;
+  int n = free > SID_OUT_CHUNK ? SID_OUT_CHUNK : free;
+
   sid_service_active = 1;
 
   if (sid.play_addr) {
-    sid.sample_acc += SID_OUT_CHUNK;
-    uint32_t play_ticks = sid.sample_acc / sid.samples_per_tick;
-    while (play_ticks > 0) {
+    sid.sample_acc += (uint32_t) n;
+    uint32_t ticks = sid.sample_acc / sid.samples_per_tick;
+    sid.sample_acc -= ticks * sid.samples_per_tick;
+    if (ticks > 16) ticks = 16;        /* a long stall must not turn into a burst */
+    while (ticks > 0) {
       sid.cpu->mem[0x01fd] = 0xff;
       sid.cpu->mem[0x01fc] = 0xfd;
       sid.cpu->s = 0xfb;
@@ -231,53 +242,48 @@ void sid_fpga_service(void) {
       if (sid.play_calls < 4) fprintf(stderr, "[sid] play pc=%04x steps=%d end=%04x writes=%u\n",
                                       sid.play_addr, steps, sid.cpu->pc, (unsigned) sid.sid_regs_written);
 #endif
-
       sid.play_calls++;
-      play_ticks--;
-      sid.sample_acc -= sid.samples_per_tick;
+      ticks--;
     }
   }
 
-  for (int i = 0; i < SID_OUT_CHUNK; i++) {
-    uint32_t sample = 0;
-    while (MMIO(0xdc)) {
-      uint32_t v = MMIO(0xd8);
-      int16_t l = (int16_t)(v >> 16), r = (int16_t)v;
-      sample = (uint32_t)l | ((uint32_t)r << 16);
-      
-      if (l < 0) l = -l;
-      if (r < 0) r = -r;
-      if (l > sid.peak_l) sid.peak_l = l;
-      if (r > sid.peak_r) sid.peak_r = r;
+  /* One tap sample per output sample: the tap ring is filled at the 48 kHz tick, so
+   * draining it in a burst repeated the last sample and destroyed the timing. */
+  for (int i = 0; i < n; i++) {
+    uint32_t sample = sid.last_tap;
+    if (MMIO(0xdc)) {
+      sample = MMIO(0xd8);
+      sid.last_tap = sample;
     }
-
     int16_t l = (int16_t)(sample >> 16);
-    int16_t r = (int16_t)sample;
-    
+    int16_t r = (int16_t)(sample & 0xffff);
+
+    if (l < 0) l = -l;
+    if (r < 0) r = -r;
+    if (l > sid.peak_l) sid.peak_l = l;
+    if (r > sid.peak_r) sid.peak_r = r;
+
+    l = (int16_t)(sample >> 16);
+    r = (int16_t)(sample & 0xffff);
     l = (int32_t)l * sid.vol / 64;
     r = (int32_t)r * sid.vol / 64;
 
     sid_out[i * 2] = l;
     sid_out[i * 2 + 1] = r;
-    
+
     sid.last_l = l;
     sid.last_r = r;
   }
 
-  for (int i = 0; i < SID_OUT_CHUNK; i++) {
+  for (int i = 0; i < n; i++) {
     mixer_write(sid_out[i * 2], sid_out[i * 2 + 1]);
   }
 
   sid_service_active = 0;
 }
 
-int sid_fpga_active(void) {
-  return sid.active;
-}
-
-int sid_fpga_finished(void) {
-  return sid.finished;
-}
+int sid_fpga_active(void) { return sid.active; }
+int sid_fpga_finished(void) { return sid.finished; }
 
 void sid_fpga_stop(void) {
   sid.active = 0;

@@ -547,7 +547,7 @@ reg aud_t_r = 1'b0;
 reg [9:0] ay_tap_wr = 10'd0, ay_tap_rd = 10'd0;
 reg [31:0] ay_tap [0:1023];
 
-wire aud_read = aud_tick && !ay_active && !sid_active && !aud_empty;
+wire aud_read = aud_tick && !ay_active && !aud_empty;
 kg_sdpram #(.DW(32), .AW(AUD_W)) aud_ram (
 	.clka(clk), .wea(aud_we && !aud_full), .addra(aud_wr), .dina(aud_wdat),
 	.clkb(clk), .enb(aud_read), .addrb(aud_rd), .doutb(aud_dout)
@@ -595,13 +595,13 @@ always @(posedge clk) begin
 			ay_tap[ay_tap_wr] <= {ay_l, ay_r};
 			ay_tap_wr <= ay_tap_wr + 10'd1;
 			if (sid_active) begin
+				// The SID keeps its own tap for the spectrum/meters; the audio itself goes
+				// through the software FIFO as for every other engine, so the player is
+				// paced by the FIFO instead of free-running.
 				sid_tap[sid_tap_wr] <= {sid_l, sid_r};
 				sid_tap_wr <= sid_tap_wr + 10'd1;
-				aud_l_r <= sid_l;
-				aud_r_r <= sid_r;
-				aud_valid <= 1'b0;
-				aud_rd <= aud_wr;
-			end else if (ay_active) begin
+			end
+			if (ay_active) begin
 				aud_l_r <= ay_l;
 				aud_r_r <= ay_r;
 				aud_valid <= 1'b0;
