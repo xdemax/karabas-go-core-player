@@ -364,10 +364,7 @@ static const uint32_t s3m_semitone_mul[12] = {
 
 static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
   int octave = (note >> 4) & 0x0F;
-  int semitone = (note & 0x0F);
-  
-  if (semitone == 0) return 0;
-  semitone--;
+  int semitone = note & 0x0F;   /* 0 = C, 1 = C#, ... (the whole byte 0 means "no note") */
   
   uint32_t step = c2spd;
   /* C-4 is the note that plays at c2spd (checked against the openmpt render:
