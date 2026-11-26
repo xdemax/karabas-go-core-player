@@ -225,10 +225,8 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.last_l = sid.last_r = 0;
   sid.peak_l = sid.peak_r = 0;
   memset(sid.vu, 0, sizeof(sid.vu));
-  /* PSID flags bits 2-3: 1 PAL, 2 NTSC. A CIA-timed song is approximated at 60 Hz:
-   * the firmware has no CIA timer, but 50 Hz made those songs 20% slow. */
+  /* PSID flags bits 2-3: 1 PAL, 2 NTSC. */
   int hz = (((flags >> 2) & 3) == 2) ? 60 : 50;
-  if (start_song >= 1 && start_song <= 32 && (speed & (1u << (start_song - 1)))) hz = 60;
   sid.samples_per_tick = (uint32_t) ((48000 + hz / 2) / hz);
   sid.hz = hz;
   sid.last_us = R_US;
@@ -268,6 +266,20 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 #endif
   }
 
+  /* A CIA-timed song programs timer A; the latch tells the real interrupt rate.
+   * Without this every such tune played at a flat 60 Hz (wrong tempo). */
+  if (start_song >= 1 && start_song <= 32 && (speed & (1u << (start_song - 1)))) {
+    uint16_t latch = (uint16_t) (sid.cpu->mem[0xdc04] | (sid.cpu->mem[0xdc05] << 8));
+    int hz2 = latch ? (int) (985248u / ((uint32_t) latch + 1u)) : 60;
+    if (hz2 < 1) hz2 = 1;
+    if (hz2 > 400) hz2 = 400;
+    sid.hz = hz2;
+    sid.samples_per_tick = (uint32_t) ((48000 + hz2 / 2) / hz2);
+#ifdef HOST
+    fprintf(stderr, "[sid] CIA latch=%04x rate=%d Hz\n", latch, hz2);
+#endif
+  }
+
   sid.vol = 64;
   sid_hw_on();
 
@@ -275,7 +287,7 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
 }
 
 static void sid_hw_on(void) {
-  MMIO(0xcc) = 1u | ((uint32_t) (sid.vol * 3) << 8);   /* 0..64 -> gain 0..192 */
+  MMIO(0xcc) = 1u | ((uint32_t) (sid.vol * 2) << 8);   /* 0..64 -> gain 0..128 */
 }
 
 void sid_fpga_service(void) {
@@ -335,13 +347,17 @@ void sid_fpga_service(void) {
         if (!vec || vec == 0xffff)
           vec = (uint16_t) (sid.cpu->mem[0xfffe] | (sid.cpu->mem[0xffff] << 8));
         if (vec && vec != 0xffff) {
-          uint16_t ret = sid.cpu->pc;
-          sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) (ret >> 8); sid.cpu->s--;
-          sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) ret; sid.cpu->s--;
+          /* Return through a sentinel instead of the interrupted address: RTI then
+           * stops the handler loop at once, and the main loop resumes where it was
+           * (before, the handler "finished" only after 20000 main-loop instructions). */
+          uint16_t back = sid.cpu->pc;
+          sid.cpu->mem[0x100 + sid.cpu->s] = 0xff; sid.cpu->s--;
+          sid.cpu->mem[0x100 + sid.cpu->s] = 0xfd; sid.cpu->s--;
           sid.cpu->mem[0x100 + sid.cpu->s] = (uint8_t) (sid.cpu->p & ~0x10); sid.cpu->s--;
           sid.cpu->p |= 0x04;
           sid.cpu->pc = vec;
           for (int i = 0; i < 20000; i++) if (m6502_step(sid.cpu)) break;
+          sid.cpu->pc = back;
         }
       }
     }
@@ -400,7 +416,7 @@ int sid_fpga_position(uint32_t *cur, uint32_t *total) {
 
 void sid_fpga_info(fmt_info_t *o) {
   if (!o) return;
-  o->channels = 1;
+  o->channels = 3;
   o->samples = 0;
   o->order = 0;
   o->pattern = 0;
