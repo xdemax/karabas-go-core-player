@@ -44,14 +44,17 @@ typedef struct {
 } s3m_pattern_t;
 
 typedef struct {
-  uint32_t note, pos, step, target_step;
+  uint32_t note, pos, step;
+  uint32_t per, per_target, per_base;   /* MikMod Amiga period state */
+  uint32_t c2spd;
   int smp, vol, pan, active, keyoff;
   uint8_t eff, par;
   int porta_speed, retrig_tick;
   int32_t mix_vol, lgain, rgain;
-  uint32_t vib_pos, base_step;
+  uint32_t vib_pos;
   int vib_speed, vib_depth;  // vibrato speed and depth
   int vol_cur;               // smoothed volume, Q8 of 0..64
+  int end_ramp;              // 64..0 while a one-shot sample fades out
 } s3m_voice_t;
 
 typedef struct {
@@ -362,46 +365,69 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   return 0;
 }
 
-/* ST3 note periods (the official table). The pitch is NOT 12-TET: ST3 shifts the
- * period right by the octave and divides, so e.g. A-4 lands on 14203 Hz, not 14064. */
-static const uint16_t s3m_period[12] = {
-  1712, 1616, 1524, 1440, 1356, 1280, 1208, 1140, 1076, 1016, 960, 907
+/* MikMod's tables (the engine that plays this file correctly): Amiga periods,
+ * vibrato table, rate = 8363*1712/period. Effects work on the period, not on a
+ * frequency ratio. */
+static const uint16_t s3m_amiga[24] = {
+  0x6b00,0x6800,0x6500,0x6220,0x5f50,0x5c80,0x5a00,0x5740,
+  0x54d0,0x5260,0x5010,0x4dc0,0x4b90,0x4960,0x4750,0x4540,
+  0x4350,0x4160,0x3f90,0x3dc0,0x3c10,0x3a40,0x38b0,0x3700
+};
+static const uint8_t s3m_vibtab[128] = {
+    0,  6, 13, 19, 25, 31, 37, 44, 50, 56, 62, 68, 74, 80, 86, 92,
+   98,103,109,115,120,126,131,136,142,147,152,157,162,167,171,176,
+  180,185,189,193,197,201,205,208,212,215,219,222,225,228,231,233,
+  236,238,240,242,244,246,247,249,250,251,252,253,254,254,255,255,
+  255,255,255,254,254,253,252,251,250,249,247,246,244,242,240,238,
+  236,233,231,228,225,222,219,215,212,208,205,201,197,193,189,185,
+  180,176,171,167,162,157,152,147,142,136,131,126,120,115,109,103,
+   98, 92, 86, 80, 74, 68, 62, 56, 50, 44, 37, 31, 25, 19, 13,  6
 };
 
-static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
-  int octave = (note >> 4) & 0x0F;
-  int semitone = note & 0x0F;
-  uint32_t per = s3m_period[semitone];
-  uint32_t shifted = octave < 16 ? (per >> octave) : 1;
-  if (!shifted) shifted = 1;
-  if (!c2spd) c2spd = 8363;
-  /* rate = 14317056 * c2spd / (8363 * 16 * shifted); step is 16.16 of the source index */
-  uint64_t step = ((uint64_t) 14317056u * c2spd * 65536u)
-                / ((uint64_t) 8363u * 16u * shifted * 48000u);
+static uint32_t s3m_step_from_period(uint32_t per) {
+  if (!per) per = 1;
+  uint32_t rate = (uint32_t) ((8363ull * 1712ull) / per);
+  uint64_t step = ((uint64_t) rate << 16) / 48000u;
   return step > 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t) step;
 }
 
+static uint32_t s3m_period_from_n12(int n12, uint32_t c2spd) {
+  if (n12 < 0) n12 = 0;
+  int n2 = n12 * 2;
+  int o = n2 / 24;
+  uint32_t p = s3m_amiga[n2 % 24];
+  uint32_t per = (uint32_t) (((uint64_t) 8363u * p) >> (o > 15 ? 15 : o));
+  per /= (c2spd ? c2spd : 8363u);
+  return per ? per : 1;
+}
+
+static uint32_t s3m_period_for(int note, uint32_t c2spd) {
+  int n12 = ((note >> 4) & 0x0F) * 12 + (note & 0x0F);
+  return s3m_period_from_n12(n12, c2spd);
+}
+
+static void s3m_apply_period(s3m_voice_t *v) { v->step = s3m_step_from_period(v->per); }
+
+/* Per-tick effects (G tone porta, H vibrato, J arpeggio, D volume slide). */
 static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
   if (ch < 0 || ch >= 32) return;
   s3m_voice_t *v = &m->vox[ch];
-  
   if (instr > 0 && instr <= m->nsmp) {
     v->smp = instr - 1;
     v->vol = m->smp[instr - 1].vol;
-    v->pan = 128;   /* openmpt keeps this file centred; the pan table is ignored */
   }
-  
   if (vol > 0 && vol <= 64) v->vol = vol;
-  
+  v->pan = 128;
   if (note > 0 && note < 254) {
     uint32_t c2spd = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
     v->note = note;
+    v->c2spd = c2spd;
     v->pos = 0;
-    v->target_step = s3m_note_to_step(note, c2spd);
-    v->step = v->target_step;
-    v->base_step = v->step;     /* vibrato/arpeggio modulate from here */
-    v->vol_cur = 0;             /* fade in from silence, no click at the note start */
+    v->per = v->per_target = v->per_base = s3m_period_for(note, c2spd);
+    s3m_apply_period(v);
     v->vib_pos = 0;
+    v->end_ramp = 0;
+    v->vol_cur = 0;
     v->active = 1;
     v->keyoff = 0;
   }
@@ -409,10 +435,9 @@ static void s3m_note_on(s3m_module_t *m, int ch, int note, int instr, int vol) {
 
 static void s3m_note_off(s3m_voice_t *v) {
   v->keyoff = 1;
-  v->active = 0;      /* "with samples stops smp" (ST3 doc) */
+  v->active = 0;
 }
 
-/* Per-tick effects (G tone porta, H vibrato, J arpeggio, D volume slide). */
 static void s3m_tick_effects(s3m_module_t *m) {
   for (int ch = 0; ch < m->chn; ch++) {
     s3m_voice_t *v = &m->vox[ch];
@@ -422,34 +447,38 @@ static void s3m_tick_effects(s3m_module_t *m) {
       int up = par >> 4, dn = par & 15;
       if (up) { v->vol += up; if (v->vol > 64) v->vol = 64; }
       else if (dn) { v->vol -= dn; if (v->vol < 0) v->vol = 0; }
-    } else if (eff == 7 || eff == 'G') {
-      /* Gxx is a period speed: scale it to the frequency step. The old `par << 2`
-       * was ~0.04% of a step per tick, so portamento never arrived. */
-      int sp = par ? par : (v->porta_speed ? v->porta_speed : 8);
+    } else if (eff == 5 || eff == 'E') {            /* tone slide down */
       if (par) v->porta_speed = par;
-      uint32_t d = (uint32_t) (((uint64_t) v->step * (uint32_t) sp) >> 12);
-      if (!d) d = 1;
-      if (v->step < v->target_step) v->step = (v->target_step - v->step > d) ? v->step + d : v->target_step;
-      else if (v->step > v->target_step) v->step = (v->step - v->target_step > d) ? v->step - d : v->target_step;
-    } else if (eff == 8 || eff == 'H') {
-      if (par >> 4) v->vib_speed = par >> 4;
+      uint32_t d = (uint32_t) v->porta_speed * 4u;
+      v->per = v->per > d ? v->per - d : 1;
+      s3m_apply_period(v);
+    } else if (eff == 6 || eff == 'F') {            /* tone slide up */
+      if (par) v->porta_speed = par;
+      v->per += (uint32_t) v->porta_speed * 4u;
+      s3m_apply_period(v);
+    } else if (eff == 7 || eff == 'G') {            /* tone portamento to the target */
+      if (par) v->porta_speed = par;
+      uint32_t speed = (uint32_t) (v->porta_speed ? v->porta_speed : 1) * 4u;
+      if (v->per > v->per_target) v->per = (v->per - v->per_target > speed) ? v->per - speed : v->per_target;
+      else if (v->per < v->per_target) v->per = (v->per_target - v->per > speed) ? v->per + speed : v->per_target;
+      s3m_apply_period(v);
+    } else if (eff == 8 || eff == 'H') {            /* period vibrato, MikMod's table */
+      if (par >> 4) v->vib_speed = (par & 0xF0) >> 2;
       if (par & 15) v->vib_depth = par & 15;
+      int amp = s3m_vibtab[v->vib_pos & 0x7F];
+      if ((int8_t) (v->vib_pos & 0xFF) < 0) amp = -amp;
+      int32_t d = ((int32_t) amp * v->vib_depth) >> 7;
+      d <<= 2;
+      int32_t np = (int32_t) v->per_base + d;
+      v->per = np > 0 ? (uint32_t) np : 1;
+      s3m_apply_period(v);
       v->vib_pos += (uint32_t) (v->vib_speed ? v->vib_speed : 1);
-      int phase = (int) (v->vib_pos & 31);
-      int tri = phase < 16 ? phase : 31 - phase;   /* 0..15 */
-      int amp = tri - 8;                            /* -8..7 */
-      /* depth 15 must stay inside about one semitone, not half an octave */
-      int32_t d = ((int32_t) v->base_step * amp * v->vib_depth) / 2048;
-      int32_t st = (int32_t) v->base_step + d;
-      v->step = st > 0 ? (uint32_t) st : 1;
-    } else if (eff == 10 || eff == 'J') {
+    } else if (eff == 10 || eff == 'J') {           /* arpeggio: notes x and y above */
       int x = par >> 4, y = par & 15;
-      static const uint32_t mul[12] = {65536,69433,73562,77936,82570,87480,92682,98193,104032,110218,116772,123715};
+      int n12 = ((v->note >> 4) & 0x0F) * 12 + (v->note & 0x0F);
       int t = m->tick % 3;
-      int semi = t == 1 ? x : t == 2 ? y : 0;
-      uint32_t st = v->base_step;
-      for (int i = 0; i < semi / 12; i++) st *= 2;
-      v->step = (uint32_t) (((uint64_t) st * mul[semi % 12]) >> 16);
+      v->per = s3m_period_from_n12(n12 + (t == 1 ? x : t == 2 ? y : 0), v->c2spd);
+      s3m_apply_period(v);
     }
   }
 }
@@ -537,7 +566,7 @@ void s3m_fpga_service(void) {
               if (note && (eff == 7 || eff == 'G') && v->active) {
                 /* tone portamento: slide to the new note instead of retriggering */
                 uint32_t c2 = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
-                v->target_step = s3m_note_to_step(note, c2);
+                v->per_target = s3m_period_for(note, c2);
                 if (par) v->porta_speed = par;
               } else if (note) {
                 s3m_note_on(m, ch, note, instr, vol);
@@ -569,7 +598,8 @@ void s3m_fpga_service(void) {
         if (m->row >= 64) {
           m->row = 0;
           m->order++;
-          for (int i = 0; i < 32; i++) m->vox[i].active = 0;
+          /* notes keep ringing across a pattern boundary (ST3 does not cut them);
+           * clearing them here chopped the tails and clicked */
           if (m->order >= 256 || m->orders[m->order] >= 254) {
             m->ended = 1;
             s3m_active = 0;
@@ -578,68 +608,6 @@ void s3m_fpga_service(void) {
         }
       } else {
         s3m_tick_effects(m);
-      }
-    }
-    
-    // Per-tick effect processing
-    for (int ch = 0; ch < m->chn; ch++) {
-      s3m_voice_t *v = &m->vox[ch];
-      if (!v->active) continue;
-      
-      uint8_t eff = v->eff;
-      uint8_t par = v->par;
-      
-      switch (eff) {
-        case 'D': case 4: {  // Volume slide
-          int speed = (par >> 4) & 0x0F;  // up speed
-          int down = par & 0x0F;          // down speed
-          if (speed > 0) {
-            v->vol += speed;
-            if (v->vol > 64) v->vol = 64;
-          } else if (down > 0) {
-            v->vol -= down;
-            if (v->vol < 0) v->vol = 0;
-          }
-          break;
-        }
-        case 'G': case 7: {  // Tone portamento
-          if (par == 0) par = 1;
-          if (v->target_step > v->step) {
-            v->step += (par << 2);
-            if (v->step > v->target_step) v->step = v->target_step;
-          } else if (v->target_step < v->step) {
-            v->step -= (par << 2);
-            if (v->step < v->target_step) v->step = v->target_step;
-          }
-          break;
-        }
-        case 'H': case 8: {  // Vibrato
-          int speed = (par >> 4) & 0x0F;
-          int depth = par & 0x0F;
-          if (speed > 0) {
-            v->vib_pos += speed;
-            int vib_wave = (v->vib_pos >> 1) & 0xFF;
-            int sine = (vib_wave < 64) ? vib_wave : (vib_wave < 128) ? (128 - vib_wave) : 
-                       (vib_wave < 192) ? (vib_wave - 128) : (256 - vib_wave);
-            int32_t delta = ((int32_t)v->step * sine * depth) >> 10;
-            v->step += delta;
-          }
-          break;
-        }
-        case 'J': case 10: {  // Arpeggio
-          int semi1 = (par >> 4) & 0x0F;
-          int semi2 = par & 0x0F;
-          int arp_tick = m->tick % 3;
-          uint32_t c2spd = (v->smp >= 0 && v->smp < 99) ? m->smp[v->smp].c2spd : 8363;
-          if (arp_tick == 1) {
-            v->step = s3m_note_to_step(v->note + (semi1 << 4), c2spd);
-          } else if (arp_tick == 2) {
-            v->step = s3m_note_to_step(v->note + (semi2 << 4), c2spd);
-          } else {
-            v->step = s3m_note_to_step(v->note, c2spd);
-          }
-          break;
-        }
       }
     }
     
@@ -659,9 +627,14 @@ void s3m_fpga_service(void) {
         if (looping) {
           v->pos = loop_lo << 16;
           pos_int = loop_lo;
-        } else {
+        } else if (v->end_ramp == 0) {
+          v->end_ramp = 64;               /* fade instead of cutting mid-wave */
+          pos_int = stop ? stop - 1 : 0;
+        } else if (v->end_ramp <= 1) {
           v->active = 0;
           continue;
+        } else {
+          pos_int = stop ? stop - 1 : 0;
         }
       }
 
@@ -679,6 +652,7 @@ void s3m_fpga_service(void) {
       vc += (tgt - vc) >> 4;
       v->vol_cur = vc;
       int vol = (((vc >> 8) * m->gvol) >> 6);
+      if (v->end_ramp) { vol = vol * v->end_ramp / 64; v->end_ramp--; }
       val = (val * vol) >> 8;
       
       int pan = v->pan;

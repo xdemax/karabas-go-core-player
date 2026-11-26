@@ -52,6 +52,7 @@ static uint8_t c_bg, c_panel, c_head, c_sel, c_accent, c_line, c_vu, c_hot, c_sp
 static ramp_t r_text, r_dim, r_accent, r_ptext, r_pdim, r_paccent;
 
 static int last_sel = -1, last_top = -1, last_now = -1, last_paused = -1, last_font_step = -1;
+static int load_x = -1, load_phase;
 static char last_path[FS_PATH_MAX];
 static int marq_off, marq_dir = 1;
 static uint32_t marq_t;
@@ -268,6 +269,8 @@ static void draw_player_static(const player_view_t *v) {
   spec_off = 0;
   chan_off = 0;
   last_prog = -1;
+  load_x = -1;
+  load_phase = 0;
   disp_vu_l = disp_vu_r = 0;
   last_elapsed = 0xFFFFFFFFu;
   last_paused = -1;
@@ -357,6 +360,21 @@ static void update_info(const player_view_t *v) {
 }
 
 static void update_progress(const player_view_t *v) {
+  if (v->loading && v->total_pos && v->cur >= v->total_pos) {
+    /* Bytes are in (100%) but the module is still being parsed: a percentage bar
+     * would sit full, so run an indeterminate segment instead. */
+    int seg = PW / 4, span = PW - seg;
+    if (span < 1) span = 1;
+    load_phase += 6;
+    int t = load_phase % (2 * span);
+    int x = t < span ? t : 2 * span - t;
+    if (load_x >= 0) gfx_fill(PX + load_x, 114, seg, 6, c_bg);
+    gfx_fill(PX + x, 114, seg, 6, c_accent);
+    load_x = x;
+    last_prog = -1;
+    return;
+  }
+  if (load_x >= 0) { gfx_fill(PX + load_x, 114, PW / 4, 6, c_bg); load_x = -1; }
   int nw = (v->has_pos && v->total_pos) ? (int) ((uint64_t) PW * v->cur / v->total_pos) : 0;
   if (nw < 0) nw = 0;
   if (nw > PW) nw = PW;
