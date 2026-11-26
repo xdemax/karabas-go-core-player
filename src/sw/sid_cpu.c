@@ -76,12 +76,12 @@ static void adc_op(m6502_t *cpu, uint8_t val) {
     unsigned lo = (a & 0xf) + (val & 0xf) + c;
     unsigned hi = (a >> 4) + (val >> 4);
     if (lo > 9) { lo += 6; hi++; }
-    unsigned v = (hi << 4) | (lo & 0xf);
-    if (hi > 9) v += 0x60;
+    if (hi > 9) hi += 6;
+    /* the NMOS carry is the decimal carry (99+01 gives 00 and C=1), not the binary one */
     cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-             (bin > 0xff ? FLAG_C : 0) |
+             ((hi > 0xf) ? FLAG_C : 0) |
              ((~(a ^ val) & (a ^ bin) & 0x80) ? FLAG_V : 0);
-    cpu->a = (uint8_t) v;
+    cpu->a = (uint8_t) ((hi << 4) | (lo & 0xf));
     set_nz(cpu, cpu->a);
     return;
   }
@@ -98,12 +98,13 @@ static void sbc_op(m6502_t *cpu, uint8_t val) {
   if (cpu->p & FLAG_D) {
     int lo = (int) (a & 0xf) - (int) (val & 0xf) - (int) (1 - c);
     int hi = (int) (a >> 4) - (int) (val >> 4);
-    if (lo < 0) { lo -= 6; hi--; }
-    if (hi < 0) hi -= 6;
+    if (lo < 0) { lo += 10; hi--; }
+    int borrow = (hi < 0);
+    if (borrow) hi += 10;
     cpu->p = (cpu->p & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-             (res >= 0 ? FLAG_C : 0) |
+             (borrow ? 0 : FLAG_C) |
              (((a ^ val) & (a ^ (unsigned) res) & 0x80) ? FLAG_V : 0);
-    cpu->a = (uint8_t) (((hi << 4) | (lo & 0xf)) & 0xff);
+    cpu->a = (uint8_t) ((hi << 4) | lo);
     set_nz(cpu, cpu->a);
     return;
   }

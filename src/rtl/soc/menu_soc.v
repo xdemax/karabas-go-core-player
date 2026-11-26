@@ -582,9 +582,6 @@ always @(posedge clk) begin
 		aud_under <= 16'd0;
 		ay_tap_wr <= 10'd0;
 		sid_tap_wr <= 10'd0;
-		sid_tap_rd <= 10'd0;
-		sid_active <= 1'b0;
-		sid_gain <= 8'd192;
 	end else begin
 		if (aud_stats_clr) begin
 			aud_drop <= 16'd0;
@@ -665,6 +662,9 @@ endfunction
 always @(posedge clk) begin
 	if (cpu_reset) begin
 		ay_tap_rd <= 10'd0;
+		sid_tap_rd <= 10'd0;
+		sid_active <= 1'b0;
+		sid_gain <= 8'd192;
 		// a state register: reset it only here, never in the per-cycle strobe defaults
 		aud_rate <= AUD_RATE;
 	end
