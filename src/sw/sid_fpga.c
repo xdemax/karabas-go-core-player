@@ -91,7 +91,25 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
     return -1;
   }
 
-  const uint8_t *data = src->mem;
+  const uint8_t *data;
+  if (src->f) {
+    uint8_t *buf = (uint8_t *) SDRAM_BASE;
+    uint32_t off = 0;
+    while (off < size) {
+      uint32_t n = size - off;
+      if (n > 4096) n = 4096;
+      UINT got = 0;
+      if (src_read((play_src_t *) src, off, buf + off, n, &got) != 0 || got == 0) {
+        sid_error("read error");
+        return -1;
+      }
+      off += got;
+      if (progress && ((off >> 15) != ((off - got) >> 15) || off == size)) progress(off, size);
+    }
+    data = buf;
+  } else {
+    data = src->mem;
+  }
 
   /* The PSID header is read at its fixed offsets: relying on a struct layout broke
    * on the compiler's padding (sizeof became 0x7d and the image loaded shifted). */

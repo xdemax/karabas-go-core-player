@@ -11,16 +11,14 @@
 #define FLAG_Z 0x02
 #define FLAG_C 0x01
 
+/* One CPU: the firmware has no reliable heap for a 64 KB block, so it lives in .bss. */
+static m6502_t g_cpu;
 m6502_t *m6502_new(void) {
-  m6502_t *cpu = calloc(1, sizeof(*cpu));
-  if (!cpu) return NULL;
-  memset(cpu->mem, 0, 65536);
-  return cpu;
+  memset(&g_cpu, 0, sizeof(g_cpu));
+  return &g_cpu;
 }
 
-void m6502_free(m6502_t *cpu) {
-  free(cpu);
-}
+void m6502_free(m6502_t *cpu) { (void) cpu; }
 
 void m6502_reset(m6502_t *cpu) {
   cpu->pc = 0xc000;
