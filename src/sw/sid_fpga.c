@@ -56,6 +56,9 @@ typedef struct {
   uint32_t last_tap;
   uint8_t vu[FMT_CHANNELS];
   uint8_t gate[3];
+  uint8_t ad[3], sr[3];
+  uint8_t env_state[3];       /* 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
+  uint32_t env[3];
   uint32_t sample_acc;
   uint32_t samples_per_tick;
   int hz;
@@ -155,13 +158,61 @@ no_loop:
   sid.map_tick[slot] = t;
 }
 
+/* The FPGA does not expose the voices, so the channel meters follow a model of the
+ * ADSR envelope built from the registers the tune writes (a level, not just the gate). */
+static uint32_t sid_env_step(uint8_t nibble) {
+  static const uint16_t ms[16] = { 2, 8, 16, 24, 38, 56, 68, 80,
+                                   100, 250, 500, 800, 1000, 3000, 5000, 8000 };
+  uint32_t t = ms[nibble & 15];
+  uint32_t hz = sid.hz > 0 ? (uint32_t) sid.hz : 50u;
+  return (65535u * 1000u) / (t * hz);
+}
+
+static void sid_env_tick(void) {
+  for (int v = 0; v < 3; v++) {
+    uint32_t sus = (uint32_t) (sid.sr[v] >> 4) * 4369u;   /* 0..65535 */
+    uint32_t atk = sid_env_step(sid.ad[v] >> 4);
+    uint32_t dec = sid_env_step(sid.ad[v] & 15);
+    uint32_t rel = sid_env_step(sid.sr[v] & 15);
+    switch (sid.env_state[v]) {
+      case 1:
+        sid.env[v] += atk;
+        if (sid.env[v] >= 65535u) { sid.env[v] = 65535u; sid.env_state[v] = 2; }
+        break;
+      case 2:
+        if (sid.env[v] > sus + dec) sid.env[v] -= dec;
+        else { sid.env[v] = sus; sid.env_state[v] = 3; }
+        break;
+      case 3:
+        sid.env[v] = sus;
+        break;
+      case 4:
+        if (sid.env[v] > rel) sid.env[v] -= rel;
+        else { sid.env[v] = 0; sid.env_state[v] = 0; }
+        break;
+      default:
+        sid.env[v] = 0;
+        break;
+    }
+  }
+}
+
 static void sid_io_write(uint16_t addr, uint8_t val) {
   uint32_t r = addr - 0xd400;
   if (r < 25) sid.shadow[r] = val;
   sid.tick_writes++;
   sid.tick_hash = (sid.tick_hash ^ ((r << 8) | (uint32_t) val)) * 16777619u;
   if (r == 0x18) sid.vol_writes++;
-  if (r == 0x04 || r == 0x0b || r == 0x12) sid.gate[(r == 0x04) ? 0 : (r == 0x0b) ? 1 : 2] = val & 1;
+  if (r == 0x04 || r == 0x0b || r == 0x12) {
+    int v = (r == 0x04) ? 0 : (r == 0x0b) ? 1 : 2;
+    if ((val & 1) && !sid.gate[v]) { sid.env_state[v] = 1; sid.env[v] = 0; }
+    else if (!(val & 1) && sid.gate[v]) sid.env_state[v] = 4;
+    sid.gate[v] = val & 1;
+  } else if (r == 0x05 || r == 0x0c || r == 0x13) {
+    sid.ad[(r == 0x05) ? 0 : (r == 0x0c) ? 1 : 2] = val;
+  } else if (r == 0x06 || r == 0x0d || r == 0x14) {
+    sid.sr[(r == 0x06) ? 0 : (r == 0x0d) ? 1 : 2] = val;
+  }
   sid_wr(r, val);
 }
 
@@ -313,6 +364,10 @@ int sid_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   sid.play_calls = 0;
   sid.last_tap = 0;
   memset(sid.gate, 0, sizeof(sid.gate));
+  memset(sid.ad, 0, sizeof(sid.ad));
+  memset(sid.sr, 0, sizeof(sid.sr));
+  memset(sid.env_state, 0, sizeof(sid.env_state));
+  memset(sid.env, 0, sizeof(sid.env));
   sid.active = 1;
   sid.finished = 0;
   sid.paused = 0;
@@ -427,6 +482,7 @@ void sid_fpga_service(void) {
 
     while (advance > 0) {
       advance--;
+      sid_env_tick();
       if (!(sid.cpu->p & 0x04)) {             /* I flag clear */
         uint16_t vec = (uint16_t) (sid.cpu->mem[0x0314] | (sid.cpu->mem[0x0315] << 8));
         if (!vec || vec == 0xffff)
@@ -457,6 +513,7 @@ void sid_fpga_service(void) {
       sid.cpu->y = 0;
       for (int steps = 0; steps < 50000; steps++) if (m6502_step(sid.cpu)) break;
       sid_tick_update();
+      sid_env_tick();
       sid.play_calls++;
       ticks--;
       if (sid.loop_found && sid.tick >= sid.loop_end_tick) { sid.finished = 1; break; }
@@ -476,8 +533,11 @@ void sid_fpga_service(void) {
     sid_set_warn("tune writes no SID registers");
 
   memset(sid.vu, 0, sizeof sid.vu);
-  for (int vch = 0; vch < 3; vch++)
-    if (sid.gate[vch]) sid.vu[vch] = (uint8_t) (sid.vol * 4 > 255 ? 255 : sid.vol * 4);
+  for (int vch = 0; vch < 3; vch++) {
+    uint32_t lv = sid.env[vch] >> 8;               /* 0..255 */
+    if (lv > 255) lv = 255;
+    sid.vu[vch] = (uint8_t) lv;
+  }
 
   sid_service_active = 0;
 }
