@@ -28,4 +28,21 @@ void sid_test_tone(int on) {
   }
 }
 
+/* Drain the RTL tap for a few milliseconds and return the peak |sample|. */
+int sid_tap_peak(int ms) {
+  int peak = 0;
+  uint32_t t0 = R_US;
+  while ((uint32_t) (R_US - t0) < (uint32_t) ms * 1000u) {
+    while (MMIO(0xdc)) {
+      uint32_t v = MMIO(0xd8);
+      int l = (int16_t) (v >> 16), r = (int16_t) v;
+      if (l < 0) l = -l;
+      if (r < 0) r = -r;
+      if (l > peak) peak = l;
+      if (r > peak) peak = r;
+    }
+  }
+  return peak;
+}
+
 int sid_hw_present(void) { return 1; }

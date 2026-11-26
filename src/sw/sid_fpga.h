@@ -2,3 +2,4 @@
 #pragma once
 int sid_hw_present(void);
 void sid_test_tone(int on);
+int sid_tap_peak(int ms);

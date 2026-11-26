@@ -21,7 +21,7 @@ localparam [1:0] ST_DEC_SUS = 2'd2;
 reg  [1:0] state;
 
 function [14:0] rate_value;
-	input wire [3:0] idx;
+	input [3:0] idx;
 	begin
 		case (idx)
 			4'd0:  rate_value = 15'd8;

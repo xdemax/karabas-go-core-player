@@ -350,7 +350,12 @@ static void key(key_ev_t *e) {
       static int sid_on;
       sid_on = !sid_on;
       sid_test_tone(sid_on);
-      status(sid_on ? "SID tone on" : "SID tone off");
+      if (sid_on) {
+        int pk = sid_tap_peak(40);
+        char b[32], *q = str_cpy(b, "SID peak ");
+        u2s(q, (uint32_t) pk, 0);
+        status(b);
+      } else status("SID off");
       return;
     }
     case K_F12: core_reset();

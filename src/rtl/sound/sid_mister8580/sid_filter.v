@@ -21,7 +21,7 @@ module sid_filter
 
 // Clamp to 16 bits.
 function signed [15:0] clamp;
-	input wire signed [16:0] x;
+	input signed [16:0] x;
 	begin
 		clamp = (^x[16:15]) ? {x[16], {15{x[15]}}} : x[15:0];
 	end
@@ -29,7 +29,7 @@ endfunction
 
 // Clamp to 18 bits, for the widened (+2 fractional bits) integrators.
 function signed [17:0] clamp18;
-	input wire signed [18:0] x;
+	input signed [18:0] x;
 	begin
 		clamp18 = (^x[18:17]) ? {x[18], {17{x[17]}}} : x[17:0];
 	end
@@ -37,7 +37,7 @@ endfunction
 
 // MOS8580: 1/Q =~ 2^((4 - res)/8), the second row of the MiSTer table.
 function [10:0] q_value;
-	input wire [3:0] idx;
+	input [3:0] idx;
 	begin
 		case (idx)
 			4'd0:  q_value = 11'd1448;
