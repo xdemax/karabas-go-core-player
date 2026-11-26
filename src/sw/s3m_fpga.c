@@ -1,6 +1,5 @@
 // S3M (Scream Tracker 3) parser and replayer. Compatible with XM/IT engines.
 #include <string.h>
-#include <stdio.h>
 #include "s3m_fpga.h"
 #include "fastmix.h"
 #include "mmio.h"
@@ -57,6 +56,9 @@ typedef struct {
   char title[29];
   int chn, npat, nins, nsmp;
   uint32_t orders[256];
+  uint32_t ins_off[99];    /* instrument parapointers (were written past orders[] and
+                              clobbered smp[]: only some samples ever loaded) */
+  uint32_t pat_off[99];    /* pattern parapointers */
   s3m_sample_t smp[99];
   s3m_pattern_t pat[99];
   s3m_voice_t vox[32];
@@ -116,7 +118,7 @@ static int s3m_load_patterns(const uint8_t *buf, uint32_t size, s3m_module_t *m)
   int max_chn = 0;
   
   for (int p = 0; p < m->npat; p++) {
-    uint32_t off = m->orders[256 + 99 + p];
+    uint32_t off = m->pat_off[p];
     if (off == 0 || off * 16 >= size) {
       m->pat[p].data = NULL;
       m->pat[p].len = 0;
@@ -158,7 +160,7 @@ static int s3m_load_samples(const uint8_t *buf, uint32_t size, s3m_module_t *m, 
   uint32_t pcm_off = 0;
   
   for (int s = 0; s < m->nsmp; s++) {
-    uint32_t hoff = m->orders[256 + s];
+    uint32_t hoff = m->ins_off[s];
     if (hoff == 0) {
       m->smp[s].data = NULL;
       m->smp[s].len = 0;
@@ -293,12 +295,12 @@ int s3m_fpga_start(const play_src_t *src, uint32_t size, play_progress_t progres
   
   uint32_t ioff = 0x60 + ordnum;
   for (int i = 0; i < insnum; i++) {
-    s3m_mod.orders[256 + i] = read16le(buf, ioff + i*2, size);
+    s3m_mod.ins_off[i] = read16le(buf, ioff + i*2, size);
   }
   
   uint32_t poff = ioff + insnum * 2;
   for (int i = 0; i < patnum; i++) {
-    s3m_mod.orders[256 + 99 + i] = read16le(buf, poff + i*2, size);
+    s3m_mod.pat_off[i] = read16le(buf, poff + i*2, size);
   }
   
   s3m_mod.chn = 0;
@@ -365,10 +367,10 @@ static uint32_t s3m_note_to_step(int note, uint32_t c2spd) {
   semitone--;
   
   uint32_t step = c2spd;
-  if (octave > 5) {
-    for (int i = 0; i < octave - 5; i++) step *= 2;
-  } else if (octave < 5) {
-    for (int i = 0; i < 5 - octave; i++) step /= 2;
+  if (octave > 2) {
+    for (int i = 0; i < octave - 2; i++) step *= 2;
+  } else if (octave < 2) {
+    for (int i = 0; i < 2 - octave; i++) step /= 2;
   }
   
   step = (step * s3m_semitone_mul[semitone]) >> 16;
@@ -477,12 +479,18 @@ void s3m_fpga_service(void) {
             
             if (ch < m->chn) {
               if (note) s3m_note_on(m, ch, note, instr, vol);
+              else if (vol > 0 && vol <= 64) m->vox[ch].vol = vol;   /* volume-only cell */
               if (vol == 255) s3m_note_off(&m->vox[ch]);
               
               if (eff) {
                 switch (eff) {
                   case 'A': case 1: m->speed = par; break;
-                  case 'T': case 2: m->bpm = par; if (m->bpm < 32) m->bpm = 32; m->samples_per_tick = 120000 / m->bpm; break;
+                  case 'B': case 2: m->order = par; break;
+                  case 'C': case 3: m->row = 63; break;
+                  case 'D': case 4: break;  // vol slide
+                  case 'G': case 7: break;  // tone porta
+                  case 'H': case 8: break;  // vibrato
+                  case 'J': case 10: break; // arpeggio
                   case 'V': m->gvol = par & 0x7f; break;
                 }
               }
@@ -537,8 +545,11 @@ void s3m_fpga_service(void) {
       v->pos += v->step;
     }
     
-    s3m_out[2 * out_count] = (int16_t)(mix_l >> 2);
-    s3m_out[2 * out_count + 1] = (int16_t)(mix_r >> 2);
+    mix_l = (mix_l * 3) >> 2; mix_r = (mix_r * 3) >> 2;   /* calibrated to the openmpt rms */
+    if (mix_l > 32767) mix_l = 32767; else if (mix_l < -32768) mix_l = -32768;
+    if (mix_r > 32767) mix_r = 32767; else if (mix_r < -32768) mix_r = -32768;
+    s3m_out[2 * out_count] = (int16_t) mix_l;
+    s3m_out[2 * out_count + 1] = (int16_t) mix_r;
     out_count++;
   }
   
