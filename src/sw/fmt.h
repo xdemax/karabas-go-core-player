@@ -69,6 +69,7 @@ const fmt_module_t *fmt_by_ext(const char *name);
 const fmt_module_t *fmt_by_head(const uint8_t *head, uint32_t len);
 int fmt_supported(const char *name);
 int fmt_supported_list(char *out, int max);
+int fmt_grouped_list(char *out, int max);
 
 void fmt_init(void);
 void fmt_service(void);

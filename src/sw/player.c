@@ -33,7 +33,7 @@ static int play_ctx;
 
 static int np_on;
 static char np_fmt[8], np_title[48];
-static char fmt_list[96];
+static char fmt_list[224];
 static uint32_t np_start, np_cur, np_total, np_us;
 static uint32_t nav_t;
 static int view_ch;
@@ -76,7 +76,7 @@ static void view_fill(int audio) {
   V.mix = mix_msg;
   V.format = np_fmt;
   V.title = np_title;
-  fmt_supported_list(fmt_list, sizeof(fmt_list));
+  fmt_grouped_list(fmt_list, sizeof(fmt_list));
   V.formats = fmt_list;
   V.skin = skin_name();
   V.elapsed = np_on ? (uint32_t) ((R_US - np_start) / 1000000u) : 0;

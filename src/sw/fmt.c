@@ -50,6 +50,36 @@ static int title_hidden(const char *e) {
 
 // "mod, xm, s3m": the extensions of the registry, in the registration order. A new format
 // module automatically appears in the startup panel of the skin unless it is hidden above.
+// The title screen groups the formats by the chip / tracker they come from.
+static const struct { const char *label, *exts; } fmt_groups[] = {
+  { "AY8912",           "pt2 pt3 stc pt1 asc psc sqt stp vtx psg" },
+  { "SID8580",          "sid" },
+  { "Scream Tracker",   "stm s3m" },
+  { "ProTracker",       "mod" },
+  { "FastTracker",      "xm" },
+  { "Impulse Tracker",  "it" },
+  { "Playlists",        "m3u ayl" },
+};
+#define NFMT_GROUPS (sizeof(fmt_groups) / sizeof(fmt_groups[0]))
+
+int fmt_grouped_list(char *out, int max) {
+  int n = 0;
+  if (max <= 0) return 0;
+  out[0] = 0;
+  for (unsigned g = 0; g < NFMT_GROUPS; g++) {
+    const char *lab = fmt_groups[g].label, *e = fmt_groups[g].exts;
+    int need = (int) strlen(lab) + 2;
+    for (const char *q = e; *q; q++) need++;
+    if (n + need + 2 > max) break;
+    if (n) out[n++] = '\n';
+    while (*lab) out[n++] = *lab++;
+    out[n++] = ':'; out[n++] = ' ';
+    while (*e) out[n++] = *e++;
+    out[n] = 0;
+  }
+  return n;
+}
+
 int fmt_supported_list(char *out, int max) {
   int n = 0;
   if (max <= 0) return 0;

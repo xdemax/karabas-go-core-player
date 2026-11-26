@@ -279,32 +279,19 @@ static void draw_player_static(const player_view_t *v) {
     int cx = RIGHT_X + RIGHT_W / 2;
     gfx_text_center(&f26, cx, 262, "KARABAS GO", r_paccent);
     gfx_text_center(&f26, cx, 294, "MUSIC PLAYER", r_paccent);
-    char b[160], *q = b;
-    *q++ = '(';
-    q = str_cpy(q, v->formats && v->formats[0] ? v->formats : "mod, xm");
-    *q++ = ')';
-    *q = 0;
-    if (gfx_text_width(&f20, b) > PW - 12) {
-      int len = (int) strlen(b), mid = len / 2, best = -1, bestd = 1 << 20;
-      for (int i = 1; i < len - 1; i++) {
-        if (b[i] == ',') {
-          int d = i > mid ? i - mid : mid - i;
-          if (d < bestd) { bestd = d; best = i; }
-        }
-      }
-      if (best > 0) {
-        b[best] = 0;
-        gfx_text_center(&f20, cx, 326, b, r_pdim);
-        char *t = b + best + 1;
-        while (*t == ' ') t++;
-        gfx_text_center(&f20, cx, 344, t, r_pdim);
-      } else {
-        gfx_text_center(&f20, cx, 334, b, r_pdim);
-      }
-    } else {
-      gfx_text_center(&f20, cx, 334, b, r_pdim);
+    /* The grouped format list, one group per line (label: extensions). */
+    const char *f = v->formats && v->formats[0] ? v->formats : "mod, xm";
+    int fy = 322, fn = 0;
+    char line[64];
+    const char *p = f;
+    while (*p && fn < 16) {
+      int k = 0;
+      while (*p && *p != '\n' && k < (int) sizeof(line) - 1) line[k++] = *p++;
+      line[k] = 0;
+      if (*p == '\n') p++;
+      if (k) { gfx_text_center(&f20, cx, fy, line, r_pdim); fy += 12; fn++; }
     }
-    gfx_text_center(&f20, cx, 382, "Enter a file to play", r_pdim);
+    gfx_text_center(&f20, cx, fy + 10, "Enter a file to play", r_pdim);
     last_now = 0;
     return;
   }
